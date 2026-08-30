@@ -20,7 +20,8 @@ suporte físico, horizonte de validade e custo termodinâmico, auditados no
 - **`event`**: transiente; horizonte curto; sem manutenção; morre por `horizon`.
 - **`equilibrium`**: persistente; sem manutenção; custo em bytes (`cost_bytes`).
 - **`nonequilibrium`**: laborativo; exige manutenção contínua; colapsa se
-  `maintenance_deadline` expirar sem `keep()`.
+  `maintenance_deadline` expirar sem `keep()` nem revisão ativa (revisão ativa
+  mantém implicitamente a cada tick).
 - Toda forma exige `value` e `horizon` — obrigatórios, nesta ordem; o parser
   rejeita formas que os omitam.
 
@@ -37,7 +38,7 @@ conjugation = 'event' | 'equilibrium' | 'nonequilibrium' ;
 
 optional_attribute =
     'source_path' ':' string             (* sensor FXP — nome simbólico *)
-  | 'maintenance_deadline' ':' duration  (* apenas nonequilibrium *)
+  | 'maintenance_deadline' ':' duration  (* apenas nonequilibrium — obrigatório nela *)
   | 'exchange_mode' ':' string           (* apenas nonequilibrium: "cooperation"|"extraction" *)
   | 'cost_bytes' ':' integer             (* apenas equilibrium *)
   | 'currency' ':' string                (* "CpuCycles"|"DiskBytes"|"PowerWatts" — contabilidade *)
@@ -60,7 +61,7 @@ expression  = string | número | identificador ;        (* value é opaco ao run
 ```
 
 Comentários: `//` de linha e `/* ... */` de bloco. Strings: `"..."` com escapes
-`\"`, `\\`, `\n`, `\t`. Identificadores: `[a-zA-Z_][a-zA-Z0-9_]*`.
+`\"`, `\\`, `\n`, `\t` (≤ 256 bytes). Identificadores: `[a-zA-Z_][a-zA-Z0-9_]*`.
 
 ## Semântica essencial
 
@@ -74,14 +75,18 @@ Comentários: `//` de linha e `/* ... */` de bloco. Strings: `"..."` com escapes
   um `act` na mesma lista é enviado ao FXP. Acionamento legítimo apenas para:
   superação de limite termodinâmico (térmico/consumo) ou repetição sem
   propósito (ciclo insustentável).
+- **Ordem no tick**: as regras avaliam na ordem declarada, antes da verificação
+  de prazos; `dissolve`/`subvert` encurtam as regras seguintes da mesma
+  `review`. O `horizon` é absoluto — reclassificação não o renova; virar
+  `nonequilibrium` sem `maintenance_deadline` é erro registrado.
 - **`dissolve`**: encerra a forma. **`reclassify_as_equilibrium` /
   `reclassify_as_nonequilibrium`**: mudam a conjugação (formas persistem ou
   passam a exigir `keep()`).
 - **`notify_shutdown`**: desliga cargas secundárias associadas; não dissolve a
   forma nem interrompe as ações seguintes.
 - **`act(Ator, valor)`**: comando assíncrono via FXP; o FXP valida o valor
-  contra limites (mínimo, máximo, segurança) e registra comando, valor,
-  timestamp e custo no Caderno. Falha do ator → alerta no Caderno e possível
+  contra limites inclusivos (mínimo, máximo, segurança; rejeitado ⇒ não envia e
+  registra) e registra comando, valor, timestamp e custo no Caderno. Falha do ator → alerta no Caderno e possível
   fallback do runtime.
 - **Falha de sensor**: a condição **não é avaliada** naquele tick — um sensor
   ausente nunca é tratado como leitura `0.0` (zero é leitura física válida).

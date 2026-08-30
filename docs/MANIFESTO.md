@@ -33,7 +33,7 @@ Nada na matéria é estático; portanto, nada no software pode fingir sê-lo. Re
 ### 2. A Honestidade é Termodinâmica (A Vinculação ao Real)
 A integridade de um sistema não se mede por selos de conformidade ou métricas auto-referenciais, mas por grandezas físicas verificáveis: Watts, Celsius, Ciclos de CPU, Joules. Todo programa deve expor seu vazamento energético no **Caderno** — um registro imutável que audita o custo material de cada forma. Se uma estrutura consome recursos de forma incompatível com sua função declarada, as leis da termodinâmica — mediadas pelo FXP — impõem sua revisão ou dissolução.
 
-**Consequência lógica:** toda forma deve estar vinculada a um sensor físico (via FXP) e ter seu consumo registrado.
+**Consequência lógica:** toda forma deve estar vinculada a um sensor físico (via FXP) e ter seu consumo registrado — por vinculação direta (`source_path`) ou indireta, pela partilha da potência global contabilizada no Caderno (cf. FORMAL §4.2).
 
 ### 3. As Três Conjugações da Matéria
 O código, como a matéria, existe em três modos fundamentais:

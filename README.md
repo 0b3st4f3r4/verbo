@@ -159,7 +159,7 @@ embeddings com o chat desligado ou em outra máquina.
 Estado atual: **especificação + protótipo de referência concluídos** (pré-Etapa 1).
 
 1. **Etapa 1** — Suíte BDD/TDD/E2E com mocks e simulador FXP
-2. **Etapa 2** — Núcleo da linguagem: lexer, parser, AST e motor de grafo assíncrono
+2. **Etapa 2** — Núcleo da linguagem: lexer, parser, AST e motor de tick assíncrono
 3. **Etapa 3** — FXP real: registro de dispositivos, sensores e atores
 4. **Etapa 4** — Caderno de produção e validação end-to-end
 5. **Etapa 5** — Qualidade, profiling termodinâmico e otimização

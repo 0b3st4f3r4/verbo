@@ -12,7 +12,7 @@ flowchart TB
     subgraph CONSTRUCAO["Construção"]
         direction LR
         EIF["EIF — I/O Físico e FXP<br/>sensores e atores"]
-        EC["EC — Compiladores<br/>parser e grafo de verbos"]
+        EC["EC — Compiladores<br/>parser e motor de tick"]
         AC["AC — Caderno<br/>log e física"]
     end
     GQT["GQT — Qualidade Termodinâmica<br/>TDD · BDD · E2E"]
@@ -35,7 +35,7 @@ flowchart TB
 - Manter a especificação formal atualizada e consistente com o código.
 
 **Métricas de Avaliação (para medir a qualidade do trabalho do AD):**
-- **Taxa de violações ontológicas detectadas**: nº de violações encontradas por 1000 linhas de código revisadas. Meta: ≥ 0,5 violações/KLOC.
+- **Eficácia de detecção ontológica**: percentual de violações detectadas em exercícios calibrados (banco com violações conhecidas, injetadas em código de teste). Meta: ≥ 90%. Complemento: 0 violações ontológicas escapando para `main`.
 - **Tempo médio de revisão de PR**: tempo entre a submissão e o veredito final. Meta: ≤ 24h úteis.
 - **Cobertura de revisão**: percentual de PRs revisadas pelo AD antes do merge. Meta: 100%.
 
@@ -61,37 +61,37 @@ flowchart TB
 
 **Métricas de Avaliação:**
 - **Latência de leitura de sensor**: tempo para obter um valor (percentil 95). Meta: ≤ 1 ms para sensores locais, ≤ 10 ms para sensores remotos.
-- **Latência de atuação (comando a ator)**: tempo entre o envio do comando e a mudança física observável (percentil 95). Meta: ≤ 50 ms para atores locais, ≤ 500 ms para remotos.
+- **Latência de atuação (comando a ator)**: ack do driver (percentil 95) — Meta: ≤ 50 ms local, ≤ 500 ms remoto; efeito físico observável — Meta: ≤ 500 ms (atuadores mecânicos, ex. ventoinha, têm inércia; medido em laboratório, não em CI).
 - **Fidelidade física**: erro relativo entre valor lido e medidor de referência. Meta: ≤ 5% para potência e temperatura.
 - **Precisão de atuação**: erro entre valor solicitado e valor aplicado. Meta: ≤ 2% da faixa de operação.
-- **Taxa de falha de I/O**: percentual de operações de leitura/escrita que falham sem fallback. Meta: 0% (com fallback automático registrado no Caderno).
+- **Taxa de falha de I/O sem tratamento**: percentual de operações que falham sem fallback (modos simulado/híbrido) ou sem registro de não-avaliação (modo real). Meta: 0%; todo evento aparece no Caderno (cf. FORMAL §4.7).
 - **Cobertura de dispositivos**: percentual dos sensores e atores do **Registro mínimo obrigatório** (docs/FORMAL.md §6) implementados e testados. Meta: 100% para os obrigatórios; extensões opcionais do diretório do FXP não entram no denominador.
 
 **Critérios de Aceite para o módulo FXP:**
 - Todos os nomes simbólicos de sensores e atores usados nos programas `.vl` têm um correspondente no registro do FXP.
 - As operações de I/O são não bloqueantes ou possuem timeout máximo definido.
-- Unidades de medida são validadas em tempo de compilação (ex: não é possível somar `Watts` com `Celsius`).
-- Drivers de fallback e simulação são ativados automaticamente quando o dispositivo real não está acessível, e o Caderno registra um aviso de `measurement_status: difficult` ou `actuator_status: simulated`.
+- Unidades de medida: o parser rejeita `threshold` sem unidade quando a grandeza a exige, e a grandeza é validada em runtime contra o registro do FXP (coberta por teste em CI). A gramática não possui operadores aritméticos — não há como misturar unidades.
+- Dado sintético só circula em modo simulado/híbrido **explícito**, marcado no Caderno (`measurement_status: difficult` / `actuator_status: simulated`); em modo real, dispositivo inacessível ⇒ condição não avaliada + alerta (FORMAL §4.7). Drivers de fallback atuam sobre a rota de I/O (endpoint alternativo), sem falsificar leitura.
 - A documentação lista a precisão típica, latência e limites de segurança de cada sensor/ator.
 
 ---
 
 ### 1.3 Especialista em Compiladores (EC)
 
-**Missão:** Desenvolver o parser, a AST e o runtime de transição de estados (motor de grafo assíncrono) em Rust ou C.
+**Missão:** Desenvolver o parser, a AST e o runtime de transição de estados (motor de tick assíncrono — fila de prazos + tabela de formas) em Rust ou C.
 
 **Responsabilidades:**
-- Implementar o lexer/parser conforme a especificação EBNF (docs/FORMAL.md v1.5).
-- Construir a AST e o grafo de formas ativas.
+- Implementar o lexer/parser conforme a especificação EBNF (docs/FORMAL.md).
+- Construir a AST e a tabela de formas ativas (fila de prazos; cf. métrica do escalonador).
 - Gerenciar o ciclo de vida das formas (horizontes, deadlines, reclassificações).
 - Implementar o operador `subvert` como interrupção de prioridade máxima no escalonador.
 - Integrar as ações de `act` (comandos a atores) com o FXP, traduzindo-as em mensagens de saída.
 
 **Métricas de Avaliação:**
-- **Cobertura de testes do parser**: percentual de casos da especificação cobertos por testes automatizados. Meta: 95%.
-- **Tempo de transição entre estados**: tempo para avaliar uma condição e executar a ação correspondente. Meta: ≤ 100 µs (em hardware de referência).
+- **Cobertura de testes do parser**: matriz de rastreabilidade produção-EBNF × nota-semântica da FORMAL → id de teste. Meta: 100% das produções; ≥ 95% das notas semânticas com ≥ 1 teste.
+- **Tempo de transição entre estados**: tempo para avaliar uma condição e executar a ação correspondente. Meta: ≤ 100 µs (p95) na máquina de referência (AMD Ryzen 7 7735HS), medido com `criterion`.
 - **Uso de memória**: memória heap alocada por forma ativa. Meta: ≤ 256 bytes por forma `event`, ≤ 1 KB por forma `equilibrium`, ≤ 512 bytes por forma `nonequilibrium`.
-- **Eficiência do grafo**: nº de nós visitados por tick para processar N formas. Meta: O(N log N) no pior caso.
+- **Eficiência do escalonador**: fila de prazos (min-heap por `horizon`/`maintenance_deadline`) — O(log N) por mutação, varredura O(N + vencidos) por tick; resolução de sensores O(1) pela tabela do FXP. Meta: O(N log N) no pior caso.
 - **Overhead de integração FXP**: tempo adicional gasto na comunicação com o FXP por ação. Meta: ≤ 10 µs por mensagem local.
 
 **Critérios de Aceite para o núcleo da linguagem:**
@@ -108,7 +108,7 @@ flowchart TB
 **Missão:** Implementar o sistema de logging termodinâmico contínuo, gravando vazamentos energéticos, transições de estado, leituras de sensores e comandos a atores em um formato à prova de adulteração.
 
 **Responsabilidades:**
-- Calcular a energia dissipada por cada forma (potência × tempo).
+- Calcular a energia dissipada por cada forma (partilha da potência do tick × tempo; cf. FORMAL §4.2).
 - Registrar todas as operações de I/O (leituras de sensores e atuações) com timestamp e custo energético.
 - Gravar eventos de forma assíncrona para não interferir no consumo medido.
 - Expor métricas agregadas (Joules totais, médias) para monitoramento.
@@ -117,14 +117,14 @@ flowchart TB
 **Métricas de Avaliação:**
 - **Overhead de logging**: overhead de CPU e memória causado pelo Caderno. Meta: ≤ 1% de CPU e ≤ 5 MB de RAM para 10.000 formas ativas.
 - **Latência de gravação**: tempo para persistir um evento. Meta: ≤ 200 µs (escrita assíncrona em buffer).
-- **Precisão do cálculo energético**: erro relativo entre energia registrada e medição externa. Meta: ≤ 2%.
+- **Precisão do cálculo energético**: erro relativo entre energia registrada e referência externa. Meta: ≤ erro do sensor (`cpu_power`: ±5%) + 1% do método de atribuição (orçamento de erro; cf. FORMAL §6).
 - **Cobertura de eventos**: percentual de eventos relevantes (transições, atuações, falhas) capturados. Meta: 100%.
 - **Robustez**: percentual de eventos registrados corretamente sob carga máxima. Meta: 99,99%.
 
 **Critérios de Aceite para o Caderno:**
 - Todos os eventos de dissolução, reclassificação, subversão, vazamento, leitura de sensor e comando a ator são registrados com timestamp do relógio virtual e valores reais do FXP.
 - O log é gravado em formato binário compacto (ex: Cap'n Proto, FlatBuffers) para minimizar overhead.
-- O próprio ato de logging não causa aumento mensurável na potência consumida pela CPU (≤ 0,1 W).
+- Overhead do logging: ≤ 1% de CPU (métrica acima), taxa de escrita limitada (buffer + flush periódico) e bench A/B com logger ligado/desligado. Atribuição causal em Watts (ex.: ≤ 0,1 W) fica para o laboratório da Etapa 5.
 - Os logs podem ser verificados por um agente externo (checksum SHA-256).
 
 ---
@@ -141,9 +141,9 @@ flowchart TB
 
 **Métricas de Avaliação:**
 - **Cobertura de código**: percentual de linhas cobertas por testes. Meta: ≥ 90%.
-- **Cobertura de cenários físicos**: percentual de cenários definidos na especificação que possuem testes automatizados. Meta: 100%.
+- **Cobertura de cenários físicos**: percentual do denominador canônico — matriz de rastreabilidade da FORMAL (cf. métrica do EC) — coberto por testes automatizados. Meta: 100%.
 - **Tempo de execução da suíte completa**: tempo total para rodar todos os testes. Meta: ≤ 15 minutos.
-- **Taxa de falsos positivos/negativos**: testes que falham/ passam indevidamente. Meta: 0.
+- **Flakes não triados**: testes que falham/passam indevidamente sem triagem. Meta: 0 não triados; todo flip de teste gera issue em ≤ 24 h.
 - **Cobertura de interação FXP**: percentual de pares sensor/ator testados em integração. Meta: 100% dos obrigatórios.
 
 **Critérios de Aceite para a suíte de testes:**
@@ -179,14 +179,14 @@ A interação entre os agentes segue um fluxo de desenvolvimento orientado a ent
 
 4. **Auditoria Contínua (AC → AD)**  
    O AC fornece relatórios de overhead do logging, precisão energética e integridade dos registros de sensores/atores.  
-   **Critério de aceite:** Overhead ≤ 1% CPU, precisão ≥ 98%, e todos os comandos de atuação são registrados com sucesso.
+   **Critério de aceite:** Overhead ≤ 1% CPU, precisão dentro do orçamento de erro (sensor ±5% + 1% do método; cf. métrica do AC), e todos os comandos de atuação são registrados com sucesso.
 
 ```mermaid
 flowchart LR
     R["1 · Requisitos<br/>AD + GQT<br/><i>cenários BDD executáveis</i>"]
     D["2 · Desenvolvimento<br/>EC + EIF + AC<br/><i>testes unitários sem regressão</i>"]
     I["3 · Integração e validação<br/>GQT + AD<br/><i>E2E aprovado pelo AD</i>"]
-    A["4 · Auditoria contínua<br/>AC → AD<br/><i>overhead ≤ 1% · precisão ≥ 98%</i>"]
+    A["4 · Auditoria contínua<br/>AC → AD<br/><i>overhead ≤ 1% · orçamento de erro</i>"]
 
     R --> D --> I --> A
     A -.->|"realimenta os critérios"| R
@@ -196,8 +196,8 @@ flowchart LR
 
 | Etapa | Critérios de Aceite |
 |-------|---------------------|
-| Etapa 1: TDD/BDD | 100% dos cenários BDD escritos e rodando com mocks; cobertura de casos de erro > 80%. |
-| Etapa 2: Núcleo do Compilador | Parser cobre 95% da especificação; runtime passa em testes de transição; sem vazamentos detectados por ASan/Valgrind. |
+| Etapa 1: TDD/BDD | 100% dos cenários BDD escritos e rodando com mocks; ≥ 1 teste por cláusula de erro da FORMAL (sensor ausente, ator inexistente, valor fora de limite, forma sem `value`/`horizon`, review órfã/duplicada, `keep` de forma inexistente). |
+| Etapa 2: Núcleo do Compilador | Matriz de rastreabilidade do parser completa (100% das produções, ≥ 95% das notas semânticas); runtime passa em testes de transição; sem vazamentos detectados por ASan/Valgrind. |
 | Etapa 3: FXP (sensores e atores) | Latência de leitura ≤ 1 ms; precisão de potência ≤ 5%; protocolo FXP serializa/desserializa sem perda; todos os atores obrigatórios implementados e testados. |
 | Etapa 4: Caderno e E2E | Overhead de logging ≤ 1%; testes E2E completos passam; logs íntegros verificados; atuações registradas corretamente. |
 | Etapa 5: Qualidade e Otimização | Zero vazamentos de heap em longa execução (24h); consumo de memória dentro dos limites; profiling mostra ausência de gargalos > 100 ms. |
@@ -208,7 +208,7 @@ flowchart LR
 
 Para garantir objetividade, as seguintes ferramentas devem ser integradas ao pipeline de CI/CD:
 
-- **Cobertura de código**: `cargo-tarpaulin` (Rust), `gcov`/`lcov` (C).
+- **Cobertura de código**: `cargo-llvm-cov` (Rust), `gcov`/`lcov` (C).
 - **Análise estática**: `clippy` (Rust), `cppcheck` (C).
 - **Detecção de vazamentos**: `valgrind`, `AddressSanitizer`, `LeakSanitizer`.
 - **Medição de latência**: `criterion` (Rust), `perf` (C).

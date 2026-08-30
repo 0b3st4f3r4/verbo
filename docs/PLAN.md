@@ -34,8 +34,10 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
         Dado que a forma laborativa "PensarLivre" está ativa com um deadline de 3s
         Quando a leitura do sensor "attention" via FXP cai abaixo de 30% (ex: 15.0%)
         Então o runtime deve disparar uma transição "reclassify_as_equilibrium"
-        E o estado da ideia deve ser gravado de forma persistente no disco
-        E nenhuma CPU adicional deve ser consumida para tentar manter a atividade
+        E o estado da ideia deve ser gravado como `.vl` canônico no diretório de persistência
+        E o Caderno registra o evento de persistência com o SHA-256 do arquivo gravado
+        E após a reclassificação a forma deixa de receber ticks de manutenção
+        E 0 bytes permanecem retidos em heap para a forma (verificado com contadores do runtime)
     ```
 
 *   **Caso 2: Subversão Poética por Sobrecarga Térmica com Atuação de Ator**
@@ -43,7 +45,7 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
     Funcionalidade: Sabotagem de Processamento Predatório
       Cenário: Sobrecarga térmica em loop de trading especulativo
         Dado que a tarefa "TradingEspeculativo" está rodando em alta frequência
-        Quando o sensor térmico da CPU atinge 86.5°C (limite de 85.0°C) via FXP
+        Quando o sensor `cpu_temp` atinge 86.5°C (limite de 85.0°C) via FXP
         Então o runtime deve invocar o operador "subvert()"
         E a ação "act(CpuPowerCap, 50)" deve ser enviada ao ator correspondente via FXP
         E o valor lógico de trading deve ser substituído pelo valor poético canônico "poesia_gerada_pelo_calor_do_silicio_e_resfriamento_da_mente"
@@ -56,41 +58,43 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
       Cenário: Ator principal falha e fallback é acionado
         Dado que o ator "Ventoinha" não está respondendo
         Quando a temperatura excede 70°C e a ação é "act(Ventoinha, 200)"
-        Então o FXP deve detectar a falha e tentar o ator alternativo "VentoinhaReserva" (extensão opcional registrada no diretório do FXP)
-        E o Caderno deve registrar um alerta de falha e o fallback executado
+        Então o FXP detecta a falha (heartbeat) e aplica a política de fallback do registro, tentando o ator alternativo "VentoinhaReserva" (extensão opcional)
+        E o Caderno registra a tentativa primária, a falha e o fallback executado
     ```
 
 ### 1.2 Testes Unitários de Transição Física (TDD)
 
 *   **Asserções de Finitude:** Verificar que formas `event` expiram corretamente após o `horizon`.
-*   **Testes de Falha Controlada:** Injetar leituras de sensor com valor zero ou ausente (via FXP simulado) e assegurar que a dissolução executa a desalocação completa.
+*   **Testes de Falha Controlada:** (i) leitura `0.0` é válida e avaliada normalmente — pode disparar regras; (ii) sensor ausente ou inacessível: nenhum `when` é avaliado, o Caderno registra alerta e não há disparo falso (FORMAL §4.7); (iii) a desalocação completa na dissolução é testada à parte, via expiração de `horizon`.
 *   **Testes de Comandos de Atores:** Simular envio de `act` e validar que a mensagem FXP é serializada e entregue ao ator correto (mock).
 
 ### 1.3 Entregável da Etapa 1
 
-*   Suíte de testes de regressão contínua (CI) contendo as especificações BDD escritas, mocks de sensores/atores e o esqueleto do simulador FXP para uso nos testes.
+*   Suíte de testes de regressão contínua (CI) contendo as especificações BDD escritas, mocks de sensores/atores e o esqueleto do simulador FXP para uso nos testes. Inclui: (a) configuração do runner de CI (nomear na entrega); (b) fronteira mock em processo (sem schema binário) × simulador físico (§6.5, evoluído na Etapa 3); (c) banco fixo de 20 prompts para validação do cheat sheet (§7); (d) decisão registrada Rust × C, com reancoragem dos orçamentos de memória/latência.
 
 ---
 
-## Etapa 2: Desenvolvimento do Núcleo da Linguagem (Parser, AST e Grafo de Verbos)
+## Etapa 2: Desenvolvimento do Núcleo da Linguagem (Parser, AST e Motor de Tick)
 
 **Foco:** Construir a gramática do movimento e o motor assíncrono de transições de estado na memória.
 
 ### 2.1 Lexer & Parser (Front-End)
 
-*   Implementar o parser conforme a especificação EBNF (FORMAL.md v1.5).
-*   A AST deve validar metadados materiais obrigatórios (`horizon`, `source_path`, `maintenance_deadline`, `cost_bytes`) e referências a sensores/atores simbólicos.
+*   Implementar o parser conforme a especificação EBNF (FORMAL.md).
+*   A AST valida os obrigatórios (`value`, `horizon`) e a aplicabilidade dos opcionais por conjugação (`maintenance_deadline`/`exchange_mode` só em `nonequilibrium`, com deadline obrigatório nela; `cost_bytes` só em `equilibrium`), além das referências a sensores/atores simbólicos (FORMAL.md).
 
-### 2.2 Motor de Grafo Assíncrono (Runtime)
+### 2.2 Motor de Tick Assíncrono (Runtime)
 
-*   **Abstracionismo de Tipos:** Garantir ausência de tipos inertes. Variáveis são instâncias com horizontes.
+*   **Abstracionismo de Tipos:** Garantir ausência de tipos inertes. Variáveis são instâncias com horizontes — no nível da implementação, toda alocação é vinculada a uma forma com `horizon` explícito.
 *   **Loop de Eventos:** Em Rust, usar `tokio`; em C, `epoll`/`poll`.
+*   **Escalonador:** fila de prazos (min-heap por `horizon`/`maintenance_deadline`) sobre um relógio virtual injetável — 1 tick ≈ 1 s de parede em produção, dirigido pelo simulador em teste (FORMAL §4.2).
+*   **`exchange_mode` (cf. FORMAL §3):** definir o efeito semântico pleno de `cooperation`/`extraction`; default: anotação de auditoria registrada no Caderno.
 *   **Mecanismo `keep()`:** Canal de sinalização assíncrona para renovar `maintenance_deadline`.
 *   **Integração com FXP:** O runtime deve ser capaz de consultar o FXP para leituras de sensores e enviar comandos `act` para atores de forma não bloqueante.
 
 ### 2.3 Entregável da Etapa 2
 
-*   Compilador/interpretador de console que lê arquivos `.vl`, parseia para AST e carrega o estado inicial em memória, com suporte a um FXP simulado para leituras e atuações básicas.
+*   Compilador/interpretador de console que lê arquivos `.vl`, parseia para AST e carrega o estado inicial em memória, com suporte a um FXP simulado para leituras e atuações básicas. Inclui a persistência `nonequilibrium` → `equilibrium` como `.vl` canônico com SHA-256 registrado no Caderno (FORMAL §4.1).
 
 ---
 
@@ -119,7 +123,7 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
     *   **Ventoinhas:** PWM via hwmon.
     *   **LEDs, relés:** GPIO, sysfs.
 *   **Limites de Segurança:** Cada ator deve ter `min_value`, `max_value`, `safety_limit`. O FXP valida comandos contra esses limites antes de enviar.
-*   **Fallback:** Atores alternativos podem ser configurados por política (ex: se ventoinha principal falhar, usar reserva).
+*   **Fallback:** política do registro do FXP (primary → alternativos, com heartbeat); o runtime apenas recebe o resultado (FORMAL §4.3; cf. BDD Caso 3).
 
 ### 3.4 Integração com o Runtime
 
@@ -129,7 +133,7 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
 
 ### 3.5 Entregável da Etapa 3
 
-*   Módulo FXP completo, com registro de sensores e atores, drivers reais e simulados, testes unitários e de integração. O interpretador da Etapa 2 deve ser atualizado para usar o FXP real (ou simulado em CI).
+*   Módulo FXP completo, com **schema de mensagem v1** (campos, opcodes, endianness, ack/timeout, transporte local × remoto) definido antes dos drivers; registro de sensores e atores; drivers reais e simulados; testes unitários e de integração. O interpretador da Etapa 2 deve ser atualizado para usar o FXP real (ou simulado em CI).
 
 **Mitigação de riscos:**
 
@@ -251,10 +255,16 @@ O simulador será implementado na Etapa 1 como parte dos mocks e evoluído para 
 O modelo local do pipeline (Qwen3-4B-Instruct-2507, via vLLM — ver
 `docs/SETUP-LOCAL-LLM.md`) **não detém conhecimento da VerboLang**: nenhum
 trecho da especificação (`docs/FORMAL.md`) está no seu treino, e a janela de
-4096 tokens do servidor impede despejar a spec inteira no contexto. Consequência
+4096 tokens do servidor inviabiliza despejar a spec inteira no contexto. Consequência
 prática: qualquer tarefa da linguagem delegada ao modelo local **precisa levar
 o contexto necessário no prompt** — sem isso, o modelo produz sintaxe e
 semântica plausíveis porém falsas (alucinação documental).
+
+> **Medição (auditoria):** `FORMAL.md` tem ~2,0 mil palavras ≈ 2,8–3,8 mil
+> tokens, conforme o tokenizer (estimativa; confirmar com o do Qwen). A spec
+> quase cabe na janela de 4096 — sem folga para a resposta. Se uma versão
+> aparada (sem mermaid/exemplos) couber com folga, adicionar à UI o toggle
+> "spec aparada" além do cheat sheet.
 
 Caminhos possíveis (não exclusivos, em ordem de custo):
 
@@ -264,10 +274,12 @@ Caminhos possíveis (não exclusivos, em ordem de custo):
 | **b. RAG sobre a spec** | Recuperação dos trechos relevantes da `FORMAL.md` por similaridade antes de cada consulta. Exige nó de embeddings (não cabe na VRAM junto do chat — ver `SETUP-LOCAL-LLM.md` §3.3) ou embeddings remotos. | Médio |
 | **c. Fine-tune / LoRA** | Ajuste do Qwen3-4B com pares (pergunta, trecho da spec); inviável nos 6 GB de VRAM atuais, exige hardware maior. | Alto |
 
-**Critério de aceite (caminho a):** sem a spec inteira no contexto, o modelo
-local responde corretamente a perguntas de nível "escreva uma forma
-`nonequilibrium` válida com `review` e `act`", validadas pelo GQT contra os
-cenários BDD da Etapa 1. Enquanto o cheat sheet canônico não existir, todo uso
+**Critério de aceite (caminho a), mensurável:** banco fixo de 20 prompts (10 de
+sintaxe — ex.: "escreva uma forma `nonequilibrium` válida com `review` e
+`act`" — e 10 de semântica), 3 execuções cada; aceito se ≥ 90% das respostas
+passam no verificador sintático (parser da Etapa 2 ou mini-validador dedicado
+— o blueprint Python não parseia texto) e na rubrica semântica do GQT contra
+os cenários BDD da Etapa 1; resultados versionados em `docs/`. Até lá, todo uso
 do modelo local para assuntos da linguagem deve assumir explicitamente que
 **o modelo não conhece a VerboLang**.
 
