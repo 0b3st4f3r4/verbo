@@ -219,7 +219,11 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   entra no medidor de contexto; modelo pequeno pode desobedecer ao formato —
   nesse caso a resposta simplesmente aparece sem botões. O parser tolera
   também o `[/q]` órfão (modelo que esquece o `[q]` de abertura), linhas de
-  pergunta sem numeração e blocos não fechados.
+  pergunta sem numeração e blocos não fechados. Contra o esquecimento do
+  modelo: um **lembrete curto** acompanha a última mensagem do usuário só na
+  requisição (histórico e cópia ficam limpos; o custo entra no medidor) e, se
+  o bloco não vier, uma **segunda chamada leve** (só a cauda da resposta +
+  `max_tokens` 256) pede a lista de 7 perguntas diretamente.
 - **Tipografia**: Inter (texto corrido; pesos 400/600/700) e Iosevka (código e
   terminal; peso 400, subset latin+simbolos), **auto-hospedadas** em
   `scripts/fonts/` (SIL OFL 1.1 — proveniência em

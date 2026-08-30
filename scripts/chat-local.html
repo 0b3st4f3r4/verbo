@@ -434,6 +434,8 @@ const I18N = {
       rollbackTitle: "Desfazer a última troca (a pergunta volta ao campo)",
       rollbackNothing: "Nada a desfazer.",
       retry: "Reenviar", retryTitle: "Gerar novamente esta resposta",
+      followupReminder: "Lembre-se: termine a resposta com o bloco [q] contendo 7 perguntas numeradas e depois [/q].",
+      followupRecovery: "Gere exatamente 7 perguntas curtas de acompanhamento sobre o texto a seguir, uma por linha, numeradas de 1 a 7. Responda SOMENTE com a lista.",
       extraInstr: "Instruções adicionais do operador:",
       copyBtn: "copiar", copyTitle: "copiar resposta (markdown)", copied: "copiado ✓",
       emptyReply: "(resposta vazia)"
@@ -487,6 +489,8 @@ const I18N = {
       rollbackTitle: "Undo the last exchange (the question returns to the input)",
       rollbackNothing: "Nothing to undo.",
       retry: "Retry", retryTitle: "Regenerate this reply",
+      followupReminder: "Remember: end the reply with the [q] block containing 7 numbered questions and then [/q].",
+      followupRecovery: "Generate exactly 7 short follow-up questions about the following text, one per line, numbered 1 to 7. Reply with the list ONLY.",
       extraInstr: "Additional operator instructions:",
       copyBtn: "copy", copyTitle: "copy reply (markdown)", copied: "copied ✓",
       emptyReply: "(empty reply)"
@@ -541,6 +545,8 @@ const I18N = {
       rollbackTitle: "撤销最近一轮对话（问题回到输入框）",
       rollbackNothing: "没有可撤销的内容。",
       retry: "重试", retryTitle: "重新生成此回复",
+      followupReminder: "记住：以 [q] 块结束回复，其中包含 7 个编号问题，然后是 [/q]。",
+      followupRecovery: "针对以下文本生成恰好 7 个简短的后续问题，每行一个，编号 1 到 7。只回复列表。",
       emptyReply: "（空回复）"
     },
     chipsPuro: [
@@ -593,6 +599,8 @@ const I18N = {
       rollbackTitle: "Отменить последний обмен (вопрос вернётся в поле ввода)",
       rollbackNothing: "Отменять нечего.",
       retry: "Повторить", retryTitle: "Сгенерировать этот ответ заново",
+      followupReminder: "Помните: завершите ответ блоком [q] с 7 пронумерованными вопросами, затем [/q].",
+      followupRecovery: "Сгенерируйте ровно 7 коротких уточняющих вопросов к следующему тексту, по одному на строку, с номерами от 1 до 7. Ответьте ТОЛЬКО списком.",
       emptyReply: "(пустой ответ)"
     },
     chipsPuro: [
@@ -645,6 +653,8 @@ const I18N = {
       rollbackTitle: "अंतिम अदला-बदली पूर्ववत करें (प्रश्न इनपुट में वापस आएगा)",
       rollbackNothing: "पूर्ववत करने को कुछ नहीं।",
       retry: "पुनः प्रयास", retryTitle: "यह उत्तर फिर से बनाएँ",
+      followupReminder: "याद रखें: उत्तर को [q] खंड के साथ समाप्त करें जिसमें 7 क्रमांकित प्रश्न हों, फिर [/q]।",
+      followupRecovery: "निम्नलिखित पाठ के बारे में ठीक 7 छोटे अनुवर्ती प्रश्न बनाएँ, प्रति पंक्ति एक, 1 से 7 क्रमांकित। केवल सूची के साथ उत्तर दें।",
       emptyReply: "(खाली उत्तर)"
     },
     chipsPuro: [
@@ -697,6 +707,8 @@ const I18N = {
       rollbackTitle: "Ontdoen die laaste uitruil (die vraag keer na die invoerveld terug)",
       rollbackNothing: "Niks om te ontdoen nie.",
       retry: "Herprobeer", retryTitle: "Genereer hierdie antwoord weer",
+      followupReminder: "Onthou: eindig die antwoord met die [q]-blok wat 7 genommerde vrae bevat en dan [/q].",
+      followupRecovery: "Genereer presies 7 kort opvolgvrae oor die volgende teks, een per reël, genommer 1 tot 7. Antwoord SLEGS met die lys.",
       emptyReply: "(leë antwoord)"
     },
     chipsPuro: [
@@ -749,6 +761,8 @@ const I18N = {
       rollbackTitle: "التراجع عن آخر تبادل (يعود السؤال إلى حقل الإدخال)",
       rollbackNothing: "لا شيء للتراجع عنه.",
       retry: "إعادة المحاولة", retryTitle: "إعادة توليد هذا الرد",
+      followupReminder: "تذكير: أنهِ الرد بكتلة [q] تحتوي على 7 أسئلة مرقمة ثم [/q].",
+      followupRecovery: "أنشئ بالضبط 7 أسئلة متابعة قصيرة عن النص التالي، سؤال في كل سطر، مرقمة من 1 إلى 7. أجب بالقائمة فقط.",
       emptyReply: "(رد فارغ)"
     },
     chipsPuro: [
@@ -856,6 +870,7 @@ function contextEstimate() {
   return estimateTokens($("system").value) + 16 + sheetTokens()
     + estimateTokens(t("followupInstr"))
     + (vblMode ? estimateTokens(t("followupVbl")) : 0)
+    + estimateTokens(t("followupReminder"))
     + history.reduce(
       (acc, msg) => acc + estimateTokens(msg.content) + 4, 0);
 }
@@ -915,6 +930,35 @@ function renderSugg(bubble, items) {
     box.appendChild(b);
   }
   bubble.appendChild(box);
+}
+function parseQuestionList(text) {           // saída da chamada de recuperação
+  return (text || "").split("\n")
+    .map((l) => l.replace(/^\s*(?:\d+[.)]|[-*])?\s*/, "").trim())
+    .filter(Boolean)
+    .filter((l) => !/^\[\/?q\]?$/.test(l))
+    .slice(0, 7);
+}
+function recoverSuggestions(bubble, answerText) {
+  if (!API_KEY || !answerText) return;
+  const sys = t("followupRecovery") + (vblMode ? "\n" + t("followupVbl") : "");
+  fetch(API_URL + "/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: [
+        { role: "system", content: sys },
+        { role: "user", content: answerText.slice(-2400) } // cauda da resposta
+      ],
+      max_tokens: 256,
+      temperature: 0.6,
+      stream: false
+    })
+  }).then((r) => r.ok ? r.json() : null).then((j) => {
+    if (!j || !bubble.isConnected) return;    // bolha já foi embora (rollback etc.)
+    const items = parseQuestionList(j.choices?.[0]?.message?.content || "");
+    if (items.length) renderSugg(bubble, items);
+  }).catch(() => {});
 }
 function renderMeter() {
   const est = Math.max(contextEstimate(), lastPromptTokens ?? 0);
@@ -1176,6 +1220,15 @@ async function ask(text) {
   $("empty").style.display = "none";
   history.push({ role: "user", content: text });
   addBubble("user", text);
+  // lembrete do bloco [q] vai só na requisição: history/cópia ficam limpos
+  const reqHistory = history.concat();
+  const lastReq = reqHistory[reqHistory.length - 1];
+  if (lastReq && lastReq.role === "user") {
+    reqHistory[reqHistory.length - 1] = {
+      role: "user",
+      content: lastReq.content + "\n\n(" + t("followupReminder") + ")"
+    };
+  }
 
   const bubble = document.createElement("div");
   bubble.className = "msg assistant";
@@ -1193,7 +1246,7 @@ async function ask(text) {
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY },
       body: JSON.stringify({
         model: MODEL,
-        messages: [{ role: "system", content: systemContent() }, ...history],
+        messages: [{ role: "system", content: systemContent() }, ...reqHistory],
         stream: true,
         stream_options: { include_usage: true },
         max_tokens: maxTokens,
@@ -1230,6 +1283,7 @@ async function ask(text) {
     if (items.length) renderAssistant(bubble, clean);  // resposta sem o bloco
     history.push({ role: "assistant", content: clean });
     if (items.length) renderSugg(bubble, items);
+    else recoverSuggestions(bubble, clean);     // modelo esqueceu: 2ª chamada
     enhanceMermaid(bubble);
     enhanceMath(bubble);
     attachCopy(bubble, clean);
