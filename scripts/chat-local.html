@@ -220,10 +220,13 @@
   pre.mermaid-src.mermaid-error { outline-color: var(--bad); }
   .sugg { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
   .sugg button {
+    display: inline-flex; align-items: center; gap: 4px;
     font-size: 12px; padding: 4px 10px; border-radius: 999px;
     background: var(--code-bg); border: 1px solid var(--border); color: var(--dim);
   }
   .sugg button:hover { color: var(--text); border-color: var(--accent); }
+  .sugg .katex { font-size: 1em; }
+  .sugg .katex-src.mdisp { display: inline; }
   .note-btn { font-size: 11.5px; padding: 2px 9px; border-radius: 6px; }
   .msg code {
     font-family: var(--mono); font-size: 12.5px;
@@ -922,14 +925,16 @@ function renderSugg(bubble, items) {
   box.className = "sugg";
   for (const q of items) {
     const b = document.createElement("button");
-    b.type = "button"; b.textContent = q;
+    b.type = "button";
+    b.innerHTML = inline(stripLatex(q));   // mesmo pipeline das mensagens
     b.addEventListener("click", () => {
       if (inFlight) return;
-      $("prompt").value = q; autosize(); $("prompt").focus();
+      $("prompt").value = q; autosize(); $("prompt").focus();  // raw no campo
     });
     box.appendChild(b);
   }
   bubble.appendChild(box);
+  enhanceMath(box);                         // LaTeX dentro dos chips
 }
 function parseQuestionList(text) {           // saída da chamada de recuperação
   return (text || "").split("\n")
