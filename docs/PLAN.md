@@ -244,6 +244,35 @@ O simulador será implementado na Etapa 1 como parte dos mocks e evoluído para 
 
 ---
 
+## 7. Demanda registrada — dotar o modelo local de conhecimento da VerboLang
+
+**Status:** em atendimento (set/2026) — caminho "a" implementado: [`docs/VBL-CHEATSHEET.md`](VBL-CHEATSHEET.md) criado e a UI de consulta local ganhou a alternância **"Modelo puro ↔ + VerboLang"** (a chave injeta o cheat sheet como prompt de sistema e o medidor de contexto passa a contar seu custo). **Pendente:** validação GQT do critério de aceite. **Responsáveis sugeridos:** AD (conteúdo canônico) + EC (validação contra a EBNF) + GQT (critério de aceite).
+
+O modelo local do pipeline (Qwen3-4B-Instruct-2507, via vLLM — ver
+`docs/SETUP-LOCAL-LLM.md`) **não detém conhecimento da VerboLang**: nenhum
+trecho da especificação (`docs/FORMAL.md`) está no seu treino, e a janela de
+4096 tokens do servidor impede despejar a spec inteira no contexto. Consequência
+prática: qualquer tarefa da linguagem delegada ao modelo local **precisa levar
+o contexto necessário no prompt** — sem isso, o modelo produz sintaxe e
+semântica plausíveis porém falsas (alucinação documental).
+
+Caminhos possíveis (não exclusivos, em ordem de custo):
+
+| Caminho | Descrição | Custo |
+|---|---|---|
+| **a. "Cheat sheet" canônico** ✅ | Prompt de sistema compacto (≤ ~1.200 tokens) derivado da `FORMAL.md`: EBNF resumida, as três conjugações, regras de `horizon`/`keep()`/`subvert`, registro mínimo do FXP. Artefato versionado: [`docs/VBL-CHEATSHEET.md`](VBL-CHEATSHEET.md), injetável na UI de consulta (alternância "Modelo puro ↔ + VerboLang") e no PoC. | Baixo — documentação |
+| **b. RAG sobre a spec** | Recuperação dos trechos relevantes da `FORMAL.md` por similaridade antes de cada consulta. Exige nó de embeddings (não cabe na VRAM junto do chat — ver `SETUP-LOCAL-LLM.md` §3.3) ou embeddings remotos. | Médio |
+| **c. Fine-tune / LoRA** | Ajuste do Qwen3-4B com pares (pergunta, trecho da spec); inviável nos 6 GB de VRAM atuais, exige hardware maior. | Alto |
+
+**Critério de aceite (caminho a):** sem a spec inteira no contexto, o modelo
+local responde corretamente a perguntas de nível "escreva uma forma
+`nonequilibrium` válida com `review` e `act`", validadas pelo GQT contra os
+cenários BDD da Etapa 1. Enquanto o cheat sheet canônico não existir, todo uso
+do modelo local para assuntos da linguagem deve assumir explicitamente que
+**o modelo não conhece a VerboLang**.
+
+---
+
 ## Conclusão
 
 Com a integração de sensores e atores no FXP, o plano de execução torna-se mais coeso e alinhado à filosofia do Materialismo Computacional. A inclusão da análise de riscos e a adoção de um simulador para CI garantem que o desenvolvimento seja seguro e viável, mantendo o rigor termodinâmico e os critérios de aceite mensuráveis definidos no AGENTS.md.

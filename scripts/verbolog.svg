@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="VerboLang">
+  <!--
+    verbolog.svg — marca do projeto VerboLang.
+    Um traço de osciloscópio (a medição do FXP) que mergulha num "V" —
+    o verbo que interrompe o sinal e age sobre o mundo físico.
+    Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
+  -->
+  <defs>
+    <radialGradient id="vbg" cx="0.5" cy="0.4" r="0.8">
+      <stop offset="0" stop-color="#1d2733"/>
+      <stop offset="1" stop-color="#11161d"/>
+    </radialGradient>
+    <linearGradient id="vstroke" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4da3ff"/>
+      <stop offset="1" stop-color="#3fb96f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- badge -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#vbg)" stroke="#2a3441" stroke-width="1.5"/>
+
+  <!-- graticule do osciloscópio -->
+  <path d="M9 43H55" stroke="#8496aa" stroke-opacity="0.14" stroke-width="1"/>
+  <path d="M9 30H55" stroke="#8496aa" stroke-opacity="0.10" stroke-width="1"/>
+
+  <!-- o traço: sinal com ruído que mergulha num V -->
+  <path d="M9 30H15.6
+           C17.3 30 17.8 25.6 19.5 25.6
+           C21.2 25.6 21.7 30 23.4 30
+           H26
+           L32 43
+           L38 30
+           H40.6
+           C42.3 30 42.8 25.6 44.5 25.6
+           C46.2 25.6 46.7 30 48.4 30
+           H55"
+        fill="none" stroke="url(#vstroke)" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- nó do verbo (vale do V) -->
+  <circle cx="32" cy="43" r="6" fill="#4da3ff" opacity="0.22"/>
+  <circle cx="32" cy="43" r="2.6" fill="#eaf4ff"/>
+</svg>

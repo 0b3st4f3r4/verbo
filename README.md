@@ -142,7 +142,10 @@ embeddings com o chat desligado ou em outra máquina.
 | [`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md) | Pipeline de LLMs: GLM-5.3/Flash (cloud) + Qwen3-4B-2507 (local) |
 | [`prototype/verbolang-complete-blueprint.py`](prototype/verbolang-complete-blueprint.py) | Protótipo de referência (FXP, runtime, Caderno, bloco `main`) |
 | [`prototype/verbolang-llm-poc.py`](prototype/verbolang-llm-poc.py) | PoC: comunicação inter-LLM (agentes LLM como atores/sensores no FXP) |
-| [`scripts/serve-local-llm.sh`](scripts/serve-local-llm.sh) | Sobe o modelo local Qwen3-4B-Instruct-2507-FP8 via vLLM |
+| [`scripts/serve-local-llm.sh`](scripts/serve-local-llm.sh) | Sobe o modelo local Qwen3-4B-Instruct-2507-FP8 via vLLM (e abre a UI de consulta) |
+| [`scripts/chat-local.html`](scripts/chat-local.html) | UI de consulta local: chat single-file, streaming SSE, medidor de contexto, alternância puro ↔ +VerboLang |
+| [`scripts/verbolog.svg`](scripts/verbolog.svg) | Marca do projeto (logo e favicon da UI de consulta) |
+| [`docs/VBL-CHEATSHEET.md`](docs/VBL-CHEATSHEET.md) | VerboLang em uma página — cheat sheet canônico injetável como prompt de sistema |
 | [`LICENSE`](LICENSE) | Licença GPL-3.0 (copyleft) |
 
 > **Ordem de leitura sugerida:** [`docs/MANIFESTO.md`](docs/MANIFESTO.md) →
@@ -167,6 +170,19 @@ O projeto usa um pipeline de **dois modelos**: o orquestrador **GLM-5.3/Flash**
 (cloud, revisão de ontologia e arquitetura) e o **Qwen3-4B-Instruct-2507**
 (local, via vLLM — trabalho bulk offline, dados de sensores não saem da máquina).
 Configuração completa em [`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md).
+
+> **Atenção:** o modelo local **não conhece a VerboLang** — a especificação não
+> está no seu treino e a janela de 4096 tokens impede carregá-la inteira.
+> Tarefas da linguagem exigem injetar contexto no prompt: use o modo
+> **"+ VerboLang"** da UI de consulta (injeta o
+> [`docs/VBL-CHEATSHEET.md`](docs/VBL-CHEATSHEET.md)) ou o cheat sheet no seu
+> próprio prompt. Demanda e caminhos (cheat sheet, RAG, fine-tune) em
+> [`docs/PLAN.md` §7](docs/PLAN.md).
+
+Para consulta direta ao modelo local, `bash scripts/serve-local-llm.sh` abre
+automaticamente a **UI de chat** ([`scripts/chat-local.html`](scripts/chat-local.html))
+quando o modelo termina de carregar — streaming, medidor de contexto e a
+alternância puro ↔ +VerboLang.
 
 ## Licença
 

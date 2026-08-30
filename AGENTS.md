@@ -221,3 +221,23 @@ Para garantir objetividade, as seguintes ferramentas devem ser integradas ao pip
 ## 4. Revisão Periódica de Métricas
 
 As metas numéricas definidas acima são provisórias e devem ser revisadas após a primeira implementação completa (Etapa 5). O AD, em conjunto com a equipe, ajustará os limites com base nos resultados reais, sempre mantendo o princípio da honestidade termodinâmica.
+
+---
+
+## 5. Nota Operacional — Modelos LLM do Pipeline
+
+O modelo local (Qwen3-4B-Instruct-2507) **não detém conhecimento da VerboLang**:
+a especificação não está no seu treino e a janela de 4096 tokens do servidor
+impede carregá-la inteira. Regras para a equipe de agentes:
+
+- Ao delegar tarefas da linguagem ao modelo local, **injete o contexto
+  necessário no prompt** — preferencialmente o cheat sheet canônico
+  [`docs/VBL-CHEATSHEET.md`](docs/VBL-CHEATSHEET.md) (demanda e caminhos em
+  [`docs/PLAN.md`](docs/PLAN.md) §7).
+- **Nunca presuma** que sintaxe ou semântica produzidas pelo modelo local estão
+  corretas: toda saída usada como artefato passa pela validação do GQT contra a
+  `FORMAL.md`.
+- Consulta direta: `bash scripts/serve-local-llm.sh` sobe o modelo e abre a UI
+  de chat local (`scripts/chat-local.html`), que tem a alternância
+  "Modelo puro ↔ + VerboLang" (injeta o cheat sheet e conta seu custo no
+  medidor de contexto).
