@@ -1,0 +1,11 @@
+Vendored: Mermaid (renderização de diagramas da UI de consulta local)
+=======================================================================
+
+Arquivo:   mermaid.min.js
+Versão:    11.x (UMD, dist/mermaid.min.js)
+Origem:    https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js
+Licença:   MIT — Copyright (c) mermaid contributors
+           https://github.com/mermaid-js/mermaid/blob/develop/LICENSE
+
+Vendido para manter a UI 100% local: nenhuma requisição sai da máquina.
+Atualização: substitua este arquivo pelo novo dist e ajuste a versão aqui.

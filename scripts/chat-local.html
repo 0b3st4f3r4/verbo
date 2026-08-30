@@ -173,10 +173,43 @@
     border-bottom-right-radius: 4px;
   }
   .msg.assistant {
+    position: relative;
     align-self: flex-start; background: var(--panel);
     border: 1px solid var(--border-soft); border-bottom-left-radius: 4px;
+    padding-right: 34px;
     white-space: normal;   /* o markdown já resolve as quebras (\n → <br>) */
   }
+  .copy-btn {
+    position: absolute; top: 4px; inset-inline-end: 4px;
+    border: 1px solid var(--border-soft); background: var(--panel-2);
+    border-radius: 6px; font-size: 11px; padding: 2px 7px; color: var(--dim);
+    opacity: 0; transition: opacity .15s;
+  }
+  .msg.assistant:hover .copy-btn, .copy-btn:focus-visible { opacity: 1; }
+  .copy-btn.done { color: var(--ok); border-color: var(--ok); opacity: 1; }
+  .msg h2, .msg h3, .msg h4, .msg h5 { margin: 10px 0 4px; line-height: 1.3; }
+  .msg ul, .msg ol { margin: 6px 0; padding-inline-start: 22px; }
+  .msg li { margin: 2px 0; }
+  .msg blockquote {
+    margin: 8px 0; padding: 4px 12px; color: var(--dim);
+    border-inline-start: 3px solid var(--border);
+  }
+  .msg hr { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
+  .msg a { color: var(--accent); }
+  .tblwrap { overflow-x: auto; margin: 8px 0; scrollbar-width: thin; }
+  .msg table { border-collapse: collapse; font-size: 13px; }
+  .msg th, .msg td {
+    border: 1px solid var(--border); padding: 4px 9px; text-align: start;
+  }
+  .msg th { background: var(--code-bg); }
+  .mermaid-box {
+    margin: 8px 0 2px; padding: 10px; overflow-x: auto;
+    background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px;
+    text-align: center;
+  }
+  .mermaid-box svg { max-width: 100%; height: auto; }
+  pre.mermaid-src { outline: 1px dashed var(--border); }
+  pre.mermaid-src.mermaid-error { outline-color: var(--bad); }
   .msg code {
     font-family: var(--mono); font-size: 12.5px;
     background: var(--code-bg); border: 1px solid var(--code-border);
@@ -328,6 +361,7 @@
   </div>
 </footer>
 
+<script src="vendor/mermaid.min.js"></script>
 <script>
 "use strict";
 // ── configuração (fragmento #k=…&u=…&m=…&c=…) ─────────────────────────────
@@ -377,6 +411,7 @@ const I18N = {
       err400: "400 — a conversa excedeu o contexto de {ctx} tokens. Use ✂ Podar ou comece uma conversa nova.",
       noKey: "Chave da API ausente no fragmento #k=… da URL.",
       extraInstr: "Instruções adicionais do operador:",
+      copyBtn: "copiar", copyTitle: "copiar resposta (markdown)", copied: "copiado ✓",
       emptyReply: "(resposta vazia)"
     },
     chipsPuro: [
@@ -424,6 +459,7 @@ const I18N = {
       err400: "400 — the conversation exceeded the context of {ctx} tokens. Prune (✂) or start a new conversation.",
       noKey: "API key missing from the #k=… URL fragment.",
       extraInstr: "Additional operator instructions:",
+      copyBtn: "copy", copyTitle: "copy reply (markdown)", copied: "copied ✓",
       emptyReply: "(empty reply)"
     },
     chipsPuro: [
@@ -470,6 +506,7 @@ const I18N = {
       err401: "401 —— 密钥无效（URL 的 #k=… 片段）。",
       err400: "400 —— 对话超出 {ctx} tokens 的上下文。请使用 ✂ 修剪或开始新对话。",
       extraInstr: "操作员的附加指令：",
+      copyBtn: "复制", copyTitle: "复制回复（markdown）", copied: "已复制 ✓",
       emptyReply: "（空回复）"
     },
     chipsPuro: [
@@ -516,6 +553,7 @@ const I18N = {
       err401: "401 — неверный ключ (фрагмент URL #k=…).",
       err400: "400 — диалог превысил контекст {ctx} токенов. Обрежьте (✂) или начните новый диалог.",
       extraInstr: "Дополнительные инструкции оператора:",
+      copyBtn: "копировать", copyTitle: "копировать ответ (markdown)", copied: "скопировано ✓",
       emptyReply: "(пустой ответ)"
     },
     chipsPuro: [
@@ -562,6 +600,7 @@ const I18N = {
       err401: "401 — अमान्य कुंजी (URL का #k=… भाग)।",
       err400: "400 — बातचीत {ctx} टोकन की सीमा पार कर गई। ✂ छाँटें या नई बातचीत शुरू करें।",
       extraInstr: "ऑपरेटर के अतिरिक्त निर्देश:",
+      copyBtn: "कॉपी", copyTitle: "उत्तर कॉपी करें (markdown)", copied: "कॉपी हो गया ✓",
       emptyReply: "(खाली उत्तर)"
     },
     chipsPuro: [
@@ -608,6 +647,7 @@ const I18N = {
       err401: "401 — ongeldige sleutel (URL #k=…-fragment).",
       err400: "400 — die gesprek het die konteks van {ctx} tokens oorskry. Snoei (✂) of begin 'n nuwe gesprek.",
       extraInstr: "Bykomende operateursinstruksies:",
+      copyBtn: "kopieer", copyTitle: "kopieer antwoord (markdown)", copied: "gekopieer ✓",
       emptyReply: "(leë antwoord)"
     },
     chipsPuro: [
@@ -654,6 +694,7 @@ const I18N = {
       err401: "401 — مفتاح غير صالح (جزء #k=… من الرابط).",
       err400: "400 — تجاوزت المحادثة سياق {ctx} توكن. قلّم (✂) أو ابدأ محادثة جديدة.",
       extraInstr: "تعليمات إضافية من المشغّل:",
+      copyBtn: "نسخ", copyTitle: "نسخ الرد (markdown)", copied: "تم النسخ ✓",
       emptyReply: "(رد فارغ)"
     },
     chipsPuro: [
@@ -688,6 +729,7 @@ function applyTheme(name) {
   localStorage.setItem("vllm.theme", name);
   document.documentElement.dataset.theme = name;
   $("theme").value = name;
+  applyMermaidTheme();   // re-renderiza diagramas existentes no novo tema
 }
 function buildLangSelect() {
   const sel = $("lang");
@@ -817,23 +859,132 @@ log.addEventListener("scroll", () => {
 $("jump").addEventListener("click", () => { stickToBottom = true; scrollToBottom(); });
 function keepScroll() { if (stickToBottom) scrollToBottom(); }
 
-// ── markdown mínimo (escape → cercas → inline → negrito) ──────────────────
+// ── markdown (escape primeiro; blocos: código, mermaid, título, tabela,
+//    lista, citação, hr; inline: código, negrito, itálico, tachado, link) ──
 function esc(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+function inline(s) {
+  s = esc(s);
+  const codes = [];
+  s = s.replace(/`([^`]+)`/g, (_, c) => {          // protege o conteúdo do código
+    codes.push(c);
+    return "\x00" + (codes.length - 1) + "\x00";
+  });
+  s = s
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?:;]|$)/g, "$1<em>$2</em>")
+    .replace(/~~([^~]+)~~/g, "<del>$1</del>")
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
+             '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  return s.replace(/\x00(\d+)\x00/g, (_, i) => "<code>" + codes[+i] + "</code>");
+}
 function md(src) {
-  const parts = src.split("```");
-  return parts.map((part, i) => {
-    if (i % 2 === 1) {                                   // bloco de código
-      const nl = part.indexOf("\n");
-      const body = (nl >= 0 ? part.slice(nl + 1) : part).replace(/\n$/, "");
-      return `<pre><code>${esc(body)}</code></pre>`;
+  const lines = src.replace(/\r\n?/g, "\n").split("\n");
+  const out = [];
+  let para = [];
+  let i = 0;
+  const flushPara = () => {
+    if (para.length) { out.push("<p>" + para.map(inline).join("<br>") + "</p>"); para = []; }
+  };
+  while (i < lines.length) {
+    const line = lines[i];
+    const fence = line.match(/^\s*(```+|~~~+)\s*(\S*)\s*$/);
+    if (fence) {                                    // bloco cercado (e mermaid)
+      flushPara();
+      const lang = (fence[2] || "").toLowerCase();
+      const buf = []; i++;
+      while (i < lines.length && !/^\s*(```+|~~~+)\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
+      i++;
+      const code = buf.join("\n");
+      out.push(lang === "mermaid"
+        ? '<pre class="mermaid-src">' + esc(code) + "</pre>"
+        : "<pre><code>" + esc(code) + "</code></pre>");
+      continue;
     }
-    let x = esc(part)
-      .replace(/`([^`\n]+)`/g, "<code>$1</code>")
-      .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
-    return x.replace(/\n/g, "<br>");
-  }).join("");
+    if (/^\s*$/.test(line)) { flushPara(); i++; continue; }
+    const h = line.match(/^(#{1,4})\s+(.*)$/);
+    if (h) {                                        // título → h2..h5 (h1 é da página)
+      flushPara();
+      const l = h[1].length + 1;
+      out.push("<h" + l + ">" + inline(h[2]) + "</h" + l + ">");
+      i++; continue;
+    }
+    if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) { flushPara(); out.push("<hr>"); i++; continue; }
+    if (/^\s*>/.test(line)) {                       // citação
+      flushPara();
+      const buf = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) { buf.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
+      out.push("<blockquote>" + buf.map(inline).join("<br>") + "</blockquote>");
+      continue;
+    }
+    if (line.includes("|") && i + 1 < lines.length &&
+        /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes("-")) {
+      flushPara();                                  // tabela
+      const row = (l) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => inline(c.trim()));
+      const head = row(line); i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].includes("|") && !/^\s*$/.test(lines[i])) { rows.push(row(lines[i])); i++; }
+      let tbl = '<div class="tblwrap"><table><thead><tr>' +
+                head.map((c) => "<th>" + c + "</th>").join("") + "</tr></thead><tbody>";
+      for (const r of rows) tbl += "<tr>" + r.map((c) => "<td>" + c + "</td>").join("") + "</tr>";
+      out.push(tbl + "</tbody></table></div>");
+      continue;
+    }
+    const li = line.match(/^(\s*)([-*]|\d+[.)])\s+(.*)$/);
+    if (li) {                                       // lista (1 nível + continuação)
+      flushPara();
+      const ordered = /\d/.test(li[2]);
+      const items = [];
+      while (i < lines.length) {
+        const m = lines[i].match(/^(\s*)([-*]|\d+[.)])\s+(.*)$/);
+        if (!m) break;
+        items.push(m[3]); i++;
+        while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !/^\s*([-*]|\d+[.)])\s/.test(lines[i])) {
+          items[items.length - 1] += " " + lines[i].trim(); i++;
+        }
+      }
+      const tag = ordered ? "ol" : "ul";
+      out.push("<" + tag + ">" + items.map((x) => "<li>" + inline(x) + "</li>").join("") + "</" + tag + ">");
+      continue;
+    }
+    para.push(line); i++;
+  }
+  flushPara();
+  return out.join("");
+}
+
+// ── mermaid (vendor local; tema acompanha a UI; falha deixa o código) ─────
+let mermaidSeq = 0;
+const diagrams = [];   // {box, code} — para re-render quando o tema muda
+function mermaidThemeName() { return theme === "light" ? "neutral" : "dark"; }
+function applyMermaidTheme() {
+  if (!window.mermaid) return;
+  mermaid.initialize({
+    startOnLoad: false, securityLevel: "strict",
+    theme: mermaidThemeName(), fontFamily: "Inter, system-ui, sans-serif"
+  });
+  for (const d of diagrams) {
+    mermaid.render("mmd-" + (++mermaidSeq), d.code)
+      .then(({ svg }) => { d.box.innerHTML = svg; })
+      .catch(() => {});
+  }
+}
+async function enhanceMermaid(scope) {
+  if (!window.mermaid) return;
+  for (const pre of scope.querySelectorAll("pre.mermaid-src")) {
+    const code = pre.textContent;
+    try {
+      const { svg } = await mermaid.render("mmd-" + (++mermaidSeq), code);
+      const box = document.createElement("div");
+      box.className = "mermaid-box";
+      box.innerHTML = svg;
+      pre.replaceWith(box);
+      diagrams.push({ box, code });
+    } catch {
+      pre.classList.add("mermaid-error");  // diagrama inválido: o código fica visível
+    }
+  }
 }
 function renderAssistant(bubble, text) {
   if (!text) {
@@ -913,9 +1064,15 @@ async function send() {
     }
     if (!acc) { acc = t("emptyReply"); bubble.textContent = acc; }
     history.push({ role: "assistant", content: acc });
+    enhanceMermaid(bubble);
+    attachCopy(bubble, acc);
   } catch (err) {
     if (controller.signal.aborted) {
-      if (acc) { history.push({ role: "assistant", content: acc }); }
+      if (acc) {
+        history.push({ role: "assistant", content: acc });
+        enhanceMermaid(bubble);
+        attachCopy(bubble, acc);
+      }
       else bubble.remove();
       note(t("aborted"));
     } else {
@@ -947,6 +1104,22 @@ function addBubble(role, text) {
   log.appendChild(div);
   stickToBottom = true; scrollToBottom();
   return div;
+}
+function attachCopy(bubble, raw) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "copy-btn";
+  btn.textContent = t("copyBtn");
+  btn.title = t("copyTitle");
+  btn.addEventListener("click", async () => {
+    try {                                   // copia o markdown bruto da resposta
+      await navigator.clipboard.writeText(raw);
+      btn.textContent = t("copied");
+      btn.classList.add("done");
+      setTimeout(() => { btn.textContent = t("copyBtn"); btn.classList.remove("done"); }, 1500);
+    } catch { /* clipboard indisponível */ }
+  });
+  bubble.appendChild(btn);
 }
 function autosize() {
   const box = $("prompt");

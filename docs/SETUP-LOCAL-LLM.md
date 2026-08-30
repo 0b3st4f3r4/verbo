@@ -204,6 +204,9 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
 - **Temas e idiomas**: três temas (claro, metal, escuro) e sete idiomas de
   interface (português, inglês, chinês, russo, híndi, africâner e árabe — com
   RTL), persistidos em `localStorage`.
+- **Respostas em markdown completo**: títulos, listas, citações, tabelas, links
+  e **diagramas Mermaid** (vendido em `scripts/vendor/`, MIT — tema acompanha a
+  UI). Botão **copiar** em cada resposta devolve o markdown bruto.
 - **Tipografia**: Inter (texto corrido; pesos 400/600/700) e Iosevka (código e
   terminal; peso 400, subset latin+simbolos), **auto-hospedadas** em
   `scripts/fonts/` (SIL OFL 1.1 — proveniência em
