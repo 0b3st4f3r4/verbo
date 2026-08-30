@@ -213,7 +213,9 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   perguntas como botões (no modo "+ VerboLang" a instrução pede que explorem a
   gramática: formas, conjugações, `review`, `act`, FXP). O custo da instrução
   entra no medidor de contexto; modelo pequeno pode desobedecer ao formato —
-  nesse caso a resposta simplesmente aparece sem botões.
+  nesse caso a resposta simplesmente aparece sem botões. O parser tolera
+  também o `[/q]` órfão (modelo que esquece o `[q]` de abertura), linhas de
+  pergunta sem numeração e blocos não fechados.
 - **Tipografia**: Inter (texto corrido; pesos 400/600/700) e Iosevka (código e
   terminal; peso 400, subset latin+simbolos), **auto-hospedadas** em
   `scripts/fonts/` (SIL OFL 1.1 — proveniência em

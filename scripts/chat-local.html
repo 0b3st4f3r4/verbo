@@ -416,7 +416,7 @@ const I18N = {
       err401: "401 — chave inválida (fragmento #k=… da URL).",
       err400: "400 — a conversa excedeu o contexto de {ctx} tokens. Use ✂ Podar ou comece uma conversa nova.",
       noKey: "Chave da API ausente no fragmento #k=… da URL.",
-      followupInstr: "Termine TODA resposta com um bloco final neste formato exato, com 7 perguntas curtas de acompanhamento derivadas do conteúdo da própria resposta:\n[q]\n1. pergunta?\n2. pergunta?\n3. pergunta?\n4. pergunta?\n5. pergunta?\n6. pergunta?\n7. pergunta?\n[/q]\nNão escreva nada depois de [/q] e não comente o bloco.",
+      followupInstr: "Termine TODA resposta com um bloco final neste formato exato, com 7 perguntas curtas de acompanhamento derivadas do conteúdo da própria resposta:\n[q]\n1. pergunta?\n2. pergunta?\n3. pergunta?\n4. pergunta?\n5. pergunta?\n6. pergunta?\n7. pergunta?\n[/q]\nNão escreva nada depois de [/q] e não comente o bloco. O bloco OBRIGATORIAMENTE abre com [q] e fecha com [/q].",
       followupVbl: "As perguntas devem explorar a gramática da VerboLang relacionada à resposta: formas, conjugações (event/equilibrium/nonequilibrium), review, act, FXP.",
       extraInstr: "Instruções adicionais do operador:",
       copyBtn: "copiar", copyTitle: "copiar resposta (markdown)", copied: "copiado ✓",
@@ -466,7 +466,7 @@ const I18N = {
       err401: "401 — invalid key (URL #k=… fragment).",
       err400: "400 — the conversation exceeded the context of {ctx} tokens. Prune (✂) or start a new conversation.",
       noKey: "API key missing from the #k=… URL fragment.",
-      followupInstr: "End EVERY reply with a final block in this exact format, containing 7 short follow-up questions derived from the content of the reply itself:\n[q]\n1. question?\n2. question?\n3. question?\n4. question?\n5. question?\n6. question?\n7. question?\n[/q]\nWrite nothing after [/q] and do not comment on the block.",
+      followupInstr: "End EVERY reply with a final block in this exact format, containing 7 short follow-up questions derived from the content of the reply itself:\n[q]\n1. question?\n2. question?\n3. question?\n4. question?\n5. question?\n6. question?\n7. question?\n[/q]\nWrite nothing after [/q] and do not comment on the block. The block MUST open with [q] and close with [/q].",
       followupVbl: "The questions must explore the VerboLang grammar related to the reply: forms, conjugations (event/equilibrium/nonequilibrium), review, act, FXP.",
       extraInstr: "Additional operator instructions:",
       copyBtn: "copy", copyTitle: "copy reply (markdown)", copied: "copied ✓",
@@ -517,7 +517,7 @@ const I18N = {
       err400: "400 —— 对话超出 {ctx} tokens 的上下文。请使用 ✂ 修剪或开始新对话。",
       extraInstr: "操作员的附加指令：",
       copyBtn: "复制", copyTitle: "复制回复（markdown）", copied: "已复制 ✓",
-      followupInstr: "每条回复都必须以完全如下格式的结尾块收束，其中包含 7 个由回复内容引出的简短后续问题：\n[q]\n1. 问题？\n2. 问题？\n3. 问题？\n4. 问题？\n5. 问题？\n6. 问题？\n7. 问题？\n[/q]\n在 [/q] 之后不要写任何内容，也不要对该块作说明。",
+      followupInstr: "每条回复都必须以完全如下格式的结尾块收束，其中包含 7 个由回复内容引出的简短后续问题：\n[q]\n1. 问题？\n2. 问题？\n3. 问题？\n4. 问题？\n5. 问题？\n6. 问题？\n7. 问题？\n[/q]\n在 [/q] 之后不要写任何内容，也不要对该块作说明。该块必须以 [q] 开始、以 [/q] 结束。",
       followupVbl: "这些问题应探索与回复相关的 VerboLang 语法：形式、变体（event/equilibrium/nonequilibrium）、review、act、FXP。",
       emptyReply: "（空回复）"
     },
@@ -566,7 +566,7 @@ const I18N = {
       err400: "400 — диалог превысил контекст {ctx} токенов. Обрежьте (✂) или начните новый диалог.",
       extraInstr: "Дополнительные инструкции оператора:",
       copyBtn: "копировать", copyTitle: "копировать ответ (markdown)", copied: "скопировано ✓",
-      followupInstr: "Завершайте КАЖДЫЙ ответ финальным блоком точно в этом формате, содержащим 7 коротких уточняющих вопросов, вытекающих из содержания самого ответа:\n[q]\n1. вопрос?\n2. вопрос?\n3. вопрос?\n4. вопрос?\n5. вопрос?\n6. вопрос?\n7. вопрос?\n[/q]\nПосле [/q] ничего не пишите и не комментируйте блок.",
+      followupInstr: "Завершайте КАЖДЫЙ ответ финальным блоком точно в этом формате, содержащим 7 коротких уточняющих вопросов, вытекающих из содержания самого ответа:\n[q]\n1. вопрос?\n2. вопрос?\n3. вопрос?\n4. вопрос?\n5. вопрос?\n6. вопрос?\n7. вопрос?\n[/q]\nПосле [/q] ничего не пишите и не комментируйте блок. Блок обязательно открывается [q] и закрывается [/q].",
       followupVbl: "Вопросы должны исследовать грамматику VerboLang, связанную с ответом: формы, спряжения (event/equilibrium/nonequilibrium), review, act, FXP.",
       emptyReply: "(пустой ответ)"
     },
@@ -615,7 +615,7 @@ const I18N = {
       err400: "400 — बातचीत {ctx} टोकन की सीमा पार कर गई। ✂ छाँटें या नई बातचीत शुरू करें।",
       extraInstr: "ऑपरेटर के अतिरिक्त निर्देश:",
       copyBtn: "कॉपी", copyTitle: "उत्तर कॉपी करें (markdown)", copied: "कॉपी हो गया ✓",
-      followupInstr: "हर उत्तर को इस सटीक प्रारूप के अंतिम खंड के साथ समाप्त करें, जिसमें उत्तर की सामग्री से लिए गए 7 छोटे अनुवर्ती प्रश्न हों:\n[q]\n1. प्रश्न?\n2. प्रश्न?\n3. प्रश्न?\n4. प्रश्न?\n5. प्रश्न?\n6. प्रश्न?\n7. प्रश्न?\n[/q]\n[/q] के बाद कुछ न लिखें और इस खंड पर टिप्पणी न करें।",
+      followupInstr: "हर उत्तर को इस सटीक प्रारूप के अंतिम खंड के साथ समाप्त करें, जिसमें उत्तर की सामग्री से लिए गए 7 छोटे अनुवर्ती प्रश्न हों:\n[q]\n1. प्रश्न?\n2. प्रश्न?\n3. प्रश्न?\n4. प्रश्न?\n5. प्रश्न?\n6. प्रश्न?\n7. प्रश्न?\n[/q]\n[/q] के बाद कुछ न लिखें और इस खंड पर टिप्पणी न करें। खंड अनिवार्य रूप से [q] से खुलता है और [/q] पर बंद होता है।",
       followupVbl: "प्रश्न उत्तर से संबंधित VerboLang व्याकरण का अन्वेषण करें: रूप, कॉन्जुगेशन (event/equilibrium/nonequilibrium), review, act, FXP।",
       emptyReply: "(खाली उत्तर)"
     },
@@ -664,7 +664,7 @@ const I18N = {
       err400: "400 — die gesprek het die konteks van {ctx} tokens oorskry. Snoei (✂) of begin 'n nuwe gesprek.",
       extraInstr: "Bykomende operateursinstruksies:",
       copyBtn: "kopieer", copyTitle: "kopieer antwoord (markdown)", copied: "gekopieer ✓",
-      followupInstr: "Beëindig ELKE antwoord met 'n finale blok in hierdie presiese formaat, met 7 kort opvolgvrae wat uit die inhoud van die antwoord self voortvloei:\n[q]\n1. vraag?\n2. vraag?\n3. vraag?\n4. vraag?\n5. vraag?\n6. vraag?\n7. vraag?\n[/q]\nSkryf niks na [/q] nie en kommentaar nie oor die blok nie.",
+      followupInstr: "Beëindig ELKE antwoord met 'n finale blok in hierdie presiese formaat, met 7 kort opvolgvrae wat uit die inhoud van die antwoord self voortvloei:\n[q]\n1. vraag?\n2. vraag?\n3. vraag?\n4. vraag?\n5. vraag?\n6. vraag?\n7. vraag?\n[/q]\nSkryf niks na [/q] nie en kommentaar nie oor die blok nie. Die blok MOET met [q] begin en met [/q] eindig.",
       followupVbl: "Die vrae moet die VerboLang-grammatika wat met die antwoord verband hou verken: vorms, konjugasies (event/equilibrium/nonequilibrium), review, act, FXP.",
       emptyReply: "(leë antwoord)"
     },
@@ -713,7 +713,7 @@ const I18N = {
       err400: "400 — تجاوزت المحادثة سياق {ctx} توكن. قلّم (✂) أو ابدأ محادثة جديدة.",
       extraInstr: "تعليمات إضافية من المشغّل:",
       copyBtn: "نسخ", copyTitle: "نسخ الرد (markdown)", copied: "تم النسخ ✓",
-      followupInstr: "اختم كل رد بكتلة نهائية بهذا التنسيق تمامًا، تحتوي على 7 أسئلة متابعة قصيرة مستمدة من محتوى الرد نفسه:\n[q]\n1. سؤال؟\n2. سؤال؟\n3. سؤال؟\n4. سؤال؟\n5. سؤال؟\n6. سؤال؟\n7. سؤال؟\n[/q]\nلا تكتب شيئًا بعد [/q] ولا تعلّق على الكتلة.",
+      followupInstr: "اختم كل رد بكتلة نهائية بهذا التنسيق تمامًا، تحتوي على 7 أسئلة متابعة قصيرة مستمدة من محتوى الرد نفسه:\n[q]\n1. سؤال؟\n2. سؤال؟\n3. سؤال؟\n4. سؤال؟\n5. سؤال؟\n6. سؤال؟\n7. سؤال؟\n[/q]\nلا تكتب شيئًا بعد [/q] ولا تعلّق على الكتلة. تبدأ الكتلة إلزاميًا بـ [q] وتنتهي بـ [/q].",
       followupVbl: "يجب أن تستكشف الأسئلة قواعد VerboLang المتعلقة بالرد: الصيغ، التصريفات (event/equilibrium/nonequilibrium)، review، act، FXP.",
       emptyReply: "(رد فارغ)"
     },
@@ -839,19 +839,29 @@ function systemContent() {
 
 // ── perguntas sugeridas: bloco [q]…[/q] no fim da resposta vira botões ────
 function cutAtQ(s) {
-  const i = s.lastIndexOf("[q]");
+  const a = s.indexOf("[q]");
+  const b = s.indexOf("[/q]");
+  const i = a === -1 ? b : (b === -1 ? a : Math.min(a, b));
   return i === -1 ? s : s.slice(0, i);
 }
 function splitSuggestions(raw) {
-  const i = raw.lastIndexOf("[q]");
-  if (i === -1) return { clean: raw, items: [] };
+  let i = raw.lastIndexOf("[q]");
+  let bodyStart = i + 3;
+  if (i === -1) {
+    // modelo esqueceu o [q] de abertura (falha comum em modelos pequenos):
+    // aceita [/q] órfão — resposta antes, perguntas depois
+    const j = raw.lastIndexOf("[/q]");
+    if (j === -1) return { clean: raw, items: [] };
+    i = j; bodyStart = j + 4;
+  }
   const head = raw.slice(0, i);
-  const tail = raw.slice(i + 3);
+  const tail = raw.slice(bodyStart);
   const end = tail.indexOf("[/q]");
   const body = end === -1 ? tail : tail.slice(0, end);
   const items = body.split("\n")
-    .map((l) => l.replace(/^\s*(?:\d+[.)]|[-*])\s*/, "").trim())
+    .map((l) => l.replace(/^\s*(?:\d+[.)]|[-*])?\s*/, "").trim())
     .filter(Boolean)
+    .filter((l) => !/^\[\/?q\]?$/.test(l))
     .slice(0, 7);
   return { clean: head.replace(/\s+$/, ""), items };
 }
