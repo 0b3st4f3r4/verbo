@@ -14,15 +14,15 @@
   <!-- linha de referência -->
   <line x1="40" y1="120" x2="840" y2="120" stroke="#8a93a3" stroke-opacity=".3" stroke-width="1" stroke-dasharray="2 7"/>
 
-  <!-- traço do osciloscópio: desce num V e volta -->
-  <path d="M40 120 H 320 Q 356 120 374 144 L 426 172 Q 440 179 454 172 L 506 144 Q 524 120 560 120 H 840"
+  <!-- traço do osciloscópio: desce num V acentuado e volta -->
+  <path d="M40 120 H 312 L 430 182 Q 440 187 450 182 L 568 120 H 840"
         fill="none" stroke="url(#trace)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- nós (mesmo tratamento do ícone: halo azul translúcido + miolo claro) -->
   <circle cx="230" cy="120" r="7" fill="#4da3ff" opacity="0.22"/>
   <circle cx="230" cy="120" r="3" fill="#eaf4ff"/>
-  <circle cx="440" cy="176" r="8" fill="#4da3ff" opacity="0.22"/>
-  <circle cx="440" cy="176" r="3.4" fill="#eaf4ff"/>
+  <circle cx="440" cy="184" r="8" fill="#4da3ff" opacity="0.22"/>
+  <circle cx="440" cy="184" r="3.4" fill="#eaf4ff"/>
   <circle cx="650" cy="120" r="7" fill="#4da3ff" opacity="0.22"/>
   <circle cx="650" cy="120" r="3" fill="#eaf4ff"/>
 

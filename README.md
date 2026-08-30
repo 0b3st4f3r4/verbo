@@ -1,4 +1,4 @@
-# VerboLang
+#
 
 <p align="center"><img src="docs/verbolog-banner.svg" alt="VerboLang" width="640"></p>
 
