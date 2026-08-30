@@ -238,6 +238,6 @@ impede carregá-la inteira. Regras para a equipe de agentes:
   corretas: toda saída usada como artefato passa pela validação do GQT contra a
   `FORMAL.md`.
 - Consulta direta: `bash scripts/serve-local-llm.sh` sobe o modelo e abre a UI
-  de chat (`scripts/chat.html`), que tem a alternância
+  de chat (`scripts/verbo-chat/chat.html`), que tem a alternância
   "Modelo puro ↔ + VerboLang" (injeta o cheat sheet e conta seu custo no
   medidor de contexto).

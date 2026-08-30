@@ -145,8 +145,8 @@ embeddings com o chat desligado ou em outra máquina.
 | [`prototype/verbolang-complete-blueprint.py`](prototype/verbolang-complete-blueprint.py) | Protótipo de referência (FXP, runtime, Caderno, bloco `main`) |
 | [`prototype/verbolang-llm-poc.py`](prototype/verbolang-llm-poc.py) | PoC: comunicação inter-LLM (agentes LLM como atores/sensores no FXP) |
 | [`scripts/serve-local-llm.sh`](scripts/serve-local-llm.sh) | Sobe o modelo local Qwen3-4B-Instruct-2507-FP8 via vLLM (e abre a UI de consulta) |
-| [`scripts/chat.html`](scripts/chat.html) | UI de consulta: chat single-file, streaming SSE, medidor de contexto, alternância puro ↔ +VerboLang |
-| [`scripts/verbolog.svg`](scripts/verbolog.svg) | Marca do projeto (logo e favicon da UI de consulta) |
+| [`scripts/verbo-chat/chat.html`](scripts/verbo-chat/chat.html) | UI de consulta: chat single-file, streaming SSE, medidor de contexto, alternância puro ↔ +VerboLang |
+| [`scripts/verbo-chat/verbolog.svg`](scripts/verbo-chat/verbolog.svg) | Marca do projeto (logo e favicon da UI de consulta) |
 | [`docs/VBL-CHEATSHEET.md`](docs/VBL-CHEATSHEET.md) | VerboLang em uma página — cheat sheet canônico injetável como prompt de sistema |
 | [`LICENSE`](LICENSE) | Licença GPL-3.0 (copyleft) |
 
@@ -182,7 +182,7 @@ Configuração completa em [`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md).
 > [`docs/PLAN.md` §7](docs/PLAN.md).
 
 Para consulta direta ao modelo local, `bash scripts/serve-local-llm.sh` abre
-automaticamente a **UI de chat** ([`scripts/chat.html`](scripts/chat.html))
+automaticamente a **UI de chat** ([`scripts/verbo-chat/chat.html`](scripts/verbo-chat/chat.html))
 quando o modelo termina de carregar — streaming, medidor de contexto e a
 alternância puro ↔ +VerboLang.
 

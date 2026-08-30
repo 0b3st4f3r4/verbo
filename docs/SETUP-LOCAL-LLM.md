@@ -174,11 +174,11 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
 > inter-LLM, scripts bulk e **consulta direta pela UI** abaixo — que envia ao
 > servidor apenas o que você digita.
 
-### 4.1 UI de consulta (`scripts/chat.html`)
+### 4.1 UI de consulta (`scripts/verbo-chat/chat.html`)
 
 - Single-file, zero dependências: streaming SSE direto ao endpoint
   OpenAI-compatível (o vLLM já responde preflight com `allow-origin: *`).
-  Identidade visual: `scripts/verbolog.svg` (logo no cabeçalho, favicon e
+  Identidade visual: `scripts/verbo-chat/verbolog.svg` (logo no cabeçalho, favicon e
   estado vazio) — traço de osciloscópio mergulhando num "V": a medição do FXP
   interrompida pelo verbo.
 - `serve-local-llm.sh` abre tudo sozinho: um vigia em subshell espera o
@@ -193,7 +193,7 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   mais antigo; **Nova** zera a conversa.
 - A chave vai no fragmento da URL (`#k=…`), que o navegador não envia ao
   servidor estático. URL manual:
-  `http://127.0.0.1:8188/scripts/chat.html#k=<chave>&u=<base-url>&m=<modelo>&c=<ctx>`
+  `http://127.0.0.1:8188/scripts/verbo-chat/chat.html#k=<chave>&u=<base-url>&m=<modelo>&c=<ctx>`
 - **Alternância "Modelo puro ↔ + VerboLang"**: seletor de ícones flutuante no
   canto inferior **direito**, acima do botão ↓ (chip = modelo puro; livro =
   + VerboLang; tooltip
@@ -217,10 +217,10 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   tentar enviar de outra aba mostra aviso. Sessões vivem em memória:
   recarregar a página começa limpo.
 - **Respostas em markdown completo**: títulos, listas, citações, tabelas, links
-  e **diagramas Mermaid** (vendido em `scripts/vendor/`, MIT — tema acompanha a
+  e **diagramas Mermaid** (vendido em `scripts/verbo-chat/vendor/`, MIT — tema acompanha a
   UI). Botão **copiar** em cada resposta devolve o markdown bruto. Delimitadores
   LaTeX que o modelo vaza (`\( \)`, `\[ \]`, `$$ $$`) são **renderizados com
-  KaTeX** (vendido em `scripts/vendor/katex/`, MIT — fração empilhada, radicais
+  KaTeX** (vendido em `scripts/verbo-chat/vendor/katex/`, MIT — fração empilhada, radicais
   e símbolos reais; TeX inválido fica como texto cru) — sem tocar em blocos de
   código.
 - **Perguntas sugeridas**: o prompt de sistema instrui o modelo a terminar cada
@@ -238,8 +238,8 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   `max_tokens` 256) pede a lista de 7 perguntas diretamente.
 - **Tipografia**: Inter (texto corrido; pesos 400/600/700) e Iosevka (código e
   terminal; peso 400, subset latin+simbolos), **auto-hospedadas** em
-  `scripts/fonts/` (SIL OFL 1.1 — proveniência em
-  `scripts/fonts/LICENSE-FONTS.txt`), com fallback do sistema para glifos fora
+  `scripts/verbo-chat/fonts/` (SIL OFL 1.1 — proveniência em
+  `scripts/verbo-chat/fonts/LICENSE-FONTS.txt`), com fallback do sistema para glifos fora
   dos subsets — nenhuma requisição de fonte sai da máquina.
 
 ### 4.2 Por que não via DSH (números medidos, set/2026)

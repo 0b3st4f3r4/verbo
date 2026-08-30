@@ -7,7 +7,7 @@ SHELL := /bin/bash
 
 SCRIPT  := scripts/serve-local-llm.sh
 UI_PORT ?= 8188
-UI_BASE := http://127.0.0.1:$(UI_PORT)/scripts/chat.html
+UI_BASE := http://127.0.0.1:$(UI_PORT)/scripts/verbo-chat/chat.html
 # chave na mesma ordem do script: env → credenciais do DSH
 KEY := $(shell awk '/^LOCAL_VLLM_KEY:/{print $$2}' $${LOCAL_VLLM_KEY_FILE:-$(HOME)/.dsh}/.credentials.yaml 2>/dev/null)
 LOG := .serve.log
@@ -26,13 +26,13 @@ help:
 check:
 > @set -e; \
   bash -n $(SCRIPT) && echo "✓ shell"; \
-  sed -n '/^<script>$$/,/^<\/script>$$/p' scripts/chat.html | sed '1d;$$d' > .ui-check.js; \
+  sed -n '/^<script>$$/,/^<\/script>$$/p' scripts/verbo-chat/chat.html | sed '1d;$$d' > .ui-check.js; \
   node --check .ui-check.js && rm -f .ui-check.js && echo "✓ js da UI"
 
 smoke:
 > @set -e; \
-  for p in scripts/chat.html docs/VBL-CHEATSHEET.md scripts/verbolog.svg \
-           scripts/vendor/mermaid.min.js scripts/vendor/katex/katex.min.js; do \
+  for p in scripts/verbo-chat/chat.html docs/VBL-CHEATSHEET.md scripts/verbo-chat/verbolog.svg \
+           scripts/verbo-chat/vendor/mermaid.min.js scripts/verbo-chat/vendor/katex/katex.min.js; do \
     code=$$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(UI_PORT)/$$p"); \
     echo "$$code  $$p"; \
     test "$$code" = 200; \
