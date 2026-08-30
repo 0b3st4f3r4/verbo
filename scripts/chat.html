@@ -919,6 +919,7 @@ function applyLang() {
   $("tabs").setAttribute("aria-label", t("tabsAria"));
   renderChips();
   renderTabs();
+  retranslateNotes();
   renderMeter();
   updateSheetStatus();
 }
@@ -1123,25 +1124,44 @@ function setStatus(state, key, params) {
   $("dot").className = "dot " + statusState;
   $("who").textContent = t(statusKey, statusParams);
 }
-function note(text, sess = S) {
-  if (!sess) return;
-  const div = document.createElement("div");
-  div.className = "sysnote"; div.textContent = text;
-  sess.view.appendChild(div);
-  sess.stick = true; scrollToBottom();
-}
-function noteAction(text, label, onClick, sess = S) {   // nota com botão (ex.: Reenviar)
+function note(key, params = {}, sess = S) {   // sysnote re-traduzível
   if (!sess) return;
   const div = document.createElement("div");
   div.className = "sysnote";
-  div.appendChild(document.createTextNode(text + " "));
+  div.dataset.noteKey = key;
+  div.dataset.noteParams = JSON.stringify(params);
+  div.textContent = t(key, params);
+  sess.view.appendChild(div);
+  sess.stick = true; scrollToBottom();
+}
+function noteAction(key, params, labelKey, onClick, sess = S) {   // nota com botão (ex.: Reenviar)
+  if (!sess) return;
+  const div = document.createElement("div");
+  div.className = "sysnote";
+  div.dataset.noteKey = key;
+  div.dataset.noteParams = JSON.stringify(params || {});
+  div.dataset.noteLabel = labelKey;
+  div.appendChild(document.createTextNode(t(key, params) + " "));
   const b = document.createElement("button");
   b.type = "button"; b.className = "note-btn"; b.innerHTML = ICON_RETRY;
-  b.title = label; b.setAttribute("aria-label", label);
+  b.title = t(labelKey); b.setAttribute("aria-label", t(labelKey));
   b.addEventListener("click", onClick);
   div.appendChild(b);
   sess.view.appendChild(div);
   sess.stick = true; scrollToBottom();
+}
+function retranslateNotes() {   // na troca de idioma, todas as notas vivas
+  document.querySelectorAll(".sysnote[data-note-key]").forEach((div) => {
+    const params = JSON.parse(div.dataset.noteParams || "{}");
+    const b = div.querySelector("button");
+    if (b && div.dataset.noteLabel) {
+      div.replaceChildren(document.createTextNode(t(div.dataset.noteKey, params) + " "), b);
+      b.title = t(div.dataset.noteLabel);
+      b.setAttribute("aria-label", t(div.dataset.noteLabel));
+    } else {
+      div.textContent = t(div.dataset.noteKey, params);
+    }
+  });
 }
 function lastBubble(cls, sess = S) {
   if (!sess) return null;
@@ -1354,11 +1374,11 @@ function send() {
   const box = $("prompt");
   const text = box.value.trim();
   if (!text) return;
-  if (inFlight) { note(t("busy")); return; }
-  if (!API_KEY) { note(t("noKey")); return; }
+  if (inFlight) { note("busy"); return; }
+  if (!API_KEY) { note("noKey"); return; }
   const promptEst = contextEstimate() + estimateTokens(text);
   if (promptEst > CTX - 64) {
-    note(t("overflow", { est: fmt(promptEst), ctx: fmt(CTX) }));
+    note("overflow", { est: fmt(promptEst), ctx: fmt(CTX) });
     return;
   }
   box.value = ""; autosize();
@@ -1462,12 +1482,12 @@ async function ask(text, sess = S) {
         markLastAnswer(bubble, text, sess);
       }
       else bubble.remove();
-      note(t("aborted"), sess);
+      note("aborted", {}, sess);
     } else {
       bubble.remove();
       sess.history.pop(); // a pergunta sai do histórico — o turno não aconteceu
       if (err instanceof TypeError) setStatus("err", "whoDown", { model: MODEL });
-      noteAction(t("failed", { msg: err.message || err }), t("retry"), () => {
+      noteAction("failed", { msg: err.message || err }, "retry", () => {
         lastBubble("user", sess)?.remove();
         refreshEmpty(); renderMeter();
         ask(lastQuery, sess);
@@ -1608,7 +1628,7 @@ function rollbackLast() {
     q = S.history.pop().content;      // turno que falhou (pergunta pendente)
     lastBubble("user", S)?.remove();
   }
-  if (q === null) { note(t("rollbackNothing"), S); return; }
+  if (q === null) { note("rollbackNothing", {}, S); return; }
   S.lastTokens = null;
   $("prompt").value = q; autosize(); $("prompt").focus();
   refreshEmpty(); renderMeter();
@@ -1677,7 +1697,7 @@ $("clear").addEventListener("click", () => {
   S.history.length = 0; S.lastTokens = null; S.userTitle = null;
   [...S.view.querySelectorAll(".msg, .sysnote")].forEach((el) => el.remove());
   refreshEmpty();
-  note(t("newChat"), S);
+  note("newChat", {}, S);
   renderMeter();
   renderTabs();
   $("prompt").focus();
@@ -1691,8 +1711,8 @@ $("prune").addEventListener("click", () => {
     S.history.splice(0, 2);
     if (firstPair.length >= 2) { firstPair[0].remove(); firstPair[1].remove(); }
     S.lastTokens = null;
-    note(t("pruned"), S);
-  } else note(t("nothingToPrune"), S);
+    note("pruned", {}, S);
+  } else note("nothingToPrune", {}, S);
   refreshEmpty();
   renderMeter();
 });
@@ -1713,7 +1733,7 @@ $("prune").addEventListener("click", () => {
   }
   loadSheet();
   renderMeter();
-  note(t("welcome", { ctx: fmt(CTX) }));
+  note("welcome", { ctx: fmt(CTX) });
   $("prompt").focus();
 })();
 </script>
