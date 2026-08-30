@@ -159,8 +159,6 @@
   .session-view { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 
   /* ── área da conversa ──────────────────────────────────────────────── */
-  #system-box { padding: 8px clamp(12px, 3vw, 20px) 0; }
-  .mode-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .seg {
     display: inline-flex; border: 1px solid var(--border); border-radius: 8px;
     overflow: hidden; background: var(--panel);
@@ -172,14 +170,20 @@
   .seg-btn + .seg-btn { border-left: 1px solid var(--border-soft); }
   .seg-btn[aria-pressed="true"] { background: var(--panel-2); color: var(--accent); font-weight: 600; }
   .sheet-status { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
-  #system-box details { color: var(--dim); font-size: 13px; }
-  #system-box summary { cursor: pointer; user-select: none; width: fit-content; }
-  #system-box textarea {
-    width: 100%; background: var(--panel); color: var(--text);
+  /* painel do prompt de sistema (abre pela engrenagem no compositor) */
+  #sys-panel {
+    width: var(--col); max-width: var(--col); margin: 0 auto 8px;
+    background: var(--panel); border: 1px solid var(--border-soft);
+    border-radius: 10px; padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  #system {
+    width: 100%; background: var(--code-bg); color: var(--text);
     border: 1px solid var(--border-soft); border-radius: 8px;
     padding: 7px 10px; font: 13px/1.45 inherit; resize: vertical; min-height: 36px;
-    margin-top: 6px;
   }
+  #sys-btn.on { color: var(--accent); border-color: var(--accent); }
+  .composer .seg-btn { min-height: 42px; padding: 6px 10px; }
 
   #log {
     flex: 1; overflow-y: auto; overscroll-behavior: contain;
@@ -356,6 +360,9 @@
     .brand h1 { font-size: 13px; }
     .actions button, .actions select { padding: 6px 9px; font-size: 12px; }
     .actions .icon-btn { width: 32px; height: 32px; padding: 0; }
+    .composer { flex-wrap: wrap; }
+    .composer .seg { order: 5; width: 100%; }
+    .composer .seg-btn { flex: 1; min-height: 38px; }
     #jump { bottom: 108px; right: 16px; }
     .spinner { bottom: 108px; right: 60px; }
   }
@@ -396,20 +403,6 @@
 
 <nav id="tabs" aria-label=""></nav>
 
-<div id="system-box">
-  <div class="mode-row">
-    <div class="seg" role="group" id="mode-group">
-      <button class="seg-btn" id="mode-puro" aria-pressed="true"></button>
-      <button class="seg-btn" id="mode-vbl" aria-pressed="false"></button>
-    </div>
-    <span class="sheet-status" id="sheet-status"></span>
-  </div>
-  <details>
-    <summary id="sys-summary"></summary>
-    <textarea id="system" rows="2"></textarea>
-  </details>
-</div>
-
 <main id="log" aria-live="polite" aria-label="">
   <div class="empty" id="empty">
     <img class="logo" src="verbolog.svg" alt="">
@@ -423,7 +416,16 @@
 <div id="spinner" class="spinner" hidden role="status"></div>
 
 <footer>
+  <div id="sys-panel" hidden>
+    <span class="sheet-status" id="sheet-status"></span>
+    <textarea id="system" rows="2"></textarea>
+  </div>
   <div class="composer">
+    <div class="seg" role="group" id="mode-group">
+      <button class="seg-btn" id="mode-puro" aria-pressed="true"></button>
+      <button class="seg-btn" id="mode-vbl" aria-pressed="false"></button>
+    </div>
+    <button id="sys-btn" class="icon-btn" title=""></button>
     <textarea id="prompt" rows="1" aria-label=""></textarea>
     <button id="send" class="icon-btn send-btn" title=""></button>
   </div>
@@ -914,7 +916,9 @@ function applyLang() {
   updateSendButton();
   $("prompt").placeholder = t("promptPlaceholder");
   $("prompt").ariaLabel = t("promptAria");
-  $("sys-summary").textContent = t("summarySystem");
+  $("sys-btn").innerHTML = ICON_SLIDERS;
+  $("sys-btn").title = t("summarySystem");
+  $("sys-btn").setAttribute("aria-label", t("summarySystem"));
   $("mode-puro").textContent = t("modePuro");
   $("mode-vbl").textContent = t("modeVbl");
   $("mode-group").setAttribute("aria-label", t("modeGroupAria"));
@@ -1557,6 +1561,13 @@ const ICON_GLOBE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" 
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>' +
   '<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+const ICON_SLIDERS = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>' +
+  '<line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>' +
+  '<line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>' +
+  '<line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/>' +
+  '<line x1="17" y1="16" x2="23" y2="16"/></svg>';
 function updateSendButton() {
   const b = $("send");
   if (!b) return;
@@ -1639,6 +1650,12 @@ function setVblMode(on) {
 }
 $("mode-puro").addEventListener("click", () => setVblMode(false));
 $("mode-vbl").addEventListener("click", () => setVblMode(true));
+$("sys-btn").addEventListener("click", () => {   // painel do prompt de sistema
+  const p = $("sys-panel");
+  p.hidden = !p.hidden;
+  $("sys-btn").classList.toggle("on", !p.hidden);
+  if (!p.hidden) $("system").focus();
+});
 let sheetState = "loading";
 function updateSheetStatus() {
   const el = $("sheet-status");
