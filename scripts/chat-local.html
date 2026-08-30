@@ -191,6 +191,7 @@
   .copy-btn:hover { color: var(--text); border-color: var(--accent); }
   .msg.assistant:hover .copy-btn, .copy-btn:focus-visible { opacity: 1; }
   .copy-btn.done { color: var(--ok); border-color: var(--ok); opacity: 1; }
+  .retry-btn { inset-inline-end: 32px; }   /* ↻ ao lado do copiar */
   .msg h2, .msg h3, .msg h4, .msg h5 { margin: 10px 0 4px; line-height: 1.3; }
   .msg ul, .msg ol { margin: 6px 0; padding-inline-start: 22px; }
   .msg li { margin: 2px 0; }
@@ -220,6 +221,7 @@
     background: var(--code-bg); border: 1px solid var(--border); color: var(--dim);
   }
   .sugg button:hover { color: var(--text); border-color: var(--accent); }
+  .note-btn { font-size: 11.5px; padding: 2px 9px; border-radius: 6px; }
   .msg code {
     font-family: var(--mono); font-size: 12.5px;
     background: var(--code-bg); border: 1px solid var(--code-border);
@@ -306,6 +308,7 @@
   @media (pointer: coarse) {
     button, .chip, select { min-height: 40px; }
     .copy-btn { opacity: 1; min-height: 28px; width: 28px; height: 28px; }
+    .retry-btn { inset-inline-end: 36px; }
     #prompt { min-height: 48px; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -334,6 +337,7 @@
       <option value="dark">Escuro</option>
     </select>
     <select id="lang" aria-label="idioma" title="idioma"></select>
+    <button id="rollback" title="">↶</button>
     <button id="prune" title="">✂</button>
     <button id="clear" title=""></button>
   </div>
@@ -423,6 +427,9 @@ const I18N = {
       noKey: "Chave da API ausente no fragmento #k=… da URL.",
       followupInstr: "Termine TODA resposta com um bloco final neste formato exato, com 7 perguntas curtas de acompanhamento derivadas do conteúdo da própria resposta:\n[q]\n1. pergunta?\n2. pergunta?\n3. pergunta?\n4. pergunta?\n5. pergunta?\n6. pergunta?\n7. pergunta?\n[/q]\nNão escreva nada depois de [/q] e não comente o bloco. O bloco OBRIGATORIAMENTE abre com [q] e fecha com [/q].",
       followupVbl: "As perguntas devem explorar a gramática da VerboLang relacionada à resposta: formas, conjugações (event/equilibrium/nonequilibrium), review, act, FXP.",
+      rollbackTitle: "Desfazer a última troca (a pergunta volta ao campo)",
+      rollbackNothing: "Nada a desfazer.",
+      retry: "Reenviar", retryTitle: "Gerar novamente esta resposta",
       extraInstr: "Instruções adicionais do operador:",
       copyBtn: "copiar", copyTitle: "copiar resposta (markdown)", copied: "copiado ✓",
       emptyReply: "(resposta vazia)"
@@ -473,6 +480,9 @@ const I18N = {
       noKey: "API key missing from the #k=… URL fragment.",
       followupInstr: "End EVERY reply with a final block in this exact format, containing 7 short follow-up questions derived from the content of the reply itself:\n[q]\n1. question?\n2. question?\n3. question?\n4. question?\n5. question?\n6. question?\n7. question?\n[/q]\nWrite nothing after [/q] and do not comment on the block. The block MUST open with [q] and close with [/q].",
       followupVbl: "The questions must explore the VerboLang grammar related to the reply: forms, conjugations (event/equilibrium/nonequilibrium), review, act, FXP.",
+      rollbackTitle: "Undo the last exchange (the question returns to the input)",
+      rollbackNothing: "Nothing to undo.",
+      retry: "Retry", retryTitle: "Regenerate this reply",
       extraInstr: "Additional operator instructions:",
       copyBtn: "copy", copyTitle: "copy reply (markdown)", copied: "copied ✓",
       emptyReply: "(empty reply)"
@@ -524,6 +534,9 @@ const I18N = {
       copyBtn: "复制", copyTitle: "复制回复（markdown）", copied: "已复制 ✓",
       followupInstr: "每条回复都必须以完全如下格式的结尾块收束，其中包含 7 个由回复内容引出的简短后续问题：\n[q]\n1. 问题？\n2. 问题？\n3. 问题？\n4. 问题？\n5. 问题？\n6. 问题？\n7. 问题？\n[/q]\n在 [/q] 之后不要写任何内容，也不要对该块作说明。该块必须以 [q] 开始、以 [/q] 结束。",
       followupVbl: "这些问题应探索与回复相关的 VerboLang 语法：形式、变体（event/equilibrium/nonequilibrium）、review、act、FXP。",
+      rollbackTitle: "撤销最近一轮对话（问题回到输入框）",
+      rollbackNothing: "没有可撤销的内容。",
+      retry: "重试", retryTitle: "重新生成此回复",
       emptyReply: "（空回复）"
     },
     chipsPuro: [
@@ -573,6 +586,9 @@ const I18N = {
       copyBtn: "копировать", copyTitle: "копировать ответ (markdown)", copied: "скопировано ✓",
       followupInstr: "Завершайте КАЖДЫЙ ответ финальным блоком точно в этом формате, содержащим 7 коротких уточняющих вопросов, вытекающих из содержания самого ответа:\n[q]\n1. вопрос?\n2. вопрос?\n3. вопрос?\n4. вопрос?\n5. вопрос?\n6. вопрос?\n7. вопрос?\n[/q]\nПосле [/q] ничего не пишите и не комментируйте блок. Блок обязательно открывается [q] и закрывается [/q].",
       followupVbl: "Вопросы должны исследовать грамматику VerboLang, связанную с ответом: формы, спряжения (event/equilibrium/nonequilibrium), review, act, FXP.",
+      rollbackTitle: "Отменить последний обмен (вопрос вернётся в поле ввода)",
+      rollbackNothing: "Отменять нечего.",
+      retry: "Повторить", retryTitle: "Сгенерировать этот ответ заново",
       emptyReply: "(пустой ответ)"
     },
     chipsPuro: [
@@ -622,6 +638,9 @@ const I18N = {
       copyBtn: "कॉपी", copyTitle: "उत्तर कॉपी करें (markdown)", copied: "कॉपी हो गया ✓",
       followupInstr: "हर उत्तर को इस सटीक प्रारूप के अंतिम खंड के साथ समाप्त करें, जिसमें उत्तर की सामग्री से लिए गए 7 छोटे अनुवर्ती प्रश्न हों:\n[q]\n1. प्रश्न?\n2. प्रश्न?\n3. प्रश्न?\n4. प्रश्न?\n5. प्रश्न?\n6. प्रश्न?\n7. प्रश्न?\n[/q]\n[/q] के बाद कुछ न लिखें और इस खंड पर टिप्पणी न करें। खंड अनिवार्य रूप से [q] से खुलता है और [/q] पर बंद होता है।",
       followupVbl: "प्रश्न उत्तर से संबंधित VerboLang व्याकरण का अन्वेषण करें: रूप, कॉन्जुगेशन (event/equilibrium/nonequilibrium), review, act, FXP।",
+      rollbackTitle: "अंतिम अदला-बदली पूर्ववत करें (प्रश्न इनपुट में वापस आएगा)",
+      rollbackNothing: "पूर्ववत करने को कुछ नहीं।",
+      retry: "पुनः प्रयास", retryTitle: "यह उत्तर फिर से बनाएँ",
       emptyReply: "(खाली उत्तर)"
     },
     chipsPuro: [
@@ -671,6 +690,9 @@ const I18N = {
       copyBtn: "kopieer", copyTitle: "kopieer antwoord (markdown)", copied: "gekopieer ✓",
       followupInstr: "Beëindig ELKE antwoord met 'n finale blok in hierdie presiese formaat, met 7 kort opvolgvrae wat uit die inhoud van die antwoord self voortvloei:\n[q]\n1. vraag?\n2. vraag?\n3. vraag?\n4. vraag?\n5. vraag?\n6. vraag?\n7. vraag?\n[/q]\nSkryf niks na [/q] nie en kommentaar nie oor die blok nie. Die blok MOET met [q] begin en met [/q] eindig.",
       followupVbl: "Die vrae moet die VerboLang-grammatika wat met die antwoord verband hou verken: vorms, konjugasies (event/equilibrium/nonequilibrium), review, act, FXP.",
+      rollbackTitle: "Ontdoen die laaste uitruil (die vraag keer na die invoerveld terug)",
+      rollbackNothing: "Niks om te ontdoen nie.",
+      retry: "Herprobeer", retryTitle: "Genereer hierdie antwoord weer",
       emptyReply: "(leë antwoord)"
     },
     chipsPuro: [
@@ -720,6 +742,9 @@ const I18N = {
       copyBtn: "نسخ", copyTitle: "نسخ الرد (markdown)", copied: "تم النسخ ✓",
       followupInstr: "اختم كل رد بكتلة نهائية بهذا التنسيق تمامًا، تحتوي على 7 أسئلة متابعة قصيرة مستمدة من محتوى الرد نفسه:\n[q]\n1. سؤال؟\n2. سؤال؟\n3. سؤال؟\n4. سؤال؟\n5. سؤال؟\n6. سؤال؟\n7. سؤال؟\n[/q]\nلا تكتب شيئًا بعد [/q] ولا تعلّق على الكتلة. تبدأ الكتلة إلزاميًا بـ [q] وتنتهي بـ [/q].",
       followupVbl: "يجب أن تستكشف الأسئلة قواعد VerboLang المتعلقة بالرد: الصيغ، التصريفات (event/equilibrium/nonequilibrium)، review، act، FXP.",
+      rollbackTitle: "التراجع عن آخر تبادل (يعود السؤال إلى حقل الإدخال)",
+      rollbackNothing: "لا شيء للتراجع عنه.",
+      retry: "إعادة المحاولة", retryTitle: "إعادة توليد هذا الرد",
       emptyReply: "(رد فارغ)"
     },
     chipsPuro: [
@@ -775,6 +800,8 @@ function applyLang() {
   $("who").textContent = t(statusKey, statusParams);
   $("prune").textContent = t("btnPrune");
   $("prune").title = t("btnPruneTitle");
+  $("rollback").title = t("rollbackTitle");
+  $("rollback").setAttribute("aria-label", t("rollbackTitle"));
   $("clear").textContent = t("btnClear");
   $("clear").title = t("btnClearTitle");
   $("send").textContent = t("btnSend");
@@ -812,6 +839,7 @@ let inFlight = null;         // AbortController da requisição corrente
 let stickToBottom = true;    // autoscroll só quando o usuário está no fim
 let vblMode = localStorage.getItem("vllm.vbl") === "1"; // + VerboLang?
 let sheetText = "";          // cheat sheet da linguagem (docs/VBL-CHEATSHEET.md)
+let lastQuery = "";          // última pergunta enviada (para retry)
 
 const $ = (id) => document.getElementById(id);
 const log = $("log");
@@ -906,6 +934,21 @@ function note(text) {
   div.className = "sysnote"; div.textContent = text;
   log.appendChild(div);
   stickToBottom = true; scrollToBottom();
+}
+function noteAction(text, label, onClick) {   // nota com botão (ex.: Reenviar)
+  const div = document.createElement("div");
+  div.className = "sysnote";
+  div.appendChild(document.createTextNode(text + " "));
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "note-btn"; b.textContent = label;
+  b.addEventListener("click", onClick);
+  div.appendChild(b);
+  log.appendChild(div);
+  stickToBottom = true; scrollToBottom();
+}
+function lastBubble(cls) {
+  const list = log.querySelectorAll(".msg." + cls);
+  return list.length ? list[list.length - 1] : null;
 }
 function refreshEmpty() { $("empty").style.display = history.length ? "none" : ""; }
 
@@ -1069,21 +1112,26 @@ function renderAssistant(bubble, text) {
 }
 
 // ── chamada ao vLLM (streaming SSE) ────────────────────────────────────────
-async function send() {
+function send() {
   const box = $("prompt");
   const text = box.value.trim();
   if (!text || inFlight) return;
   if (!API_KEY) { note(t("noKey")); return; }
-
   const promptEst = contextEstimate() + estimateTokens(text);
-  const maxTokens = Math.max(64, Math.min(2048, CTX - promptEst - 256));
   if (promptEst > CTX - 64) {
     note(t("overflow", { est: fmt(promptEst), ctx: fmt(CTX) }));
     return;
   }
+  box.value = ""; autosize();
+  ask(text);
+}
+async function ask(text) {
+  if (inFlight) return;
+  lastQuery = text;
+  const maxTokens = Math.max(64, Math.min(2048,
+    CTX - contextEstimate() - estimateTokens(text) - 256));
 
   $("empty").style.display = "none";
-  box.value = ""; autosize();
   history.push({ role: "user", content: text });
   addBubble("user", text);
 
@@ -1142,6 +1190,7 @@ async function send() {
     if (items.length) renderSugg(bubble, items);
     enhanceMermaid(bubble);
     attachCopy(bubble, clean);
+    markLastAnswer(bubble, text);
   } catch (err) {
     if (controller.signal.aborted) {
       if (acc) {
@@ -1151,6 +1200,7 @@ async function send() {
         if (items.length) renderSugg(bubble, items);
         enhanceMermaid(bubble);
         attachCopy(bubble, clean);
+        markLastAnswer(bubble, text);
       }
       else bubble.remove();
       note(t("aborted"));
@@ -1158,7 +1208,11 @@ async function send() {
       bubble.remove();
       history.pop(); // a pergunta sai do histórico — o turno não aconteceu
       if (err instanceof TypeError) setStatus("err", "whoDown", { model: MODEL });
-      note(t("failed", { msg: err.message || err }));
+      noteAction(t("failed", { msg: err.message || err }), t("retry"), () => {
+        lastBubble("user")?.remove();
+        refreshEmpty(); renderMeter();
+        ask(lastQuery);
+      });
     }
   } finally {
     inFlight = null;
@@ -1191,6 +1245,9 @@ const ICON_COPY = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" '
 const ICON_CHECK = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<polyline points="20 6 9 17 4 12"/></svg>';
+const ICON_RETRY = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>';
 function attachCopy(bubble, raw) {
   const btn = document.createElement("button");
   btn.type = "button";
@@ -1207,6 +1264,44 @@ function attachCopy(bubble, raw) {
     } catch { /* clipboard indisponível */ }
   });
   bubble.appendChild(btn);
+}
+function markLastAnswer(bubble, question) {   // ↻ só na resposta mais recente
+  log.querySelectorAll(".retry-btn").forEach((b) => b.remove());
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "copy-btn retry-btn";
+  btn.innerHTML = ICON_RETRY;
+  btn.title = t("retryTitle");
+  btn.setAttribute("aria-label", t("retryTitle"));
+  btn.addEventListener("click", () => {
+    if (inFlight) return;
+    if (history.length < 2 || history[history.length - 1].role !== "assistant" ||
+        history[history.length - 2].role !== "user") return;  // estado mudou
+    history.splice(-2, 2);            // desfaz o par sem tocar no campo
+    lastBubble("user")?.remove();
+    bubble.remove();
+    refreshEmpty(); renderMeter();
+    ask(question);
+  });
+  bubble.appendChild(btn);
+}
+// ── rollback: desfaz a troca mais recente e devolve a pergunta ao campo ───
+function rollbackLast() {
+  if (inFlight) inFlight.abort();
+  let q = null;
+  if (history.length >= 2 && history[history.length - 1].role === "assistant") {
+    q = history[history.length - 2].content;
+    history.splice(-2, 2);
+    lastBubble("assistant")?.remove();
+    lastBubble("user")?.remove();
+  } else if (history.length && history[history.length - 1].role === "user") {
+    q = history.pop().content;        // turno que falhou (pergunta pendente)
+    lastBubble("user")?.remove();
+  }
+  if (q === null) { note(t("rollbackNothing")); return; }
+  lastPromptTokens = null;
+  $("prompt").value = q; autosize(); $("prompt").focus();
+  refreshEmpty(); renderMeter();
 }
 function autosize() {
   const box = $("prompt");
@@ -1270,8 +1365,8 @@ $("clear").addEventListener("click", () => {
   renderMeter();
   $("prompt").focus();
 });
-$("prune").addEventListener("click", () => {
-  if (inFlight) inFlight.abort();
+$("rollback").addEventListener("click", rollbackLast);
+$("prune").addEventListener("click", () => {  if (inFlight) inFlight.abort();
   const firstPair = log.querySelectorAll(".msg");
   if (history.length >= 2) {
     history.splice(0, 2);
