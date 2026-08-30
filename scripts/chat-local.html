@@ -992,11 +992,50 @@ function inline(s) {
     .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?:;]|$)/g, "$1<em>$2</em>")
     .replace(/~~([^~]+)~~/g, "<del>$1</del>")
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
-             '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+             '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/\x01([^\x01]+)\x01/g, "<em>$1</em>");  // matemática LaTeX
   return s.replace(/\x00(\d+)\x00/g, (_, i) => "<code>" + codes[+i] + "</code>");
 }
+// ── LaTeX vazado (\( \), \[ \], $$ $$) → texto legível ────────────────────
+const MATH_MACROS = [
+  ["\\rightarrow", "→"], ["\\to", "→"], ["\\times", "×"], ["\\cdot", "·"],
+  ["\\div", "÷"], ["\\pm", "±"], ["\\leq", "≤"], ["\\le", "≤"],
+  ["\\geq", "≥"], ["\\ge", "≥"], ["\\neq", "≠"], ["\\ne", "≠"],
+  ["\\approx", "≈"], ["\\infty", "∞"], ["\\partial", "∂"], ["\\nabla", "∇"],
+  ["\\alpha", "α"], ["\\beta", "β"], ["\\gamma", "γ"], ["\\delta", "δ"],
+  ["\\Delta", "Δ"], ["\\theta", "θ"], ["\\lambda", "λ"], ["\\mu", "μ"],
+  ["\\pi", "π"], ["\\sigma", "σ"], ["\\omega", "ω"], ["\\Omega", "Ω"],
+  ["\\sum", "Σ"], ["\\prod", "Π"], ["\\sqrt", "√"], ["\\cup", "∪"],
+  ["\\cap", "∩"], ["\\in", "∈"], ["\\ln", "ln"], ["\\log", "log"],
+  ["\\sin", "sin"], ["\\cos", "cos"], ["\\tan", "tan"], ["\\exp", "exp"],
+  ["\\left", ""], ["\\right", ""], ["\\quad", "  "], ["\\qquad", "    "],
+  ["\\,", " "], ["\\;", " "], ["\\!", ""], ["\\ ", " "]
+];
+MATH_MACROS.sort((a, b) => b[0].length - a[0].length); // \left antes de \le
+function simplifyMath(m) {
+  m = m.replace(/\\(?:text|mathrm|mathbf|mathit|operatorname)\s*\{([^{}]*)\}/g, "$1");
+  m = m.replace(/\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, "($1)/($2)");
+  for (const [k, v] of MATH_MACROS) m = m.split(k).join(v);
+  return m.replace(/\{|\}/g, "").replace(/\s+/g, " ").trim();
+}
+function stripLatex(src) {
+  const wrap = (_, m) => "\x01" + simplifyMath(m) + "\x01";
+  return src
+    .replace(/\\\(([\s\S]*?)\\\)/g, wrap)
+    .replace(/\\\[([\s\S]*?)\\\]/g, wrap)
+    .replace(/\$\$([\s\S]*?)\$\$/g, wrap);
+}
 function md(src) {
-  const lines = src.replace(/\r\n?/g, "\n").split("\n");
+  // protege cercas de código do tratamento LaTeX (durante o streaming,
+  // cerca não fechada protege até o fim)
+  const fences = [];
+  src = src.replace(/\r\n?/g, "\n").replace(/```[\s\S]*?(?:```|$)/g, (m0) => {
+    fences.push(m0);
+    return "\x02" + (fences.length - 1) + "\x02";
+  });
+  src = stripLatex(src);
+  src = src.replace(/\x02(\d+)\x02/g, (_, i) => fences[+i]);
+  const lines = src.split("\n");
   const out = [];
   let para = [];
   let i = 0;
