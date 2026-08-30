@@ -195,7 +195,8 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   servidor estático. URL manual:
   `http://127.0.0.1:8188/scripts/chat.html#k=<chave>&u=<base-url>&m=<modelo>&c=<ctx>`
 - **Alternância "Modelo puro ↔ + VerboLang"**: seletor de ícones flutuante no
-  canto inferior da página (chip = modelo puro; livro = + VerboLang; tooltip
+  canto inferior **direito**, acima do botão ↓ (chip = modelo puro; livro =
+  + VerboLang; tooltip
   traz o estado, inclusive o custo do cheat sheet em tokens). O modo
   "+ VerboLang" injeta o cheat sheet canônico
   ([`VBL-CHEATSHEET.md`](VBL-CHEATSHEET.md)) como prompt de
@@ -205,8 +206,9 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   para consultas sobre a VerboLang, ligue o modo e mantenha folga no medidor.
   As perguntas sugeridas na home acompanham o modo (gerais no puro; da
   linguagem no + VerboLang).
-- **Temas e idiomas (botões de ícone)**: sol/contraste/lua ciclam os três
-  temas (claro, metal, escuro); o globo cicla os sete idiomas da interface
+- **Temas e idiomas**: sol/contraste/lua ciclam os três temas (claro, metal,
+  escuro); o **seletor de idiomas** (nos botões de ação) mostra
+  **bandeira + nome no próprio idioma** para os sete disponíveis
   (português, inglês, chinês, russo, híndi, africâner e árabe — com RTL);
   o tooltip mostra o estado atual. Persistidos em `localStorage`.
 - **Sessões em abas**: várias conversas simultâneas, cada uma com histórico,

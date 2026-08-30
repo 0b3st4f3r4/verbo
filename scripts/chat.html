@@ -169,10 +169,10 @@
   }
   .seg-btn + .seg-btn { border-left: 1px solid var(--border-soft); }
   .seg-btn[aria-pressed="true"] { background: var(--panel-2); color: var(--accent); font-weight: 600; }
-  /* seletor de modo flutuante (canto inferior, espelho do ↓) */
+  /* seletor de modo flutuante (canto inferior direito, acima do ↓) */
   .seg-float {
-    position: fixed; z-index: 5; bottom: 92px;
-    inset-inline-start: max(18px, calc(50vw - var(--col) / 2 + 18px));
+    position: fixed; z-index: 5; bottom: 138px;
+    inset-inline-end: max(18px, calc(50vw - var(--col) / 2 + 18px));
     flex-direction: column; border-radius: 19px;
   }
   .seg-float .seg-btn {
@@ -358,7 +358,7 @@
     .brand h1 { font-size: 13px; }
     .actions button, .actions select { padding: 6px 9px; font-size: 12px; }
     .actions .icon-btn { width: 32px; height: 32px; padding: 0; }
-    .seg-float { bottom: 108px; inset-inline-start: 16px; }
+    .seg-float { bottom: 154px; inset-inline-end: 16px; }
     #jump { bottom: 108px; right: 16px; }
     .spinner { bottom: 108px; right: 60px; }
   }
@@ -390,7 +390,7 @@
   </div>
   <div class="actions">
     <button id="theme-btn" class="icon-btn" title=""></button>
-    <button id="lang-btn" class="icon-btn" title=""></button>
+    <select id="lang" aria-label="" title=""></select>
     <button id="rollback" class="icon-btn" title=""></button>
     <button id="prune" class="icon-btn" title=""></button>
     <button id="clear" class="icon-btn" title=""></button>
@@ -866,12 +866,18 @@ function updateThemeButton() {           // sol / contraste / lua
   b.title = t("theme" + theme[0].toUpperCase() + theme.slice(1));
   b.setAttribute("aria-label", b.title);
 }
-function updateLangButton() {            // globo; tooltip com o idioma atual
-  const b = $("lang-btn");
-  if (!b) return;
-  b.innerHTML = ICON_GLOBE;
-  b.title = t("langAria") + ": " + L().name;
-  b.setAttribute("aria-label", b.title);
+const LANG_FLAGS = { pt: "🇧🇷", en: "🇺🇸", zh: "🇨🇳", ru: "🇷🇺", hi: "🇮🇳", af: "🇿🇦", ar: "🇸🇦" };
+function buildLangSelect() {             // bandeira + nome no próprio idioma
+  const sel = $("lang");
+  sel.replaceChildren(...Object.entries(I18N).map(([code, def]) => {
+    const o = document.createElement("option");
+    o.value = code;
+    o.textContent = (LANG_FLAGS[code] || "") + " " + def.name;
+    return o;
+  }));
+  sel.value = lang;
+  sel.title = t("langAria");
+  sel.setAttribute("aria-label", t("langAria"));
 }
 function applyLang() {
   localStorage.setItem("vllm.lang", lang);
@@ -906,7 +912,7 @@ function applyLang() {
   $("jump").title = t("jumpAria");
   $("jump").setAttribute("aria-label", t("jumpAria"));
   updateThemeButton();
-  updateLangButton();
+  buildLangSelect();
 
   $("empty-title").textContent = t("emptyTitle");
   $("empty-desc").textContent = t("emptyDesc");
@@ -1531,10 +1537,6 @@ const ICON_CONTRAST = '<svg viewBox="0 0 24 24" width="16" height="16" fill="non
 const ICON_MOON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-const ICON_GLOBE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
-  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-  '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>' +
-  '<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
 const ICON_CPU = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>' +
@@ -1668,11 +1670,7 @@ $("prompt").addEventListener("keydown", (e) => {
 $("prompt").addEventListener("input", autosize);
 $("theme-btn").addEventListener("click", () =>
   applyTheme(THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length]));
-$("lang-btn").addEventListener("click", () => {   // cicla os 7 idiomas
-  const order = Object.keys(I18N);
-  lang = order[(order.indexOf(lang) + 1) % order.length];
-  applyLang();
-});
+$("lang").addEventListener("change", () => { lang = $("lang").value; applyLang(); });
 $("clear").addEventListener("click", () => {
   if (!S) return;
   if (inFlight) inFlight.abort();
