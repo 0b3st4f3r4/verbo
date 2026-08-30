@@ -199,6 +199,11 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   sistema e conta o custo dele no medidor de contexto. Lembre: o modelo local
   **não conhece a linguagem** sem isso (demanda em [`PLAN.md`](PLAN.md) §7) —
   para consultas sobre a VerboLang, ligue o modo e mantenha folga no medidor.
+  As perguntas sugeridas na home acompanham o modo (gerais no puro; da
+  linguagem no + VerboLang).
+- **Temas e idiomas**: três temas (claro, metal, escuro) e sete idiomas de
+  interface (português, inglês, chinês, russo, híndi, africâner e árabe — com
+  RTL), persistidos em `localStorage`.
 
 ### 4.2 Por que não via DSH (números medidos, set/2026)
 

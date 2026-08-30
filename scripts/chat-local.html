@@ -13,15 +13,41 @@
 
   Configuração por fragmento da URL (não vai em logs de servidor):
     #k=<api-key>&u=<base-url>&m=<modelo>&c=<ctx>
-  Marca do projeto: verbolog.svg (logo + favicon).
+  Marca: verbolog.svg (logo + favicon). Temas: claro, metal, escuro.
+  Idiomas: pt, en, zh, ru, hi, af, ar (RTL). Preferências em localStorage.
   Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
 -->
 <style>
-  :root {
+  /* ── temas ─────────────────────────────────────────────────────────── */
+  :root, html[data-theme="dark"] {
     color-scheme: dark;
-    --bg: #0e1319; --bg-soft: #12181f; --panel: #171d24; --panel-2: #1b232c;
+    --bg: #0e1319; --bg-glow: #16202b; --panel: #171d24; --panel-2: #1b232c;
     --border: #29323e; --border-soft: #212a34; --text: #dde6f0; --dim: #8fa1b5;
     --accent: #4da3ff; --ok: #3fb96f; --warn: #e0a83a; --bad: #e05c5c;
+    --user-bubble: #1d3a5f; --user-bubble-text: #eaf2fc;
+    --code-bg: #0d1116; --code-border: #212a34; --placeholder: #5d7086;
+    --shadow: 0 4px 14px rgba(0,0,0,.35);
+  }
+  html[data-theme="metal"] {
+    color-scheme: dark;
+    --bg: #24292f; --bg-glow: #2e353d; --panel: #333941; --panel-2: #3d4450;
+    --border: #4a525d; --border-soft: #3f4750; --text: #e6eaee; --dim: #9aa6b2;
+    --accent: #6db1f5; --ok: #4cba7f; --warn: #d8a944; --bad: #e06565;
+    --user-bubble: #3a5a7e; --user-bubble-text: #eaf2fc;
+    --code-bg: #272d34; --code-border: #3f4750; --placeholder: #7d8b99;
+    --shadow: 0 4px 14px rgba(0,0,0,.3);
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f2f5f8; --bg-glow: #e7edf4; --panel: #ffffff; --panel-2: #eaeef3;
+    --border: #cfd7e0; --border-soft: #dde3ea; --text: #1b2530; --dim: #5a6a7b;
+    --accent: #1f6fd6; --ok: #23804d; --warn: #a06f12; --bad: #c04343;
+    --user-bubble: #d9e9fb; --user-bubble-text: #12233a;
+    --code-bg: #eef2f6; --code-border: #dfe5ec; --placeholder: #8a97a5;
+    --shadow: 0 4px 12px rgba(27,37,48,.12);
+  }
+
+  :root {
     --mono: ui-monospace, "Cascadia Code", "Fira Code", Menlo, Consolas, monospace;
     --col: min(100%, 900px);
   }
@@ -30,7 +56,7 @@
   body {
     margin: 0; color: var(--text);
     font: 15px/1.55 system-ui, "Segoe UI", Roboto, sans-serif;
-    background: radial-gradient(1200px 500px at 50% -10%, #16202b 0%, var(--bg) 55%) fixed, var(--bg);
+    background: radial-gradient(1200px 500px at 50% -10%, var(--bg-glow) 0%, var(--bg) 55%) fixed, var(--bg);
     display: flex; flex-direction: column;
     height: 100vh; height: 100dvh;
   }
@@ -60,18 +86,23 @@
   .meter .lbl { font-size: 11px; color: var(--dim); margin-top: 3px; text-align: right;
                 font-variant-numeric: tabular-nums; }
 
-  .actions { display: flex; gap: 8px; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
   button {
     background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
     border-radius: 8px; padding: 7px 13px; cursor: pointer; font-size: 13px;
     transition: border-color .15s, background .15s, transform .05s;
   }
-  button:hover { border-color: var(--accent); background: #202a35; }
+  button:hover { border-color: var(--accent); background: var(--panel-2); filter: brightness(1.08); }
   button:active { transform: translateY(1px); }
   button:disabled { opacity: .45; cursor: default; transform: none; }
-  button:focus-visible, textarea:focus-visible, summary:focus-visible, .chip:focus-visible {
+  button:focus-visible, textarea:focus-visible, summary:focus-visible,
+  .chip:focus-visible, select:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  select {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 8px; font-size: 12.5px; cursor: pointer;
   }
 
   /* ── área da conversa ──────────────────────────────────────────────── */
@@ -107,7 +138,7 @@
   #log::-webkit-scrollbar { width: 10px; }
   #log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px;
                                   border: 2px solid var(--bg); }
-  #log::-webkit-scrollbar-thumb:hover { background: #3a4656; }
+  #log::-webkit-scrollbar-thumb:hover { filter: brightness(1.2); }
 
   .msg {
     max-width: min(78%, 720px); padding: 9px 13px; border-radius: 12px;
@@ -115,7 +146,7 @@
     animation: rise .18s ease-out;
   }
   .msg.user {
-    align-self: flex-end; background: #1d3a5f;
+    align-self: flex-end; background: var(--user-bubble); color: var(--user-bubble-text);
     border-bottom-right-radius: 4px;
   }
   .msg.assistant {
@@ -123,15 +154,14 @@
     border: 1px solid var(--border-soft); border-bottom-left-radius: 4px;
     white-space: normal;   /* o markdown já resolve as quebras (\n → <br>) */
   }
-  .msg p { margin: 0; }
   .msg code {
     font-family: var(--mono); font-size: 12.5px;
-    background: #0d1116; border: 1px solid var(--border-soft);
+    background: var(--code-bg); border: 1px solid var(--code-border);
     border-radius: 5px; padding: 1px 5px;
   }
   .msg pre {
     margin: 8px 0 2px; padding: 10px 12px; overflow-x: auto;
-    background: #0d1116; border: 1px solid var(--border-soft); border-radius: 8px;
+    background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px;
     scrollbar-width: thin;
   }
   .msg pre code { background: none; border: 0; padding: 0; font-size: 12.5px;
@@ -171,7 +201,7 @@
     right: max(18px, calc(50vw - var(--col) / 2 + 18px));
     width: 38px; height: 38px; border-radius: 50%; padding: 0;
     background: var(--panel-2); border: 1px solid var(--border);
-    box-shadow: 0 4px 14px rgba(0,0,0,.35); font-size: 16px; line-height: 1;
+    box-shadow: var(--shadow); font-size: 16px; line-height: 1;
   }
 
   /* ── rodapé ────────────────────────────────────────────────────────── */
@@ -187,27 +217,28 @@
     width: var(--col); max-width: var(--col); margin: 0 auto;
   }
   #prompt {
-    flex: 1; background: #0d1116; color: var(--text);
+    flex: 1; background: var(--code-bg); color: var(--text);
     border: 1px solid var(--border); border-radius: 10px;
     padding: 11px 13px; font: inherit; resize: none;
     min-height: 44px; max-height: 200px;
   }
   #prompt:focus { outline: none; border-color: var(--accent);
                   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
-  #prompt::placeholder { color: #5d7086; }
+  #prompt::placeholder { color: var(--placeholder); }
   #send { min-width: 84px; min-height: 44px; }
   #stop { min-height: 44px; }
 
   /* ── responsivo ────────────────────────────────────────────────────── */
   @media (max-width: 640px) {
     .meter { order: 3; flex-basis: 100%; max-width: none; margin-left: 0; }
+    .actions { order: 4; }
     .msg { max-width: 88%; }
     .brand h1 { font-size: 13px; }
-    .actions button { padding: 7px 10px; font-size: 12px; }
+    .actions button, .actions select { padding: 6px 9px; font-size: 12px; }
     #jump { bottom: 108px; right: 16px; }
   }
   @media (pointer: coarse) {
-    button, .chip { min-height: 40px; }
+    button, .chip, select { min-height: 40px; }
     #prompt { min-height: 48px; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -221,57 +252,56 @@
   <div class="brand">
     <img class="logo" src="verbolog.svg" alt="Logo VerboLang">
     <div class="brand-text">
-      <h1>Consulta local · VerboLang</h1>
-      <div class="sub"><span class="dot" id="dot"></span><span id="who">conectando…</span></div>
+      <h1>VerboLang</h1>
+      <div class="sub"><span class="dot" id="dot"></span><span id="who">…</span></div>
     </div>
   </div>
-  <div class="meter" aria-label="Uso do contexto">
+  <div class="meter" id="meter" aria-label="contexto">
     <div class="bar"><div class="fill" id="fill"></div></div>
-    <div class="lbl" id="meter-lbl">contexto: —</div>
+    <div class="lbl" id="meter-lbl">—</div>
   </div>
   <div class="actions">
-    <button id="prune" title="Remove o par (pergunta, resposta) mais antigo da conversa">✂ Podar</button>
-    <button id="clear" title="Nova conversa (zera o contexto)">Nova</button>
+    <select id="theme" aria-label="tema" title="tema">
+      <option value="light">Claro</option>
+      <option value="metal">Metal</option>
+      <option value="dark">Escuro</option>
+    </select>
+    <select id="lang" aria-label="idioma" title="idioma"></select>
+    <button id="prune" title="">✂</button>
+    <button id="clear" title=""></button>
   </div>
 </header>
 
 <div id="system-box">
   <div class="mode-row">
-    <div class="seg" role="group" aria-label="Modo do modelo">
-      <button class="seg-btn" id="mode-puro" aria-pressed="true">Modelo puro</button>
-      <button class="seg-btn" id="mode-vbl" aria-pressed="false" title="Injeta o cheat sheet da VerboLang (docs/VBL-CHEATSHEET.md) como prompt de sistema">+ VerboLang</button>
+    <div class="seg" role="group" id="mode-group">
+      <button class="seg-btn" id="mode-puro" aria-pressed="true"></button>
+      <button class="seg-btn" id="mode-vbl" aria-pressed="false"></button>
     </div>
     <span class="sheet-status" id="sheet-status"></span>
   </div>
   <details>
-    <summary>prompt de sistema</summary>
-    <textarea id="system" rows="2">Você é um assistente objetivo. Responda em português do Brasil.</textarea>
+    <summary id="sys-summary"></summary>
+    <textarea id="system" rows="2"></textarea>
   </details>
 </div>
 
-<main id="log" aria-live="polite" aria-label="Conversa">
+<main id="log" aria-live="polite" aria-label="">
   <div class="empty" id="empty">
     <img class="logo" src="verbolog.svg" alt="">
-    <h2>Consulta direta ao modelo local</h2>
-    <p>Tudo fica nesta máquina — nada sai dela. O medidor no topo mostra o quanto
-       da janela de contexto você já usou.</p>
-    <div class="chips" role="list">
-      <button class="chip" role="listitem">Explique o operador subvert da VerboLang</button>
-      <button class="chip" role="listitem">Escreva um stub Rust de parser EBNF</button>
-      <button class="chip" role="listitem">Resuma o protocolo FXP em 5 tópicos</button>
-    </div>
+    <h2 id="empty-title"></h2>
+    <p id="empty-desc"></p>
+    <div class="chips" id="chips" role="list"></div>
   </div>
 </main>
 
-<button id="jump" title="Ir para o fim da conversa" aria-label="Ir para o fim da conversa" hidden>↓</button>
+<button id="jump" hidden>↓</button>
 
 <footer>
   <div class="composer">
-    <textarea id="prompt" rows="1"
-      placeholder="Escreva sua pergunta…  (Enter envia · Shift+Enter quebra linha · Esc para)"
-      aria-label="Sua mensagem"></textarea>
-    <button id="send">Enviar</button>
-    <button id="stop" disabled>Parar</button>
+    <textarea id="prompt" rows="1" aria-label=""></textarea>
+    <button id="send"></button>
+    <button id="stop" disabled></button>
   </div>
 </footer>
 
@@ -288,6 +318,403 @@ localStorage.setItem("vllm.url", API_URL);
 localStorage.setItem("vllm.model", MODEL);
 localStorage.setItem("vllm.ctx", String(CTX));
 
+// ── i18n ───────────────────────────────────────────────────────────────────
+const I18N = {
+  pt: {
+    name: "Português", dir: "ltr",
+    t: {
+      docTitle: "VerboLang · Consulta local",
+      whoConnecting: "conectando…", whoOk: "{model} · conectado",
+      whoHttp: "{model} · HTTP {code}", whoDown: "{model} · servidor inacessível",
+      meterEst: "contexto ≈ {est} / {ctx} tokens · estimativa",
+      meterReal: "contexto ≈ {est} / {ctx} tokens · uso real do último turno",
+      welcome: "Teto de contexto: {ctx} tokens (prompt + resposta). O medidor mostra onde você está.",
+      btnPrune: "✂ Podar", btnPruneTitle: "Remove o par (pergunta, resposta) mais antigo da conversa",
+      btnClear: "Nova", btnClearTitle: "Nova conversa (zera o contexto)",
+      btnSend: "Enviar", btnStop: "Parar",
+      promptPlaceholder: "Escreva sua pergunta…  (Enter envia · Shift+Enter quebra linha · Esc para)",
+      summarySystem: "prompt de sistema",
+      sysDefault: "Você é um assistente objetivo. Responda em português do Brasil.",
+      modePuro: "Modelo puro", modeVbl: "+ VerboLang",
+      modeGroupAria: "Modo do modelo", meterAria: "Uso do contexto",
+      logAria: "Conversa", promptAria: "Sua mensagem", jumpAria: "Ir para o fim da conversa",
+      langAria: "Idioma da interface", themeAria: "Tema da interface",
+      themeLight: "Claro", themeMetal: "Metal", themeDark: "Escuro",
+      sheetTokens: "cheat sheet · ~{n} tokens",
+      sheetMissing: "cheat sheet indisponível (sirva a raiz do repositório)",
+      emptyTitle: "Consulta direta ao modelo local",
+      emptyDesc: "Tudo fica nesta máquina — nada sai dela. O medidor no topo mostra o quanto da janela de contexto você já usou.",
+      newChat: "Conversa nova. Contexto zerado.",
+      pruned: "Par mais antigo removido do contexto.",
+      nothingToPrune: "Nada a podar.",
+      aborted: "Geração interrompida.",
+      failed: "Falhou: {msg}",
+      overflow: "Conversa em ~{est} tokens (teto {ctx}). Use ✂ Podar ou comece uma conversa nova.",
+      err401: "401 — chave inválida (fragmento #k=… da URL).",
+      err400: "400 — a conversa excedeu o contexto de {ctx} tokens. Use ✂ Podar ou comece uma conversa nova.",
+      noKey: "Chave da API ausente no fragmento #k=… da URL.",
+      extraInstr: "Instruções adicionais do operador:",
+      emptyReply: "(resposta vazia)"
+    },
+    chipsPuro: [
+      "Explique recursão com um exemplo simples",
+      "Escreva uma função Python que verifique palíndromos",
+      "Resuma as vantagens do Rust sobre C"
+    ],
+    chipsVbl: [
+      "Explique o operador subvert da VerboLang",
+      "Escreva uma forma nonequilibrium válida com review e act",
+      "Quais atributos são obrigatórios em uma forma?"
+    ]
+  },
+  en: {
+    name: "English", dir: "ltr",
+    t: {
+      docTitle: "VerboLang · Local chat",
+      whoConnecting: "connecting…", whoOk: "{model} · connected",
+      whoHttp: "{model} · HTTP {code}", whoDown: "{model} · server unreachable",
+      meterEst: "context ≈ {est} / {ctx} tokens · estimate",
+      meterReal: "context ≈ {est} / {ctx} tokens · real usage from last turn",
+      welcome: "Context ceiling: {ctx} tokens (prompt + reply). The meter shows where you stand.",
+      btnPrune: "✂ Prune", btnPruneTitle: "Removes the oldest (question, answer) pair from the conversation",
+      btnClear: "New", btnClearTitle: "New conversation (resets the context)",
+      btnSend: "Send", btnStop: "Stop",
+      promptPlaceholder: "Type your question…  (Enter sends · Shift+Enter newline · Esc stops)",
+      summarySystem: "system prompt",
+      sysDefault: "You are an objective assistant. Answer in English.",
+      modePuro: "Pure model", modeVbl: "+ VerboLang",
+      modeGroupAria: "Model mode", meterAria: "Context usage",
+      logAria: "Conversation", promptAria: "Your message", jumpAria: "Go to end of conversation",
+      langAria: "Interface language", themeAria: "Interface theme",
+      themeLight: "Light", themeMetal: "Metal", themeDark: "Dark",
+      sheetTokens: "cheat sheet · ~{n} tokens",
+      sheetMissing: "cheat sheet unavailable (serve the repository root)",
+      emptyTitle: "Direct chat with the local model",
+      emptyDesc: "Everything stays on this machine — nothing leaves it. The meter at the top shows how much of the context window you have used.",
+      newChat: "New conversation. Context cleared.",
+      pruned: "Oldest pair removed from the context.",
+      nothingToPrune: "Nothing to prune.",
+      aborted: "Generation stopped.",
+      failed: "Failed: {msg}",
+      overflow: "Conversation at ~{est} tokens (ceiling {ctx}). Prune (✂) or start a new conversation.",
+      err401: "401 — invalid key (URL #k=… fragment).",
+      err400: "400 — the conversation exceeded the context of {ctx} tokens. Prune (✂) or start a new conversation.",
+      noKey: "API key missing from the #k=… URL fragment.",
+      extraInstr: "Additional operator instructions:",
+      emptyReply: "(empty reply)"
+    },
+    chipsPuro: [
+      "Explain recursion with a simple example",
+      "Write a Python function that checks for palindromes",
+      "Summarize the advantages of Rust over C"
+    ],
+    chipsVbl: [
+      "Explain the VerboLang subvert operator",
+      "Write a valid nonequilibrium form with review and act",
+      "Which attributes are mandatory in a form?"
+    ]
+  },
+  zh: {
+    name: "中文", dir: "ltr",
+    t: {
+      docTitle: "VerboLang · 本地对话",
+      whoConnecting: "连接中…", whoOk: "{model} · 已连接",
+      whoHttp: "{model} · HTTP {code}", whoDown: "{model} · 服务器无法访问",
+      meterEst: "上下文 ≈ {est} / {ctx} tokens · 估算",
+      meterReal: "上下文 ≈ {est} / {ctx} tokens · 上一轮实际用量",
+      welcome: "上下文上限：{ctx} 个 tokens（提示 + 回复）。顶部进度条显示当前用量。",
+      btnPrune: "✂ 修剪", btnPruneTitle: "移除对话中最早的一组（提问，回答）",
+      btnClear: "新对话", btnClearTitle: "开始新对话（清空上下文）",
+      btnSend: "发送", btnStop: "停止",
+      promptPlaceholder: "输入你的问题…（Enter 发送 · Shift+Enter 换行 · Esc 停止）",
+      summarySystem: "系统提示词",
+      sysDefault: "你是一个客观的助手。用中文回答。",
+      modePuro: "纯模型", modeVbl: "+ VerboLang",
+      modeGroupAria: "模型模式", meterAria: "上下文用量",
+      logAria: "对话", promptAria: "你的消息", jumpAria: "转到对话末尾",
+      langAria: "界面语言", themeAria: "界面主题",
+      themeLight: "浅色", themeMetal: "金属", themeDark: "深色",
+      sheetTokens: "速查表 · ~{n} tokens",
+      sheetMissing: "速查表不可用（请以仓库根目录提供服务）",
+      emptyTitle: "直接与本地模型对话",
+      emptyDesc: "一切都在这台机器上进行——数据不会离开。顶部的计量条显示上下文窗口的已用量。",
+      newChat: "新对话。上下文已清空。",
+      pruned: "已移除最早的一组对话。",
+      nothingToPrune: "没有可修剪的内容。",
+      aborted: "生成已停止。",
+      failed: "失败：{msg}",
+      overflow: "对话约 {est} tokens（上限 {ctx}）。请使用 ✂ 修剪或开始新对话。",
+      err401: "401 —— 密钥无效（URL 的 #k=… 片段）。",
+      err400: "400 —— 对话超出 {ctx} tokens 的上下文。请使用 ✂ 修剪或开始新对话。",
+      extraInstr: "操作员的附加指令：",
+      emptyReply: "（空回复）"
+    },
+    chipsPuro: [
+      "用简单的例子解释递归",
+      "写一个判断回文的 Python 函数",
+      "总结 Rust 相对于 C 的优点"
+    ],
+    chipsVbl: [
+      "解释 VerboLang 的 subvert 运算符",
+      "写一个带 review 和 act 的合法 nonequilibrium 形式",
+      "一个形式必须有哪些必填属性？"
+    ]
+  },
+  ru: {
+    name: "Русский", dir: "ltr",
+    t: {
+      docTitle: "VerboLang · Локальный чат",
+      whoConnecting: "подключение…", whoOk: "{model} · подключено",
+      whoHttp: "{model} · HTTP {code}", whoDown: "{model} · сервер недоступен",
+      meterEst: "контекст ≈ {est} / {ctx} токенов · оценка",
+      meterReal: "контекст ≈ {est} / {ctx} токенов · факт по последнему ходу",
+      welcome: "Потолок контекста: {ctx} токенов (запрос + ответ). Индикатор показывает, где вы.",
+      btnPrune: "✂ Обрезать", btnPruneTitle: "Удаляет самую старую пару (вопрос, ответ) из диалога",
+      btnClear: "Новый", btnClearTitle: "Новый диалог (сбрасывает контекст)",
+      btnSend: "Отправить", btnStop: "Стоп",
+      promptPlaceholder: "Введите вопрос… (Enter — отправить · Shift+Enter — новая строка · Esc — стоп)",
+      summarySystem: "системный промпт",
+      sysDefault: "Вы объективный ассистент. Отвечайте по-русски.",
+      modePuro: "Чистая модель", modeVbl: "+ VerboLang",
+      modeGroupAria: "Режим модели", meterAria: "Использование контекста",
+      logAria: "Диалог", promptAria: "Ваше сообщение", jumpAria: "В конец диалога",
+      langAria: "Язык интерфейса", themeAria: "Тема интерфейса",
+      themeLight: "Светлая", themeMetal: "Металл", themeDark: "Тёмная",
+      sheetTokens: "шпаргалка · ~{n} токенов",
+      sheetMissing: "шпаргалка недоступна (нужен корень репозитория)",
+      emptyTitle: "Прямой чат с локальной моделью",
+      emptyDesc: "Всё остаётся на этой машине — ничего не уходит наружу. Индикатор сверху показывает, сколько окна контекста использовано.",
+      newChat: "Новый диалог. Контекст очищен.",
+      pruned: "Самая старая пара удалена из контекста.",
+      nothingToPrune: "Обрезать нечего.",
+      aborted: "Генерация остановлена.",
+      failed: "Ошибка: {msg}",
+      overflow: "Диалог ~{est} токенов (потолок {ctx}). Обрежьте (✂) или начните новый диалог.",
+      err401: "401 — неверный ключ (фрагмент URL #k=…).",
+      err400: "400 — диалог превысил контекст {ctx} токенов. Обрежьте (✂) или начните новый диалог.",
+      extraInstr: "Дополнительные инструкции оператора:",
+      emptyReply: "(пустой ответ)"
+    },
+    chipsPuro: [
+      "Объясните рекурсию на простом примере",
+      "Напишите функцию на Python для проверки палиндрома",
+      "Кратко о преимуществах Rust над C"
+    ],
+    chipsVbl: [
+      "Объясните оператор subvert в VerboLang",
+      "Напишите корректную форму nonequilibrium с review и act",
+      "Какие атрибуты обязательны для формы?"
+    ]
+  },
+  hi: {
+    name: "हिन्दी", dir: "ltr",
+    t: {
+      docTitle: "VerboLang · लोकल चैट",
+      whoConnecting: "कनेक्ट हो रहा है…", whoOk: "{model} · कनेक्ट हो गया",
+      whoHttp: "{model} · HTTP {code}", whoDown: "{model} · सर्वर अपुष्ट",
+      meterEst: "संदर्भ ≈ {est} / {ctx} टोकन · अनुमान",
+      meterReal: "संदर्भ ≈ {est} / {ctx} टोकन · पिछले चरण की वास्तविक खपत",
+      welcome: "संदर्भ सीमा: {ctx} टोकन (प्रॉम्प्ट + उत्तर)। मीटर दिखाता है कि आप कहाँ हैं।",
+      btnPrune: "✂ छाँटें", btnPruneTitle: "बातचीत की सबसे पुरानी जोड़ी (प्रश्न, उत्तर) हटाता है",
+      btnClear: "नई", btnClearTitle: "नई बातचीत (संदर्भ रीसेट)",
+      btnSend: "भेजें", btnStop: "रोकें",
+      promptPlaceholder: "अपना प्रश्न लिखें… (Enter भेजें · Shift+Enter नई पंक्ति · Esc रोकें)",
+      summarySystem: "सिस्टम प्रॉम्प्ट",
+      sysDefault: "आप एक वस्तुनिष्ठ सहायक हैं। हिन्दी में उत्तर दें।",
+      modePuro: "शुद्ध मॉडल", modeVbl: "+ VerboLang",
+      modeGroupAria: "मॉडल मोड", meterAria: "संदर्भ उपयोग",
+      logAria: "बातचीत", promptAria: "आपका संदेश", jumpAria: "बातचीत के अंत पर जाएँ",
+      langAria: "इंटरफ़ेस भाषा", themeAria: "इंटरफ़ेस थीम",
+      themeLight: "हल्की", themeMetal: "मेटल", themeDark: "गहरी",
+      sheetTokens: "चीटशीट · ~{n} टोकन",
+      sheetMissing: "चीटशीट अनुपलब्ध (रिपॉज़िटरी रूट सर्व करें)",
+      emptyTitle: "लोकल मॉडल से सीधी बातचीत",
+      emptyDesc: "सब कुछ इसी मशीन पर रहता है — कुछ भी बाहर नहीं जाता। ऊपर का मीटर दिखाता है कि संदर्भ विंडो का कितना उपयोग हुआ।",
+      newChat: "नई बातचीत। संदर्भ साफ़।",
+      pruned: "सबसे पुरानी जोड़ी संदर्भ से हटाई गई।",
+      nothingToPrune: "छाँटने को कुछ नहीं।",
+      aborted: "जनरेशन रोक दी गई।",
+      failed: "विफल: {msg}",
+      overflow: "बातचीत ~{est} टोकन (सीमा {ctx})। ✂ छाँटें या नई बातचीत शुरू करें।",
+      err401: "401 — अमान्य कुंजी (URL का #k=… भाग)।",
+      err400: "400 — बातचीत {ctx} टोकन की सीमा पार कर गई। ✂ छाँटें या नई बातचीत शुरू करें।",
+      extraInstr: "ऑपरेटर के अतिरिक्त निर्देश:",
+      emptyReply: "(खाली उत्तर)"
+    },
+    chipsPuro: [
+      "सरल उदाहरण के साथ रिकर्शन समझाइए",
+      "पैलिंड्रोम जाँचने वाला Python फ़ंक्शन लिखिए",
+      "C की तुलना में Rust के फ़ायदे बताइए"
+    ],
+    chipsVbl: [
+      "VerboLang के subvert ऑपरेटर को समझाइए",
+      "review और act के साथ एक मान्य nonequilibrium रूप लिखिए",
+      "एक रूप (form) में कौन से गुण अनिवार्य हैं?"
+    ]
+  },
+  af: {
+    name: "Afrikaans", dir: "ltr",
+    t: {
+      docTitle: "VerboLang · Plaaslike klets",
+      whoConnecting: "koppel…", whoOk: "{model} · gekoppel",
+      whoHttp: "{model} · HTTP {code}", whoDown: "{model} · bediener onbereikbaar",
+      meterEst: "konteks ≈ {est} / {ctx} tokens · skatting",
+      meterReal: "konteks ≈ {est} / {ctx} tokens · werklike gebruik laaste beurt",
+      welcome: "Konteksplafon: {ctx} tokens (prompt + antwoord). Die meter wys waar jy is.",
+      btnPrune: "✂ Snoei", btnPruneTitle: "Verwyder die oudste (vraag, antwoord)-paar uit die gesprek",
+      btnClear: "Nuut", btnClearTitle: "Nuwe gesprek (stel konteks terug)",
+      btnSend: "Stuur", btnStop: "Stop",
+      promptPlaceholder: "Tik jou vraag… (Enter stuur · Shift+Enter nuwe reël · Esc stop)",
+      summarySystem: "stelselprompt",
+      sysDefault: "Jy is 'n objektiewe assistent. Antwoord in Afrikaans.",
+      modePuro: "Pure model", modeVbl: "+ VerboLang",
+      modeGroupAria: "Modelmodus", meterAria: "Konteksgebruik",
+      logAria: "Gesprek", promptAria: "Jou boodskap", jumpAria: "Gaan na die einde van die gesprek",
+      langAria: "Koppelvlaktaal", themeAria: "Koppelvlaktema",
+      themeLight: "Lig", themeMetal: "Metaal", themeDark: "Donker",
+      sheetTokens: "spiekbrief · ~{n} tokens",
+      sheetMissing: "spiekbrief nie beskikbaar (bedien die bewaarplekwortel)",
+      emptyTitle: "Regstreekse klets met die plaaslike model",
+      emptyDesc: "Alles bly op hierdie masjien — niks verlaat dit nie. Die meter bo wys hoeveel van die konteksvenster jy gebruik het.",
+      newChat: "Nuwe gesprek. Konteks skoongemaak.",
+      pruned: "Oudste paar uit die konteks verwyder.",
+      nothingToPrune: "Niks om te snoei nie.",
+      aborted: "Generering gestop.",
+      failed: "Misluk: {msg}",
+      overflow: "Gesprek by ~{est} tokens (plafon {ctx}). Snoei (✂) of begin 'n nuwe gesprek.",
+      err401: "401 — ongeldige sleutel (URL #k=…-fragment).",
+      err400: "400 — die gesprek het die konteks van {ctx} tokens oorskry. Snoei (✂) of begin 'n nuwe gesprek.",
+      extraInstr: "Bykomende operateursinstruksies:",
+      emptyReply: "(leë antwoord)"
+    },
+    chipsPuro: [
+      "Verduidelik rekursie met 'n eenvoudige voorbeeld",
+      "Skryf 'n Python-funksie wat palindrome toets",
+      "Som die voordele van Rust bo C op"
+    ],
+    chipsVbl: [
+      "Verduidelik die subvert-operator in VerboLang",
+      "Skryf 'n geldige nonequilibrium-vorm met review en act",
+      "Watter attributen is verpligtend in 'n vorm?"
+    ]
+  },
+  ar: {
+    name: "العربية", dir: "rtl",
+    t: {
+      docTitle: "VerboLang · محادثة محلية",
+      whoConnecting: "جارٍ الاتصال…", whoOk: "{model} · متصل",
+      whoHttp: "{model} · HTTP {code}", whoDown: "{model} · الخادم غير قابل للوصول",
+      meterEst: "السياق ≈ {est} / {ctx} توكن · تقدير",
+      meterReal: "السياق ≈ {est} / {ctx} توكن · الاستخدام الفعلي للدور الأخير",
+      welcome: "سقف السياق: {ctx} توكن (الطلب + الرد). يوضّح المؤشر أين أنت.",
+      btnPrune: "✂ تقليم", btnPruneTitle: "يزيل أقدم زوج (سؤال، جواب) من المحادثة",
+      btnClear: "جديد", btnClearTitle: "محادثة جديدة (تصفير السياق)",
+      btnSend: "إرسال", btnStop: "إيقاف",
+      promptPlaceholder: "اكتب سؤالك… (Enter للإرسال · Shift+Enter سطر جديد · Esc للإيقاف)",
+      summarySystem: "موجه النظام",
+      sysDefault: "أنت مساعد موضوعي. أجب بالعربية.",
+      modePuro: "نموذج خالص", modeVbl: "+ VerboLang",
+      modeGroupAria: "وضع النموذج", meterAria: "استخدام السياق",
+      logAria: "المحادثة", promptAria: "رسالتك", jumpAria: "الانتقال إلى نهاية المحادثة",
+      langAria: "لغة الواجهة", themeAria: "مظهر الواجهة",
+      themeLight: "فاتح", themeMetal: "معدني", themeDark: "داكن",
+      sheetTokens: "ورقة مراجعة · ~{n} توكن",
+      sheetMissing: "ورقة المراجعة غير متاحة (قدّم جذر المستودع)",
+      emptyTitle: "محادثة مباشرة مع النموذج المحلي",
+      emptyDesc: "كل شيء يبقى على هذه الآلة — لا شيء يخرج منها. يوضّح المؤشر في الأعلى مقدار ما استخدمته من نافذة السياق.",
+      newChat: "محادثة جديدة. تم تصفير السياق.",
+      pruned: "أُزيل أقدم زوج من السياق.",
+      nothingToPrune: "لا شيء لتقليمه.",
+      aborted: "توقّف التوليد.",
+      failed: "فشل: {msg}",
+      overflow: "المحادثة عند ~{est} توكن (السقف {ctx}). قلّم (✂) أو ابدأ محادثة جديدة.",
+      err401: "401 — مفتاح غير صالح (جزء #k=… من الرابط).",
+      err400: "400 — تجاوزت المحادثة سياق {ctx} توكن. قلّم (✂) أو ابدأ محادثة جديدة.",
+      extraInstr: "تعليمات إضافية من المشغّل:",
+      emptyReply: "(رد فارغ)"
+    },
+    chipsPuro: [
+      "اشرح العودية بمثال بسيط",
+      "اكتب دالة بايثون للتحقق من المتناظرات",
+      "لخّص مزايا Rust مقارنة بـ C"
+    ],
+    chipsVbl: [
+      "اشرح عامل subvert في VerboLang",
+      "اكتب صيغة nonequilibrium صحيحة مع review و act",
+      "ما السمات الإلزامية في الصيغة؟"
+    ]
+  }
+};
+
+// ── idioma e tema ──────────────────────────────────────────────────────────
+const langDetect = () => (navigator.language || "pt-BR").slice(0, 2).toLowerCase();
+let lang = localStorage.getItem("vllm.lang");
+if (!I18N[lang]) lang = I18N[langDetect()] ? langDetect() : "pt";
+let theme = localStorage.getItem("vllm.theme");
+if (!["light", "metal", "dark"].includes(theme)) theme = "dark";
+
+const L = () => I18N[lang];
+const t = (key, params) => {
+  let s = L().t[key] ?? I18N.en.t[key] ?? key;
+  if (params) for (const [k, v] of Object.entries(params)) s = s.replaceAll("{" + k + "}", v);
+  return s;
+};
+
+function applyTheme(name) {
+  theme = name;
+  localStorage.setItem("vllm.theme", name);
+  document.documentElement.dataset.theme = name;
+  $("theme").value = name;
+}
+function buildLangSelect() {
+  const sel = $("lang");
+  sel.replaceChildren(...Object.entries(I18N).map(([code, def]) => {
+    const o = document.createElement("option");
+    o.value = code; o.textContent = def.name;
+    return o;
+  }));
+  sel.value = lang;
+}
+function applyLang() {
+  localStorage.setItem("vllm.lang", lang);
+  document.documentElement.lang = lang === "pt" ? "pt-BR" : lang;
+  document.documentElement.dir = L().dir;
+  document.title = t("docTitle");
+
+  $("dot").className = "dot " + statusState;
+  $("who").textContent = t(statusKey, statusParams);
+  $("prune").textContent = t("btnPrune");
+  $("prune").title = t("btnPruneTitle");
+  $("clear").textContent = t("btnClear");
+  $("clear").title = t("btnClearTitle");
+  $("send").textContent = t("btnSend");
+  $("stop").textContent = t("btnStop");
+  $("prompt").placeholder = t("promptPlaceholder");
+  $("prompt").ariaLabel = t("promptAria");
+  $("sys-summary").textContent = t("summarySystem");
+  $("mode-puro").textContent = t("modePuro");
+  $("mode-vbl").textContent = t("modeVbl");
+  $("mode-group").setAttribute("aria-label", t("modeGroupAria"));
+  $("meter").setAttribute("aria-label", t("meterAria"));
+  $("log").setAttribute("aria-label", t("logAria"));
+  $("jump").title = t("jumpAria");
+  $("jump").setAttribute("aria-label", t("jumpAria"));
+  $("theme").setAttribute("aria-label", t("themeAria"));
+  $("theme").title = t("themeAria");
+  $("lang").setAttribute("aria-label", t("langAria"));
+  $("lang").title = t("langAria");
+  const opt = $("theme").options;
+  opt[0].textContent = t("themeLight");
+  opt[1].textContent = t("themeMetal");
+  opt[2].textContent = t("themeDark");
+
+  $("empty-title").textContent = t("emptyTitle");
+  $("empty-desc").textContent = t("emptyDesc");
+  renderChips();
+  renderMeter();
+  updateSheetStatus();
+}
+
 // ── estado ─────────────────────────────────────────────────────────────────
 const history = [];          // [{role, content}] sem o system
 let lastPromptTokens = null; // uso real informado pelo vLLM
@@ -298,7 +725,7 @@ let sheetText = "";          // cheat sheet da linguagem (docs/VBL-CHEATSHEET.md
 
 const $ = (id) => document.getElementById(id);
 const log = $("log");
-const fmt = (n) => n.toLocaleString("pt-BR");
+const fmt = (n) => n.toLocaleString(lang === "pt" ? "pt-BR" : lang);
 
 // ── medidor de contexto (honestidade termodinâmica) ───────────────────────
 function estimateTokens(text) { return Math.ceil((text || "").length / 4); }
@@ -313,11 +740,11 @@ function systemContent() {
   if (vblMode && sheetText) parts.push(sheetText.trim());
   if (extra) {
     parts.push(vblMode && sheetText
-      ? "Instruções adicionais do operador:\n" + extra
+      ? t("extraInstr") + "\n" + extra
       : extra);
   }
   return parts.join("\n\n---\n\n")
-    || "Você é um assistente objetivo. Responda em português do Brasil.";
+    || t("sysDefault");
 }
 function renderMeter() {
   const est = Math.max(contextEstimate(), lastPromptTokens ?? 0);
@@ -327,13 +754,14 @@ function renderMeter() {
   fill.style.background = pct > 85 ? "var(--bad)"
                         : pct > 65 ? "var(--warn)"
                         : "linear-gradient(90deg, var(--accent), var(--ok))";
-  $("meter-lbl").textContent =
-    `contexto ≈ ${fmt(est)} / ${fmt(CTX)} tokens` +
-    (lastPromptTokens ? " · uso real do último turno" : " · estimativa");
+  $("meter-lbl").textContent = t(lastPromptTokens ? "meterReal" : "meterEst",
+                                 { est: fmt(est), ctx: fmt(CTX) });
 }
-function setStatus(state, text) {
-  $("dot").className = "dot " + state;
-  $("who").textContent = text;
+let statusState = "", statusKey = "whoConnecting", statusParams = {};
+function setStatus(state, key, params) {
+  statusState = state; statusKey = key; statusParams = params || {};
+  $("dot").className = "dot " + statusState;
+  $("who").textContent = t(statusKey, statusParams);
 }
 function note(text) {
   const div = document.createElement("div");
@@ -342,6 +770,20 @@ function note(text) {
   stickToBottom = true; scrollToBottom();
 }
 function refreshEmpty() { $("empty").style.display = history.length ? "none" : ""; }
+
+// ── perguntas da home, por modo (adequadas ao contexto) ────────────────────
+function renderChips() {
+  const box = $("chips");
+  const arr = vblMode ? L().chipsVbl : L().chipsPuro;
+  box.replaceChildren(...arr.map((txt) => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.setAttribute("role", "listitem"); b.textContent = txt;
+    b.addEventListener("click", () => {
+      $("prompt").value = txt; autosize(); $("prompt").focus();
+    });
+    return b;
+  }));
+}
 
 // ── scroll ─────────────────────────────────────────────────────────────────
 function scrollToBottom() { log.scrollTop = log.scrollHeight; }
@@ -364,15 +806,15 @@ function md(src) {
       const body = (nl >= 0 ? part.slice(nl + 1) : part).replace(/\n$/, "");
       return `<pre><code>${esc(body)}</code></pre>`;
     }
-    let t = esc(part)
+    let x = esc(part)
       .replace(/`([^`\n]+)`/g, "<code>$1</code>")
       .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
-    return t.replace(/\n/g, "<br>");
+    return x.replace(/\n/g, "<br>");
   }).join("");
 }
 function renderAssistant(bubble, text) {
   if (!text) {
-    bubble.innerHTML = '<span class="dots" aria-label="gerando"><i></i><i></i><i></i></span>';
+    bubble.innerHTML = '<span class="dots" aria-label="…"><i></i><i></i><i></i></span>';
   } else {
     bubble.innerHTML = md(text);
   }
@@ -384,12 +826,12 @@ async function send() {
   const box = $("prompt");
   const text = box.value.trim();
   if (!text || inFlight) return;
-  if (!API_KEY) { note("Chave da API ausente no fragmento da URL (#k=…)."); return; }
+  if (!API_KEY) { note(t("noKey")); return; }
 
   const promptEst = contextEstimate() + estimateTokens(text);
   const maxTokens = Math.max(64, Math.min(2048, CTX - promptEst - 256));
   if (promptEst > CTX - 64) {
-    note(`Conversa em ~${fmt(promptEst)} tokens (teto ${fmt(CTX)}). Use ✂ Podar ou comece uma conversa nova.`);
+    note(t("overflow", { est: fmt(promptEst), ctx: fmt(CTX) }));
     return;
   }
 
@@ -446,18 +888,18 @@ async function send() {
         if (delta) { acc += delta; renderAssistant(bubble, acc); }
       }
     }
-    if (!acc) { acc = "(resposta vazia)"; bubble.textContent = acc; }
+    if (!acc) { acc = t("emptyReply"); bubble.textContent = acc; }
     history.push({ role: "assistant", content: acc });
   } catch (err) {
     if (controller.signal.aborted) {
       if (acc) { history.push({ role: "assistant", content: acc }); }
       else bubble.remove();
-      note("Geração interrompida.");
+      note(t("aborted"));
     } else {
       bubble.remove();
       history.pop(); // a pergunta sai do histórico — o turno não aconteceu
-      if (err instanceof TypeError) setStatus("err", `${MODEL} · servidor inacessível`);
-      note("Falhou: " + (err.message || err));
+      if (err instanceof TypeError) setStatus("err", "whoDown", { model: MODEL });
+      note(t("failed", { msg: err.message || err }));
     }
   } finally {
     inFlight = null;
@@ -468,9 +910,9 @@ async function send() {
   }
 }
 function friendlyError(status, body) {
-  if (status === 401) return "401 — chave inválida (fragmento #k=… da URL).";
+  if (status === 401) return t("err401");
   if (status === 400 && /input_tokens|context length/i.test(body))
-    return `400 — a conversa excedeu o contexto de ${fmt(CTX)} tokens. Use ✂ Podar ou comece uma conversa nova.`;
+    return t("err400", { ctx: fmt(CTX) });
   return status + " — " + body.slice(0, 200);
 }
 
@@ -489,6 +931,40 @@ function autosize() {
   box.style.height = Math.min(200, box.scrollHeight) + "px";
 }
 
+// ── alternância modelo puro ↔ + VerboLang ──────────────────────────────────
+function setVblMode(on) {
+  vblMode = on;
+  localStorage.setItem("vllm.vbl", on ? "1" : "0");
+  $("mode-puro").setAttribute("aria-pressed", String(!on));
+  $("mode-vbl").setAttribute("aria-pressed", String(on));
+  renderChips();          // as perguntas da home acompanham o modo
+  renderMeter();          // o custo do cheat sheet entra no medidor
+}
+$("mode-puro").addEventListener("click", () => setVblMode(false));
+$("mode-vbl").addEventListener("click", () => setVblMode(true));
+let sheetState = "loading";
+function updateSheetStatus() {
+  const el = $("sheet-status");
+  if (sheetState === "loading") { el.textContent = "…"; return; }
+  if (sheetState === "missing") { el.textContent = t("sheetMissing"); return; }
+  el.textContent = t("sheetTokens", { n: fmt(estimateTokens(sheetText)) });
+}
+async function loadSheet() {
+  const candidates = ["../docs/VBL-CHEATSHEET.md", "docs/VBL-CHEATSHEET.md", "VBL-CHEATSHEET.md"];
+  for (const path of candidates) {
+    try {
+      const r = await fetch(path);
+      if (r.ok) { sheetText = await r.text(); break; }
+    } catch { /* tenta o próximo */ }
+  }
+  sheetState = sheetText ? "ok" : "missing";
+  if (sheetState === "missing") {
+    $("mode-vbl").disabled = true;
+    if (vblMode) setVblMode(false);
+  }
+  updateSheetStatus();
+}
+
 // ── eventos ────────────────────────────────────────────────────────────────
 $("send").addEventListener("click", send);
 $("stop").addEventListener("click", () => inFlight?.abort());
@@ -500,12 +976,14 @@ $("prompt").addEventListener("keydown", (e) => {
 });
 $("prompt").addEventListener("input", autosize);
 $("system").addEventListener("input", renderMeter);
+$("theme").addEventListener("change", () => applyTheme($("theme").value));
+$("lang").addEventListener("change", () => { lang = $("lang").value; applyLang(); });
 $("clear").addEventListener("click", () => {
   if (inFlight) inFlight.abort();
   history.length = 0; lastPromptTokens = null;
   [...log.querySelectorAll(".msg, .sysnote")].forEach((el) => el.remove());
   refreshEmpty();
-  note("Conversa nova. Contexto zerado.");
+  note(t("newChat"));
   renderMeter();
   $("prompt").focus();
 });
@@ -516,60 +994,35 @@ $("prune").addEventListener("click", () => {
     history.splice(0, 2);
     if (firstPair.length >= 2) { firstPair[0].remove(); firstPair[1].remove(); }
     lastPromptTokens = null;
-    note("Par mais antigo removido do contexto.");
-  } else note("Nada a podar.");
+    note(t("pruned"));
+  } else note(t("nothingToPrune"));
   refreshEmpty();
   renderMeter();
 });
-document.querySelectorAll(".chip").forEach((chip) => {
-  chip.addEventListener("click", () => {
-    $("prompt").value = chip.textContent.trim();
-    autosize();
-    $("prompt").focus();
-  });
-});
-
-// ── alternância modelo puro ↔ + VerboLang ──────────────────────────────────
-function setVblMode(on) {
-  vblMode = on;
-  localStorage.setItem("vllm.vbl", on ? "1" : "0");
-  $("mode-puro").setAttribute("aria-pressed", String(!on));
-  $("mode-vbl").setAttribute("aria-pressed", String(on));
-  renderMeter();
-}
-$("mode-puro").addEventListener("click", () => setVblMode(false));
-$("mode-vbl").addEventListener("click", () => setVblMode(true));
-async function loadSheet() {
-  const candidates = ["../docs/VBL-CHEATSHEET.md", "docs/VBL-CHEATSHEET.md", "VBL-CHEATSHEET.md"];
-  for (const path of candidates) {
-    try {
-      const r = await fetch(path);
-      if (r.ok) { sheetText = await r.text(); break; }
-    } catch { /* tenta o próximo */ }
-  }
-  const el = $("sheet-status");
-  if (!sheetText) {
-    el.textContent = "cheat sheet indisponível (sirva a raiz do repositório)";
-    $("mode-vbl").disabled = true;
-    if (vblMode) setVblMode(false);
-    return;
-  }
-  el.textContent = `cheat sheet · ~${fmt(estimateTokens(sheetText))} tokens`;
-  setVblMode(vblMode); // reflete o modo salvo e atualiza o medidor
-}
 
 // ── partida ────────────────────────────────────────────────────────────────
 (async function boot() {
+  applyTheme(theme);
+  buildLangSelect();
+  $("lang").value = lang;
+  if (!localStorage.getItem("vllm.sysinit")) {
+    $("system").value = t("sysDefault");
+    localStorage.setItem("vllm.sysinit", "1");
+  }
+  applyLang();
+  setVblMode(vblMode);
   refreshEmpty();
   autosize();
   try {
     const r = await fetch(API_URL + "/models", { headers: { "Authorization": "Bearer " + API_KEY } });
-    setStatus(r.ok ? "ok" : "err", r.ok ? `${MODEL} · conectado` : `${MODEL} · HTTP ${r.status}`);
+    if (r.ok) setStatus("ok", "whoOk", { model: MODEL });
+    else setStatus("err", "whoHttp", { model: MODEL, code: r.status });
   } catch {
-    setStatus("err", `${MODEL} · servidor inacessível`);
+    setStatus("err", "whoDown", { model: MODEL });
   }
   loadSheet();
   renderMeter();
+  note(t("welcome", { ctx: fmt(CTX) }));
   $("prompt").focus();
 })();
 </script>
