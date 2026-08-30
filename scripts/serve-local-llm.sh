@@ -37,7 +37,7 @@ fi
 
 echo ">>> Subindo o modelo $MODEL como '$SERVED' na porta 8000"
 
-# ── UI de consulta local (chat-local.html) ──────────────────────────────────
+# ── UI de consulta (chat.html) ──────────────────────────────────
 # Vigia em subshell: quando o /v1/models responde 200, sobe um servidor
 # estático (python3 http.server) na RAIZ do repositório — a página precisa
 # alcançar ../docs/VBL-CHEATSHEET.md para o modo "+ VerboLang" — e abre o
@@ -47,7 +47,7 @@ echo ">>> Subindo o modelo $MODEL como '$SERVED' na porta 8000"
 if [[ "${LOCAL_LLM_UI:-1}" != "0" ]]; then
   UI_PORT="${LOCAL_LLM_UI_PORT:-8188}"
   UI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  UI_URL="http://127.0.0.1:${UI_PORT}/scripts/chat-local.html#k=${KEY}&u=http%3A%2F%2F127.0.0.1%3A8000%2Fv1&m=${SERVED}&c=${CTX}"
+  UI_URL="http://127.0.0.1:${UI_PORT}/scripts/chat.html#k=${KEY}&u=http%3A%2F%2F127.0.0.1%3A8000%2Fv1&m=${SERVED}&c=${CTX}"
   (
     http_pid=""
     for _ in $(seq 1 120); do                    # ~10 min de paciência
@@ -58,12 +58,12 @@ if [[ "${LOCAL_LLM_UI:-1}" != "0" ]]; then
         exit 0
       fi
       if curl -fsS -H "Authorization: Bearer ${KEY}" http://127.0.0.1:8000/v1/models >/dev/null 2>&1; then
-        if ! curl -fsS "http://127.0.0.1:${UI_PORT}/scripts/chat-local.html" >/dev/null 2>&1; then
+        if ! curl -fsS "http://127.0.0.1:${UI_PORT}/scripts/chat.html" >/dev/null 2>&1; then
           python3 -m http.server "$UI_PORT" --bind 127.0.0.1 --directory "$UI_DIR" >/dev/null 2>&1 &
           http_pid=$!
           sleep 1
         fi
-        if curl -fsS "http://127.0.0.1:${UI_PORT}/scripts/chat-local.html" >/dev/null 2>&1; then
+        if curl -fsS "http://127.0.0.1:${UI_PORT}/scripts/chat.html" >/dev/null 2>&1; then
           command -v xdg-open >/dev/null 2>&1 && xdg-open "$UI_URL" >/dev/null 2>&1
           echo ">>> UI de consulta: ${UI_URL%%\#*}  (modelo ${SERVED}, ctx ${CTX})"
           break                                   # UI no ar → fase de guarda

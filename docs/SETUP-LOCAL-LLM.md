@@ -174,7 +174,7 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
 > inter-LLM, scripts bulk e **consulta direta pela UI** abaixo — que envia ao
 > servidor apenas o que você digita.
 
-### 4.1 UI de consulta (`scripts/chat-local.html`)
+### 4.1 UI de consulta (`scripts/chat.html`)
 
 - Single-file, zero dependências: streaming SSE direto ao endpoint
   OpenAI-compatível (o vLLM já responde preflight com `allow-origin: *`).
@@ -193,7 +193,7 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   mais antigo; **Nova** zera a conversa.
 - A chave vai no fragmento da URL (`#k=…`), que o navegador não envia ao
   servidor estático. URL manual:
-  `http://127.0.0.1:8188/scripts/chat-local.html#k=<chave>&u=<base-url>&m=<modelo>&c=<ctx>`
+  `http://127.0.0.1:8188/scripts/chat.html#k=<chave>&u=<base-url>&m=<modelo>&c=<ctx>`
 - **Alternância "Modelo puro ↔ + VerboLang"**: o modo "+ VerboLang" injeta o
   cheat sheet canônico ([`VBL-CHEATSHEET.md`](VBL-CHEATSHEET.md)) como prompt de
   sistema e conta o custo dele no medidor de contexto. Lembre: o modelo local

@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>VerboLang · Consulta local</title>
+<title>VerboLang</title>
 <link rel="icon" type="image/svg+xml" href="verbolog.svg">
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
 <!--
-  chat-local.html — UI de consulta direta ao modelo local (vLLM :8000).
+  chat.html — UI de consulta direta ao modelo (vLLM :8000).
   Single-file, sem dependências: streaming SSE via fetch, markdown mínimo
   (blocos de código, `inline`, **negrito**) com escape prévio — seguro por
   construção. Aberta automaticamente por scripts/serve-local-llm.sh.
@@ -417,7 +417,7 @@ const I18N = {
   pt: {
     name: "Português", dir: "ltr",
     t: {
-      docTitle: "VerboLang · Consulta local",
+      docTitle: "VerboLang · Consulta",
       whoConnecting: "conectando…", whoOk: "{model} · conectado",
       whoHttp: "{model} · HTTP {code}", whoDown: "{model} · servidor inacessível",
       meterEst: "contexto ≈ {est} / {ctx} tokens · estimativa",
@@ -436,7 +436,7 @@ const I18N = {
       themeLight: "Claro", themeMetal: "Metal", themeDark: "Escuro",
       sheetTokens: "cheat sheet · ~{n} tokens",
       sheetMissing: "cheat sheet indisponível (sirva a raiz do repositório)",
-      emptyTitle: "Consulta direta ao modelo local",
+      emptyTitle: "Consulta direta ao modelo",
       emptyDesc: "Tudo fica nesta máquina — nada sai dela. O medidor no topo mostra o quanto da janela de contexto você já usou.",
       newChat: "Conversa nova. Contexto zerado.",
       pruned: "Par mais antigo removido do contexto.",
@@ -473,7 +473,7 @@ const I18N = {
   en: {
     name: "English", dir: "ltr",
     t: {
-      docTitle: "VerboLang · Local chat",
+      docTitle: "VerboLang · Chat",
       whoConnecting: "connecting…", whoOk: "{model} · connected",
       whoHttp: "{model} · HTTP {code}", whoDown: "{model} · server unreachable",
       meterEst: "context ≈ {est} / {ctx} tokens · estimate",
@@ -492,7 +492,7 @@ const I18N = {
       themeLight: "Light", themeMetal: "Metal", themeDark: "Dark",
       sheetTokens: "cheat sheet · ~{n} tokens",
       sheetMissing: "cheat sheet unavailable (serve the repository root)",
-      emptyTitle: "Direct chat with the local model",
+      emptyTitle: "Direct chat with the model",
       emptyDesc: "Everything stays on this machine — nothing leaves it. The meter at the top shows how much of the context window you have used.",
       newChat: "New conversation. Context cleared.",
       pruned: "Oldest pair removed from the context.",
@@ -529,7 +529,7 @@ const I18N = {
   zh: {
     name: "中文", dir: "ltr",
     t: {
-      docTitle: "VerboLang · 本地对话",
+      docTitle: "VerboLang · 对话",
       whoConnecting: "连接中…", whoOk: "{model} · 已连接",
       whoHttp: "{model} · HTTP {code}", whoDown: "{model} · 服务器无法访问",
       meterEst: "上下文 ≈ {est} / {ctx} tokens · 估算",
@@ -548,7 +548,7 @@ const I18N = {
       themeLight: "浅色", themeMetal: "金属", themeDark: "深色",
       sheetTokens: "速查表 · ~{n} tokens",
       sheetMissing: "速查表不可用（请以仓库根目录提供服务）",
-      emptyTitle: "直接与本地模型对话",
+      emptyTitle: "直接与模型对话",
       emptyDesc: "一切都在这台机器上进行——数据不会离开。顶部的计量条显示上下文窗口的已用量。",
       newChat: "新对话。上下文已清空。",
       pruned: "已移除最早的一组对话。",
@@ -584,7 +584,7 @@ const I18N = {
   ru: {
     name: "Русский", dir: "ltr",
     t: {
-      docTitle: "VerboLang · Локальный чат",
+      docTitle: "VerboLang · Чат",
       whoConnecting: "подключение…", whoOk: "{model} · подключено",
       whoHttp: "{model} · HTTP {code}", whoDown: "{model} · сервер недоступен",
       meterEst: "контекст ≈ {est} / {ctx} токенов · оценка",
@@ -603,7 +603,7 @@ const I18N = {
       themeLight: "Светлая", themeMetal: "Металл", themeDark: "Тёмная",
       sheetTokens: "шпаргалка · ~{n} токенов",
       sheetMissing: "шпаргалка недоступна (нужен корень репозитория)",
-      emptyTitle: "Прямой чат с локальной моделью",
+      emptyTitle: "Прямой чат с моделью",
       emptyDesc: "Всё остаётся на этой машине — ничего не уходит наружу. Индикатор сверху показывает, сколько окна контекста использовано.",
       newChat: "Новый диалог. Контекст очищен.",
       pruned: "Самая старая пара удалена из контекста.",
@@ -639,7 +639,7 @@ const I18N = {
   hi: {
     name: "हिन्दी", dir: "ltr",
     t: {
-      docTitle: "VerboLang · लोकल चैट",
+      docTitle: "VerboLang · चैट",
       whoConnecting: "कनेक्ट हो रहा है…", whoOk: "{model} · कनेक्ट हो गया",
       whoHttp: "{model} · HTTP {code}", whoDown: "{model} · सर्वर अपुष्ट",
       meterEst: "संदर्भ ≈ {est} / {ctx} टोकन · अनुमान",
@@ -658,7 +658,7 @@ const I18N = {
       themeLight: "हल्की", themeMetal: "मेटल", themeDark: "गहरी",
       sheetTokens: "चीटशीट · ~{n} टोकन",
       sheetMissing: "चीटशीट अनुपलब्ध (रिपॉज़िटरी रूट सर्व करें)",
-      emptyTitle: "लोकल मॉडल से सीधी बातचीत",
+      emptyTitle: "मॉडल से सीधी बातचीत",
       emptyDesc: "सब कुछ इसी मशीन पर रहता है — कुछ भी बाहर नहीं जाता। ऊपर का मीटर दिखाता है कि संदर्भ विंडो का कितना उपयोग हुआ।",
       newChat: "नई बातचीत। संदर्भ साफ़।",
       pruned: "सबसे पुरानी जोड़ी संदर्भ से हटाई गई।",
@@ -694,7 +694,7 @@ const I18N = {
   af: {
     name: "Afrikaans", dir: "ltr",
     t: {
-      docTitle: "VerboLang · Plaaslike klets",
+      docTitle: "VerboLang · Klets",
       whoConnecting: "koppel…", whoOk: "{model} · gekoppel",
       whoHttp: "{model} · HTTP {code}", whoDown: "{model} · bediener onbereikbaar",
       meterEst: "konteks ≈ {est} / {ctx} tokens · skatting",
@@ -713,7 +713,7 @@ const I18N = {
       themeLight: "Lig", themeMetal: "Metaal", themeDark: "Donker",
       sheetTokens: "spiekbrief · ~{n} tokens",
       sheetMissing: "spiekbrief nie beskikbaar (bedien die bewaarplekwortel)",
-      emptyTitle: "Regstreekse klets met die plaaslike model",
+      emptyTitle: "Regstreekse klets met die model",
       emptyDesc: "Alles bly op hierdie masjien — niks verlaat dit nie. Die meter bo wys hoeveel van die konteksvenster jy gebruik het.",
       newChat: "Nuwe gesprek. Konteks skoongemaak.",
       pruned: "Oudste paar uit die konteks verwyder.",
@@ -749,7 +749,7 @@ const I18N = {
   ar: {
     name: "العربية", dir: "rtl",
     t: {
-      docTitle: "VerboLang · محادثة محلية",
+      docTitle: "VerboLang · محادثة",
       whoConnecting: "جارٍ الاتصال…", whoOk: "{model} · متصل",
       whoHttp: "{model} · HTTP {code}", whoDown: "{model} · الخادم غير قابل للوصول",
       meterEst: "السياق ≈ {est} / {ctx} توكن · تقدير",
@@ -768,7 +768,7 @@ const I18N = {
       themeLight: "فاتح", themeMetal: "معدني", themeDark: "داكن",
       sheetTokens: "ورقة مراجعة · ~{n} توكن",
       sheetMissing: "ورقة المراجعة غير متاحة (قدّم جذر المستودع)",
-      emptyTitle: "محادثة مباشرة مع النموذج المحلي",
+      emptyTitle: "محادثة مباشرة مع النموذج",
       emptyDesc: "كل شيء يبقى على هذه الآلة — لا شيء يخرج منها. يوضّح المؤشر في الأعلى مقدار ما استخدمته من نافذة السياق.",
       newChat: "محادثة جديدة. تم تصفير السياق.",
       pruned: "أُزيل أقدم زوج من السياق.",
