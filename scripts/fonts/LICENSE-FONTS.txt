@@ -1,0 +1,21 @@
+Fontes auto-hospedadas da UI de consulta local — proveniência e licença
+========================================================================
+
+Arquivos          Fonte      Licença     Origem
+----------------  ---------  ----------  --------------------------------------
+inter-latin-*.    Inter      SIL OFL 1.1  https://rsms.me/inter/ (rsms/inter),
+                                          via CDN Fontsource (jsDelivr)
+iosevka-latin-*.  Iosevka    SIL OFL 1.1  https://typeof.net/Iosevka
+                                          (be5invis/iosevka), via CDN
+                                          Fontsource (jsDelivr)
+
+- Subsets "latin" obtidos de https://cdn.jsdelivr.net/fontsource/fonts/
+  (Weight 400/600/700 para Inter; 400 para Iosevka).
+- O Iosevka foi submetido localmente com fontTools/pyftsubset para
+  latim + símbolos (setas, caixa, operadores): 984 KB → 95 KB.
+- Glifos fora desses subsets (cirílico, devanágari, árabe, CJK) usam o
+  fallback do sistema automaticamente — nada é carregado de fora.
+- Ambas as fontes são distribuídas sob a SIL Open Font License 1.1
+  (https://openfontlicense.org/); o texto completo da licença acompanha os
+  releases originais das respectivas fontes. Este arquivo documenta a
+  proveniência exigida pela OFL para redistribuição.

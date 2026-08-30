@@ -18,6 +18,28 @@
   Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
 -->
 <style>
+  /* ── fontes auto-hospedadas (SIL OFL 1.1 — ver fonts/LICENSE-FONTS.txt) ── */
+  @font-face {
+    font-family: "Inter";
+    font-style: normal; font-weight: 400; font-display: swap;
+    src: url("fonts/inter-latin-400.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Inter";
+    font-style: normal; font-weight: 600; font-display: swap;
+    src: url("fonts/inter-latin-600.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Inter";
+    font-style: normal; font-weight: 700; font-display: swap;
+    src: url("fonts/inter-latin-700.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Iosevka";
+    font-style: normal; font-weight: 400; font-display: swap;
+    src: url("fonts/iosevka-latin-400.woff2") format("woff2");
+  }
+
   /* ── temas ─────────────────────────────────────────────────────────── */
   :root, html[data-theme="dark"] {
     color-scheme: dark;
@@ -48,14 +70,15 @@
   }
 
   :root {
-    --mono: ui-monospace, "Cascadia Code", "Fira Code", Menlo, Consolas, monospace;
+    --font-text: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+    --mono: "Iosevka", ui-monospace, "Cascadia Code", "Fira Code", Menlo, Consolas, monospace;
     --col: min(100%, 900px);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
     margin: 0; color: var(--text);
-    font: 15px/1.55 system-ui, "Segoe UI", Roboto, sans-serif;
+    font: 15px/1.55 var(--font-text);
     background: radial-gradient(1200px 500px at 50% -10%, var(--bg-glow) 0%, var(--bg) 55%) fixed, var(--bg);
     display: flex; flex-direction: column;
     height: 100vh; height: 100dvh;

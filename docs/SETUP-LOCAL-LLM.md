@@ -204,6 +204,11 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
 - **Temas e idiomas**: três temas (claro, metal, escuro) e sete idiomas de
   interface (português, inglês, chinês, russo, híndi, africâner e árabe — com
   RTL), persistidos em `localStorage`.
+- **Tipografia**: Inter (texto corrido; pesos 400/600/700) e Iosevka (código e
+  terminal; peso 400, subset latin+simbolos), **auto-hospedadas** em
+  `scripts/fonts/` (SIL OFL 1.1 — proveniência em
+  `scripts/fonts/LICENSE-FONTS.txt`), com fallback do sistema para glifos fora
+  dos subsets — nenhuma requisição de fonte sai da máquina.
 
 ### 4.2 Por que não via DSH (números medidos, set/2026)
 
