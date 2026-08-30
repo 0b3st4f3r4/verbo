@@ -204,6 +204,11 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
 - **Temas e idiomas**: três temas (claro, metal, escuro) e sete idiomas de
   interface (português, inglês, chinês, russo, híndi, africâner e árabe — com
   RTL), persistidos em `localStorage`.
+- **Sessões em abas**: várias conversas simultâneas, cada uma com histórico,
+  DOM e medidor próprios; a primeira pergunta batiza a aba. `+` abre nova
+  sessão, `×` fecha (se for a última, zera). Geração é uma por vez (global) —
+  tentar enviar de outra aba mostra aviso. Sessões vivem em memória:
+  recarregar a página começa limpo.
 - **Respostas em markdown completo**: títulos, listas, citações, tabelas, links
   e **diagramas Mermaid** (vendido em `scripts/vendor/`, MIT — tema acompanha a
   UI). Botão **copiar** em cada resposta devolve o markdown bruto. Delimitadores

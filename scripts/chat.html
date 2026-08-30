@@ -129,6 +129,30 @@
     border-radius: 8px; padding: 6px 8px; font-size: 12.5px; cursor: pointer;
   }
 
+  /* ── abas de sessão ────────────────────────────────────────────────── */
+  #tabs {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px clamp(12px, 3vw, 20px) 0;
+    width: 100%; max-width: var(--col); margin: 0 auto;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  #tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    max-width: 200px; padding: 5px 10px; border-radius: 8px;
+    background: var(--panel); border: 1px solid var(--border-soft);
+    color: var(--dim); font-size: 12.5px;
+  }
+  .tab:hover { color: var(--text); border-color: var(--accent); }
+  .tab[aria-selected="true"] {
+    background: var(--panel-2); color: var(--text); border-color: var(--accent);
+  }
+  .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab-x { color: var(--dim); font-size: 14px; line-height: 1; }
+  .tab-x:hover { color: var(--bad); }
+  .tab-new { padding: 5px 12px; font-weight: 600; }
+  .session-view { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+
   /* ── área da conversa ──────────────────────────────────────────────── */
   #system-box { padding: 8px clamp(12px, 3vw, 20px) 0; }
   .mode-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -363,6 +387,8 @@
   </div>
 </header>
 
+<nav id="tabs" aria-label=""></nav>
+
 <div id="system-box">
   <div class="mode-row">
     <div class="seg" role="group" id="mode-group">
@@ -453,6 +479,9 @@ const I18N = {
       rollbackNothing: "Nada a desfazer.",
       retry: "Reenviar", retryTitle: "Gerar novamente esta resposta",
       loading: "gerando…",
+      tabsAria: "Sessões",
+      busy: "Aguarde: há uma resposta em andamento.", tabNewTitle: "Nova sessão",
+      tabCloseTitle: "Fechar sessão", tabDefault: "Conversa {n}",
       followupReminder: "Lembre-se: termine a resposta com o bloco [q] contendo 7 perguntas numeradas e depois [/q].",
       followupRecovery: "Gere exatamente 7 perguntas curtas de acompanhamento sobre o texto a seguir, uma por linha, numeradas de 1 a 7. Responda SOMENTE com a lista.",
       extraInstr: "Instruções adicionais do operador:",
@@ -509,6 +538,9 @@ const I18N = {
       rollbackNothing: "Nothing to undo.",
       retry: "Retry", retryTitle: "Regenerate this reply",
       loading: "generating…",
+      tabsAria: "Sessions",
+      busy: "Please wait: a reply is being generated.", tabNewTitle: "New session",
+      tabCloseTitle: "Close session", tabDefault: "Chat {n}",
       followupReminder: "Remember: end the reply with the [q] block containing 7 numbered questions and then [/q].",
       followupRecovery: "Generate exactly 7 short follow-up questions about the following text, one per line, numbered 1 to 7. Reply with the list ONLY.",
       extraInstr: "Additional operator instructions:",
@@ -566,6 +598,9 @@ const I18N = {
       rollbackNothing: "没有可撤销的内容。",
       retry: "重试", retryTitle: "重新生成此回复",
       loading: "生成中…",
+      tabsAria: "会话",
+      busy: "请稍候：正在生成回复。", tabNewTitle: "新会话",
+      tabCloseTitle: "关闭会话", tabDefault: "对话 {n}",
       followupReminder: "记住：以 [q] 块结束回复，其中包含 7 个编号问题，然后是 [/q]。",
       followupRecovery: "针对以下文本生成恰好 7 个简短的后续问题，每行一个，编号 1 到 7。只回复列表。",
       emptyReply: "（空回复）"
@@ -621,6 +656,9 @@ const I18N = {
       rollbackNothing: "Отменять нечего.",
       retry: "Повторить", retryTitle: "Сгенерировать этот ответ заново",
       loading: "генерация…",
+      tabsAria: "Сессии",
+      busy: "Подождите: генерируется ответ.", tabNewTitle: "Новая сессия",
+      tabCloseTitle: "Закрыть сессию", tabDefault: "Чат {n}",
       followupReminder: "Помните: завершите ответ блоком [q] с 7 пронумерованными вопросами, затем [/q].",
       followupRecovery: "Сгенерируйте ровно 7 коротких уточняющих вопросов к следующему тексту, по одному на строку, с номерами от 1 до 7. Ответьте ТОЛЬКО списком.",
       emptyReply: "(пустой ответ)"
@@ -676,6 +714,9 @@ const I18N = {
       rollbackNothing: "पूर्ववत करने को कुछ नहीं।",
       retry: "पुनः प्रयास", retryTitle: "यह उत्तर फिर से बनाएँ",
       loading: "जनरेट हो रहा है…",
+      tabsAria: "सत्र",
+      busy: "प्रतीक्षा करें: उत्तर जनरेट हो रहा है।", tabNewTitle: "नया सत्र",
+      tabCloseTitle: "सत्र बंद करें", tabDefault: "चैट {n}",
       followupReminder: "याद रखें: उत्तर को [q] खंड के साथ समाप्त करें जिसमें 7 क्रमांकित प्रश्न हों, फिर [/q]।",
       followupRecovery: "निम्नलिखित पाठ के बारे में ठीक 7 छोटे अनुवर्ती प्रश्न बनाएँ, प्रति पंक्ति एक, 1 से 7 क्रमांकित। केवल सूची के साथ उत्तर दें।",
       emptyReply: "(खाली उत्तर)"
@@ -731,6 +772,9 @@ const I18N = {
       rollbackNothing: "Niks om te ontdoen nie.",
       retry: "Herprobeer", retryTitle: "Genereer hierdie antwoord weer",
       loading: "genereer…",
+      tabsAria: "Sessies",
+      busy: "Wag asseblief: daar word 'n antwoord gegenereer.", tabNewTitle: "Nuwe sessie",
+      tabCloseTitle: "Sluit sessie", tabDefault: "Gesprek {n}",
       followupReminder: "Onthou: eindig die antwoord met die [q]-blok wat 7 genommerde vrae bevat en dan [/q].",
       followupRecovery: "Genereer presies 7 kort opvolgvrae oor die volgende teks, een per reël, genommer 1 tot 7. Antwoord SLEGS met die lys.",
       emptyReply: "(leë antwoord)"
@@ -786,6 +830,9 @@ const I18N = {
       rollbackNothing: "لا شيء للتراجع عنه.",
       retry: "إعادة المحاولة", retryTitle: "إعادة توليد هذا الرد",
       loading: "جارٍ التوليد…",
+      tabsAria: "جلسات",
+      busy: "يرجى الانتظار: يتم توليد الرد.", tabNewTitle: "جلسة جديدة",
+      tabCloseTitle: "إغلاق الجلسة", tabDefault: "محادثة {n}",
       followupReminder: "تذكير: أنهِ الرد بكتلة [q] تحتوي على 7 أسئلة مرقمة ثم [/q].",
       followupRecovery: "أنشئ بالضبط 7 أسئلة متابعة قصيرة عن النص التالي، سؤال في كل سطر، مرقمة من 1 إلى 7. أجب بالقائمة فقط.",
       emptyReply: "(رد فارغ)"
@@ -871,33 +918,111 @@ function applyLang() {
 
   $("empty-title").textContent = t("emptyTitle");
   $("empty-desc").textContent = t("emptyDesc");
+  $("tabs").setAttribute("aria-label", t("tabsAria"));
   renderChips();
+  renderTabs();
   renderMeter();
   updateSheetStatus();
 }
 
-// ── estado ─────────────────────────────────────────────────────────────────
-const history = [];          // [{role, content}] sem o system
-let lastPromptTokens = null; // uso real informado pelo vLLM
-let inFlight = null;         // AbortController da requisição corrente
-let stickToBottom = true;    // autoscroll só quando o usuário está no fim
+// ── estado & sessões (abas) ────────────────────────────────────────────────
+let inFlight = null;         // AbortController da geração corrente (global)
+let genSession = null;       // sessão dona da geração corrente
 let vblMode = localStorage.getItem("vllm.vbl") === "1"; // + VerboLang?
 let sheetText = "";          // cheat sheet da linguagem (docs/VBL-CHEATSHEET.md)
 let lastQuery = "";          // última pergunta enviada (para retry)
+const sessions = [];         // sessões abertas (abas)
+let S = null;                // sessão ativa
+let seq = 0;                 // numeração das conversas
 
 const $ = (id) => document.getElementById(id);
 const log = $("log");
 const fmt = (n) => n.toLocaleString(lang === "pt" ? "pt-BR" : lang);
 
+// cada sessão: history (mensagens), lastTokens (uso real), stick (autoscroll),
+// view (DOM próprio — as mensagens nunca se misturam entre abas)
+function sessionTitle(sess) {
+  return sess.userTitle || t("tabDefault", { n: sess.id });
+}
+function makeSession() {
+  const view = document.createElement("div");
+  view.className = "session-view";
+  const sess = {
+    id: ++seq, userTitle: null, history: [], lastTokens: null,
+    stick: true, view, scrollTopSave: 0
+  };
+  view.addEventListener("scroll", () => {
+    if (S !== sess) return;
+    sess.stick = view.scrollHeight - view.scrollTop - view.clientHeight < 80;
+    $("jump").hidden = sess.stick;
+  });
+  log.appendChild(view);
+  sessions.push(sess);
+  activateSession(sess);
+  return sess;
+}
+function activateSession(sess) {
+  if (S === sess) { renderTabs(); return; }
+  if (S) {
+    S.scrollTopSave = S.view.scrollTop;
+    S.view.style.display = "none";
+  }
+  S = sess;
+  sess.view.style.display = "flex";
+  if (sess.stick) sess.view.scrollTop = sess.view.scrollHeight;
+  else sess.view.scrollTop = sess.scrollTopSave || 0;
+  $("jump").hidden = sess.stick;
+  refreshEmpty();
+  renderMeter();
+  renderTabs();
+}
+function closeSession(sess) {
+  if (inFlight && genSession === sess) inFlight.abort();
+  const i = sessions.indexOf(sess);
+  if (i === -1) return;
+  sess.view.remove();
+  sessions.splice(i, 1);
+  if (!sessions.length) { makeSession(); return; }  // sempre há uma aberta
+  if (S === sess) activateSession(sessions[Math.max(0, i - 1)]);
+  else renderTabs();
+}
+function renderTabs() {
+  const nav = $("tabs");
+  nav.replaceChildren(...sessions.map((sess) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tab";
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", String(sess === S));
+    b.title = sessionTitle(sess);
+    const label = document.createElement("span");
+    label.className = "tab-label";
+    label.textContent = sessionTitle(sess);
+    const x = document.createElement("span");
+    x.className = "tab-x"; x.textContent = "×";
+    x.title = t("tabCloseTitle");
+    x.addEventListener("click", (e) => { e.stopPropagation(); closeSession(sess); });
+    b.append(label, x);
+    b.addEventListener("click", () => activateSession(sess));
+    return b;
+  }));
+  const plus = document.createElement("button");
+  plus.type = "button"; plus.className = "tab tab-new"; plus.textContent = "+";
+  plus.title = t("tabNewTitle");
+  plus.setAttribute("aria-label", t("tabNewTitle"));
+  plus.addEventListener("click", () => { makeSession(); $("prompt").focus(); });
+  nav.appendChild(plus);
+}
+
 // ── medidor de contexto (honestidade termodinâmica) ───────────────────────
 function estimateTokens(text) { return Math.ceil((text || "").length / 4); }
 function sheetTokens() { return vblMode && sheetText ? estimateTokens(sheetText) : 0; }
-function contextEstimate() {
+function contextEstimate(sess = S) {
+  if (!sess) return 0;
   return estimateTokens($("system").value) + 16 + sheetTokens()
     + estimateTokens(t("followupInstr"))
     + (vblMode ? estimateTokens(t("followupVbl")) : 0)
     + estimateTokens(t("followupReminder"))
-    + history.reduce(
+    + sess.history.reduce(
       (acc, msg) => acc + estimateTokens(msg.content) + 4, 0);
 }
 function systemContent() {
@@ -994,14 +1119,15 @@ function recoverSuggestions(bubble, answerText) {
   });
 }
 function renderMeter() {
-  const est = Math.max(contextEstimate(), lastPromptTokens ?? 0);
+  if (!S) return;
+  const est = Math.max(contextEstimate(S), S.lastTokens ?? 0);
   const pct = Math.min(100, (est / CTX) * 100);
   const fill = $("fill");
   fill.style.width = pct.toFixed(1) + "%";
   fill.style.background = pct > 85 ? "var(--bad)"
                         : pct > 65 ? "var(--warn)"
                         : "linear-gradient(90deg, var(--accent), var(--ok))";
-  $("meter-lbl").textContent = t(lastPromptTokens ? "meterReal" : "meterEst",
+  $("meter-lbl").textContent = t(S.lastTokens ? "meterReal" : "meterEst",
                                  { est: fmt(est), ctx: fmt(CTX) });
 }
 let statusState = "", statusKey = "whoConnecting", statusParams = {};
@@ -1010,13 +1136,15 @@ function setStatus(state, key, params) {
   $("dot").className = "dot " + statusState;
   $("who").textContent = t(statusKey, statusParams);
 }
-function note(text) {
+function note(text, sess = S) {
+  if (!sess) return;
   const div = document.createElement("div");
   div.className = "sysnote"; div.textContent = text;
-  log.appendChild(div);
-  stickToBottom = true; scrollToBottom();
+  sess.view.appendChild(div);
+  sess.stick = true; scrollToBottom(sess);
 }
-function noteAction(text, label, onClick) {   // nota com botão (ex.: Reenviar)
+function noteAction(text, label, onClick, sess = S) {   // nota com botão (ex.: Reenviar)
+  if (!sess) return;
   const div = document.createElement("div");
   div.className = "sysnote";
   div.appendChild(document.createTextNode(text + " "));
@@ -1024,14 +1152,15 @@ function noteAction(text, label, onClick) {   // nota com botão (ex.: Reenviar)
   b.type = "button"; b.className = "note-btn"; b.textContent = label;
   b.addEventListener("click", onClick);
   div.appendChild(b);
-  log.appendChild(div);
-  stickToBottom = true; scrollToBottom();
+  sess.view.appendChild(div);
+  sess.stick = true; scrollToBottom(sess);
 }
-function lastBubble(cls) {
-  const list = log.querySelectorAll(".msg." + cls);
+function lastBubble(cls, sess = S) {
+  if (!sess) return null;
+  const list = sess.view.querySelectorAll(".msg." + cls);
   return list.length ? list[list.length - 1] : null;
 }
-function refreshEmpty() { $("empty").style.display = history.length ? "none" : ""; }
+function refreshEmpty() { if (S) $("empty").style.display = S.history.length ? "none" : ""; }
 
 // ── perguntas da home, por modo (adequadas ao contexto) ────────────────────
 function renderChips() {
@@ -1048,13 +1177,9 @@ function renderChips() {
 }
 
 // ── scroll ─────────────────────────────────────────────────────────────────
-function scrollToBottom() { log.scrollTop = log.scrollHeight; }
-log.addEventListener("scroll", () => {
-  stickToBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
-  $("jump").hidden = stickToBottom;
-});
-$("jump").addEventListener("click", () => { stickToBottom = true; scrollToBottom(); });
-function keepScroll() { if (stickToBottom) scrollToBottom(); }
+function scrollToBottom(sess = S) { if (sess) sess.view.scrollTop = sess.view.scrollHeight; }
+function keepScroll(sess = S) { if (sess && sess.stick) scrollToBottom(sess); }
+$("jump").addEventListener("click", () => { if (S) { S.stick = true; scrollToBottom(S); } });
 
 // ── markdown (escape primeiro; blocos: código, mermaid, título, tabela,
 //    lista, citação, hr; inline: código, negrito, itálico, tachado, link) ──
@@ -1221,20 +1346,21 @@ function enhanceMath(scope) {                // KaTeX: TeX cru se falhar
     } catch { /* TeX inválido: o texto bruto permanece */ }
   }
 }
-function renderAssistant(bubble, text) {
+function renderAssistant(bubble, text, sess = S) {
   if (!text) {
     bubble.innerHTML = '<span class="dots" aria-label="…"><i></i><i></i><i></i></span>';
   } else {
     bubble.innerHTML = md(text);
   }
-  keepScroll();
+  keepScroll(sess);
 }
 
 // ── chamada ao vLLM (streaming SSE) ────────────────────────────────────────
 function send() {
   const box = $("prompt");
   const text = box.value.trim();
-  if (!text || inFlight) return;
+  if (!text) return;
+  if (inFlight) { note(t("busy")); return; }
   if (!API_KEY) { note(t("noKey")); return; }
   const promptEst = contextEstimate() + estimateTokens(text);
   if (promptEst > CTX - 64) {
@@ -1244,17 +1370,22 @@ function send() {
   box.value = ""; autosize();
   ask(text);
 }
-async function ask(text) {
-  if (inFlight) return;
+async function ask(text, sess = S) {
+  if (inFlight || !sess) return;
   lastQuery = text;
+  genSession = sess;
   const maxTokens = Math.max(64, Math.min(2048,
-    CTX - contextEstimate() - estimateTokens(text) - 256));
+    CTX - contextEstimate(sess) - estimateTokens(text) - 256));
 
+  sess.history.push({ role: "user", content: text });
+  if (sess.history.length === 1) {           // a 1ª pergunta batiza a aba
+    sess.userTitle = text.length > 30 ? text.slice(0, 30) + "…" : text;
+    renderTabs();
+  }
+  addBubble("user", text, sess);
   $("empty").style.display = "none";
-  history.push({ role: "user", content: text });
-  addBubble("user", text);
   // lembrete do bloco [q] vai só na requisição: history/cópia ficam limpos
-  const reqHistory = history.concat();
+  const reqHistory = sess.history.concat();
   const lastReq = reqHistory[reqHistory.length - 1];
   if (lastReq && lastReq.role === "user") {
     reqHistory[reqHistory.length - 1] = {
@@ -1265,8 +1396,8 @@ async function ask(text) {
 
   const bubble = document.createElement("div");
   bubble.className = "msg assistant";
-  log.appendChild(bubble);
-  renderAssistant(bubble, "");
+  sess.view.appendChild(bubble);
+  renderAssistant(bubble, "", sess);
   $("send").disabled = true; $("stop").disabled = false;
   const sp = $("spinner");
   sp.setAttribute("aria-label", t("loading"));
@@ -1308,48 +1439,49 @@ async function ask(text) {
         if (payload === "[DONE]") continue;
         let evt; try { evt = JSON.parse(payload); } catch { continue; }
         if (evt.usage) {
-          lastPromptTokens = evt.usage.prompt_tokens + (evt.usage.completion_tokens || 0);
+          sess.lastTokens = evt.usage.prompt_tokens + (evt.usage.completion_tokens || 0);
         }
         const delta = evt.choices?.[0]?.delta?.content;
-        if (delta) { acc += delta; renderAssistant(bubble, cutAtQ(acc)); }
+        if (delta) { acc += delta; renderAssistant(bubble, cutAtQ(acc), sess); }
       }
     }
     if (!acc) { acc = t("emptyReply"); bubble.textContent = acc; }
     const { clean, items } = splitSuggestions(acc);
-    if (items.length) renderAssistant(bubble, clean);  // resposta sem o bloco
-    history.push({ role: "assistant", content: clean });
+    if (items.length) renderAssistant(bubble, clean, sess);  // resposta sem o bloco
+    sess.history.push({ role: "assistant", content: clean });
     if (items.length) renderSugg(bubble, items);
     else recoverSuggestions(bubble, clean);     // modelo esqueceu: 2ª chamada
     enhanceMermaid(bubble);
     enhanceMath(bubble);
     attachCopy(bubble, clean);
-    markLastAnswer(bubble, text);
+    markLastAnswer(bubble, text, sess);
   } catch (err) {
     if (controller.signal.aborted) {
       if (acc) {
         const { clean, items } = splitSuggestions(acc);
-        renderAssistant(bubble, clean);
-        history.push({ role: "assistant", content: clean });
+        renderAssistant(bubble, clean, sess);
+        sess.history.push({ role: "assistant", content: clean });
         if (items.length) renderSugg(bubble, items);
         enhanceMermaid(bubble);
         enhanceMath(bubble);
         attachCopy(bubble, clean);
-        markLastAnswer(bubble, text);
+        markLastAnswer(bubble, text, sess);
       }
       else bubble.remove();
-      note(t("aborted"));
+      note(t("aborted"), sess);
     } else {
       bubble.remove();
-      history.pop(); // a pergunta sai do histórico — o turno não aconteceu
+      sess.history.pop(); // a pergunta sai do histórico — o turno não aconteceu
       if (err instanceof TypeError) setStatus("err", "whoDown", { model: MODEL });
       noteAction(t("failed", { msg: err.message || err }), t("retry"), () => {
-        lastBubble("user")?.remove();
+        lastBubble("user", sess)?.remove();
         refreshEmpty(); renderMeter();
-        ask(lastQuery);
-      });
+        ask(lastQuery, sess);
+      }, sess);
     }
   } finally {
     inFlight = null;
+    genSession = null;
     $("spinner").hidden = true;
     $("send").disabled = false; $("stop").disabled = true;
     box.focus();
@@ -1365,12 +1497,12 @@ function friendlyError(status, body) {
 }
 
 // ── UI helpers ─────────────────────────────────────────────────────────────
-function addBubble(role, text) {
+function addBubble(role, text, sess = S) {
   const div = document.createElement("div");
   div.className = "msg " + role;
   div.textContent = text;
-  log.appendChild(div);
-  stickToBottom = true; scrollToBottom();
+  sess.view.appendChild(div);
+  sess.stick = true; scrollToBottom(sess);
   return div;
 }
 const ICON_COPY = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" ' +
@@ -1400,8 +1532,8 @@ function attachCopy(bubble, raw) {
   });
   bubble.appendChild(btn);
 }
-function markLastAnswer(bubble, question) {   // ↻ só na resposta mais recente
-  log.querySelectorAll(".retry-btn").forEach((b) => b.remove());
+function markLastAnswer(bubble, question, sess = S) {   // ↻ só na resposta mais recente
+  sess.view.querySelectorAll(".retry-btn").forEach((b) => b.remove());
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "copy-btn retry-btn";
@@ -1410,31 +1542,33 @@ function markLastAnswer(bubble, question) {   // ↻ só na resposta mais recent
   btn.setAttribute("aria-label", t("retryTitle"));
   btn.addEventListener("click", () => {
     if (inFlight) return;
-    if (history.length < 2 || history[history.length - 1].role !== "assistant" ||
-        history[history.length - 2].role !== "user") return;  // estado mudou
-    history.splice(-2, 2);            // desfaz o par sem tocar no campo
-    lastBubble("user")?.remove();
+    if (sess.history.length < 2 ||
+        sess.history[sess.history.length - 1].role !== "assistant" ||
+        sess.history[sess.history.length - 2].role !== "user") return;  // estado mudou
+    sess.history.splice(-2, 2);       // desfaz o par sem tocar no campo
+    lastBubble("user", sess)?.remove();
     bubble.remove();
     refreshEmpty(); renderMeter();
-    ask(question);
+    ask(question, sess);
   });
   bubble.appendChild(btn);
 }
 // ── rollback: desfaz a troca mais recente e devolve a pergunta ao campo ───
 function rollbackLast() {
+  if (!S) return;
   if (inFlight) inFlight.abort();
   let q = null;
-  if (history.length >= 2 && history[history.length - 1].role === "assistant") {
-    q = history[history.length - 2].content;
-    history.splice(-2, 2);
-    lastBubble("assistant")?.remove();
-    lastBubble("user")?.remove();
-  } else if (history.length && history[history.length - 1].role === "user") {
-    q = history.pop().content;        // turno que falhou (pergunta pendente)
-    lastBubble("user")?.remove();
+  if (S.history.length >= 2 && S.history[S.history.length - 1].role === "assistant") {
+    q = S.history[S.history.length - 2].content;
+    S.history.splice(-2, 2);
+    lastBubble("assistant", S)?.remove();
+    lastBubble("user", S)?.remove();
+  } else if (S.history.length && S.history[S.history.length - 1].role === "user") {
+    q = S.history.pop().content;      // turno que falhou (pergunta pendente)
+    lastBubble("user", S)?.remove();
   }
-  if (q === null) { note(t("rollbackNothing")); return; }
-  lastPromptTokens = null;
+  if (q === null) { note(t("rollbackNothing"), S); return; }
+  S.lastTokens = null;
   $("prompt").value = q; autosize(); $("prompt").focus();
   refreshEmpty(); renderMeter();
 }
@@ -1492,23 +1626,27 @@ $("system").addEventListener("input", renderMeter);
 $("theme").addEventListener("change", () => applyTheme($("theme").value));
 $("lang").addEventListener("change", () => { lang = $("lang").value; applyLang(); });
 $("clear").addEventListener("click", () => {
+  if (!S) return;
   if (inFlight) inFlight.abort();
-  history.length = 0; lastPromptTokens = null;
-  [...log.querySelectorAll(".msg, .sysnote")].forEach((el) => el.remove());
+  S.history.length = 0; S.lastTokens = null; S.userTitle = null;
+  [...S.view.querySelectorAll(".msg, .sysnote")].forEach((el) => el.remove());
   refreshEmpty();
-  note(t("newChat"));
+  note(t("newChat"), S);
   renderMeter();
+  renderTabs();
   $("prompt").focus();
 });
 $("rollback").addEventListener("click", rollbackLast);
-$("prune").addEventListener("click", () => {  if (inFlight) inFlight.abort();
-  const firstPair = log.querySelectorAll(".msg");
-  if (history.length >= 2) {
-    history.splice(0, 2);
+$("prune").addEventListener("click", () => {
+  if (!S) return;
+  if (inFlight) inFlight.abort();
+  const firstPair = S.view.querySelectorAll(".msg");
+  if (S.history.length >= 2) {
+    S.history.splice(0, 2);
     if (firstPair.length >= 2) { firstPair[0].remove(); firstPair[1].remove(); }
-    lastPromptTokens = null;
-    note(t("pruned"));
-  } else note(t("nothingToPrune"));
+    S.lastTokens = null;
+    note(t("pruned"), S);
+  } else note(t("nothingToPrune"), S);
   refreshEmpty();
   renderMeter();
 });
@@ -1523,8 +1661,8 @@ $("prune").addEventListener("click", () => {  if (inFlight) inFlight.abort();
     localStorage.setItem("vllm.sysinit", "1");
   }
   applyLang();
+  makeSession();               // primeira aba
   setVblMode(vblMode);
-  refreshEmpty();
   autosize();
   try {
     const r = await fetch(API_URL + "/models", { headers: { "Authorization": "Bearer " + API_KEY } });
