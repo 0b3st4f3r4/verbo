@@ -2,7 +2,7 @@
   <title id="vbl-title">VerboLang — traço de osciloscópio mergulhando num V, com os nós das três conjugações</title>
   <defs>
     <linearGradient id="trace" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#2b8fa3"/>
+      <stop offset="0" stop-color="#4da3ff"/>
       <stop offset="1" stop-color="#3fb96f"/>
     </linearGradient>
   </defs>
@@ -19,7 +19,7 @@
         fill="none" stroke="url(#trace)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- nós: event · equilibrium (no fundo do V) · nonequilibrium -->
-  <circle cx="230" cy="120" r="7" fill="#2b8fa3"/>
+  <circle cx="230" cy="120" r="7" fill="#4da3ff"/>
   <circle cx="440" cy="176" r="8" fill="#3fb96f"/>
   <circle cx="440" cy="176" r="3" fill="#eaf2f1"/>
   <circle cx="650" cy="120" r="7" fill="#e0a83a"/>
