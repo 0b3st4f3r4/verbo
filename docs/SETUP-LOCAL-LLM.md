@@ -201,9 +201,10 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   para consultas sobre a VerboLang, ligue o modo e mantenha folga no medidor.
   As perguntas sugeridas na home acompanham o modo (gerais no puro; da
   linguagem no + VerboLang).
-- **Temas e idiomas**: três temas (claro, metal, escuro) e sete idiomas de
-  interface (português, inglês, chinês, russo, híndi, africâner e árabe — com
-  RTL), persistidos em `localStorage`.
+- **Temas e idiomas (botões de ícone)**: sol/contraste/lua ciclam os três
+  temas (claro, metal, escuro); o globo cicla os sete idiomas da interface
+  (português, inglês, chinês, russo, híndi, africâner e árabe — com RTL);
+  o tooltip mostra o estado atual. Persistidos em `localStorage`.
 - **Sessões em abas**: várias conversas simultâneas, cada uma com histórico,
   DOM e medidor próprios; a primeira pergunta batiza a aba. `+` abre nova
   sessão, `×` fecha (se for a última, zera). Geração é uma por vez (global) —

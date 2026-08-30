@@ -386,12 +386,8 @@
     <div class="lbl" id="meter-lbl">—</div>
   </div>
   <div class="actions">
-    <select id="theme" aria-label="tema" title="tema">
-      <option value="light">Claro</option>
-      <option value="metal">Metal</option>
-      <option value="dark">Escuro</option>
-    </select>
-    <select id="lang" aria-label="idioma" title="idioma"></select>
+    <button id="theme-btn" class="icon-btn" title=""></button>
+    <button id="lang-btn" class="icon-btn" title=""></button>
     <button id="rollback" class="icon-btn" title=""></button>
     <button id="prune" class="icon-btn" title=""></button>
     <button id="clear" class="icon-btn" title=""></button>
@@ -878,17 +874,24 @@ function applyTheme(name) {
   theme = name;
   localStorage.setItem("vllm.theme", name);
   document.documentElement.dataset.theme = name;
-  $("theme").value = name;
+  updateThemeButton();
   applyMermaidTheme();   // re-renderiza diagramas existentes no novo tema
 }
-function buildLangSelect() {
-  const sel = $("lang");
-  sel.replaceChildren(...Object.entries(I18N).map(([code, def]) => {
-    const o = document.createElement("option");
-    o.value = code; o.textContent = def.name;
-    return o;
-  }));
-  sel.value = lang;
+const THEME_ORDER = ["light", "metal", "dark"];
+function updateThemeButton() {           // sol / contraste / lua
+  const b = $("theme-btn");
+  if (!b) return;
+  b.innerHTML = theme === "light" ? ICON_SUN
+              : theme === "metal" ? ICON_CONTRAST : ICON_MOON;
+  b.title = t("theme" + theme[0].toUpperCase() + theme.slice(1));
+  b.setAttribute("aria-label", b.title);
+}
+function updateLangButton() {            // globo; tooltip com o idioma atual
+  const b = $("lang-btn");
+  if (!b) return;
+  b.innerHTML = ICON_GLOBE;
+  b.title = t("langAria") + ": " + L().name;
+  b.setAttribute("aria-label", b.title);
 }
 function applyLang() {
   localStorage.setItem("vllm.lang", lang);
@@ -919,14 +922,8 @@ function applyLang() {
   $("log").setAttribute("aria-label", t("logAria"));
   $("jump").title = t("jumpAria");
   $("jump").setAttribute("aria-label", t("jumpAria"));
-  $("theme").setAttribute("aria-label", t("themeAria"));
-  $("theme").title = t("themeAria");
-  $("lang").setAttribute("aria-label", t("langAria"));
-  $("lang").title = t("langAria");
-  const opt = $("theme").options;
-  opt[0].textContent = t("themeLight");
-  opt[1].textContent = t("themeMetal");
-  opt[2].textContent = t("themeDark");
+  updateThemeButton();
+  updateLangButton();
 
   $("empty-title").textContent = t("emptyTitle");
   $("empty-desc").textContent = t("emptyDesc");
@@ -1544,6 +1541,22 @@ const ICON_PRUNE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" 
 const ICON_PLUS = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+const ICON_SUN = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>' +
+  '<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>' +
+  '<line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>' +
+  '<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+const ICON_CONTRAST = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+  '<circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>';
+const ICON_MOON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+const ICON_GLOBE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>' +
+  '<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
 function updateSendButton() {
   const b = $("send");
   if (!b) return;
@@ -1661,8 +1674,13 @@ $("prompt").addEventListener("keydown", (e) => {
 });
 $("prompt").addEventListener("input", autosize);
 $("system").addEventListener("input", renderMeter);
-$("theme").addEventListener("change", () => applyTheme($("theme").value));
-$("lang").addEventListener("change", () => { lang = $("lang").value; applyLang(); });
+$("theme-btn").addEventListener("click", () =>
+  applyTheme(THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length]));
+$("lang-btn").addEventListener("click", () => {   // cicla os 7 idiomas
+  const order = Object.keys(I18N);
+  lang = order[(order.indexOf(lang) + 1) % order.length];
+  applyLang();
+});
 $("clear").addEventListener("click", () => {
   if (!S) return;
   if (inFlight) inFlight.abort();
@@ -1692,8 +1710,6 @@ $("prune").addEventListener("click", () => {
 // ── partida ────────────────────────────────────────────────────────────────
 (async function boot() {
   applyTheme(theme);
-  buildLangSelect();
-  $("lang").value = lang;
   if (!localStorage.getItem("vllm.sysinit")) {
     $("system").value = t("sysDefault");
     localStorage.setItem("vllm.sysinit", "1");

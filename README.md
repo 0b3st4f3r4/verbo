@@ -1,5 +1,7 @@
 # VerboLang
 
+<p align="center"><img src="docs/verbolog-banner.svg" alt="VerboLang" width="640"></p>
+
 **Uma linguagem de programação onde nenhum dado é inerte.**
 
 A VerboLang é uma linguagem de baixo nível alinhada ao **Materialismo Computacional**:

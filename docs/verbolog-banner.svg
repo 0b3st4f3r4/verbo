@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 200" width="880" height="200" role="img" aria-labelledby="vbl-title">
+  <title id="vbl-title">VerboLang — traço de osciloscópio mergulhando num V, com os nós das três conjugações</title>
+  <defs>
+    <linearGradient id="trace" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4da3ff"/>
+      <stop offset="1" stop-color="#3fb96f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- wordmark -->
+  <text x="440" y="46" text-anchor="middle" font-family="ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace"
+        font-size="24" letter-spacing="10" fill="#8a93a3">VERBOLANG</text>
+
+  <!-- linha de referência -->
+  <line x1="40" y1="120" x2="840" y2="120" stroke="#8a93a3" stroke-opacity=".3" stroke-width="1" stroke-dasharray="2 7"/>
+
+  <!-- traço do osciloscópio: desce num V e volta -->
+  <path d="M40 120 H 320 Q 356 120 374 144 L 426 172 Q 440 179 454 172 L 506 144 Q 524 120 560 120 H 840"
+        fill="none" stroke="url(#trace)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- nós: event · equilibrium (no fundo do V) · nonequilibrium -->
+  <circle cx="230" cy="120" r="7" fill="#4da3ff"/>
+  <circle cx="440" cy="176" r="8" fill="#3fb96f"/>
+  <circle cx="440" cy="176" r="3" fill="#eaf2f1"/>
+  <circle cx="650" cy="120" r="7" fill="#e0a83a"/>
+
+  <!-- terminais -->
+  <line x1="40" y1="112" x2="40" y2="128" stroke="#8a93a3" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>
+  <line x1="840" y1="112" x2="840" y2="128" stroke="#8a93a3" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>
+</svg>
