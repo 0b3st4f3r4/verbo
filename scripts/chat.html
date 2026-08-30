@@ -124,6 +124,11 @@
   .chip:focus-visible, select:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px;
   }
+  .icon-btn {
+    width: 34px; height: 34px; padding: 0;
+    display: inline-grid; place-items: center;
+  }
+  .icon-btn svg { display: block; }
   select {
     background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
     border-radius: 8px; padding: 6px 8px; font-size: 12.5px; cursor: pointer;
@@ -336,8 +341,12 @@
   #prompt:focus { outline: none; border-color: var(--accent);
                   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
   #prompt::placeholder { color: var(--placeholder); }
-  #send { min-width: 84px; min-height: 44px; }
-  #stop { min-height: 44px; }
+  #send { width: 46px; min-width: 46px; height: 44px; min-height: 44px; padding: 0; }
+  #send.stopping { color: var(--bad); border-color: var(--bad); }
+  .note-btn {
+    width: 24px; height: 24px; padding: 0;
+    display: inline-grid; place-items: center; vertical-align: middle;
+  }
 
   /* ── responsivo ────────────────────────────────────────────────────── */
   @media (max-width: 640px) {
@@ -346,11 +355,13 @@
     .msg { max-width: 88%; }
     .brand h1 { font-size: 13px; }
     .actions button, .actions select { padding: 6px 9px; font-size: 12px; }
+    .actions .icon-btn { width: 32px; height: 32px; padding: 0; }
     #jump { bottom: 108px; right: 16px; }
     .spinner { bottom: 108px; right: 60px; }
   }
   @media (pointer: coarse) {
     button, .chip, select { min-height: 40px; }
+    .sysnote .note-btn { min-height: 26px; width: 26px; }
     .copy-btn { opacity: 1; min-height: 28px; width: 28px; height: 28px; }
     .retry-btn { inset-inline-end: 36px; }
     #prompt { min-height: 48px; }
@@ -381,9 +392,9 @@
       <option value="dark">Escuro</option>
     </select>
     <select id="lang" aria-label="idioma" title="idioma"></select>
-    <button id="rollback" title="">↶</button>
-    <button id="prune" title="">✂</button>
-    <button id="clear" title=""></button>
+    <button id="rollback" class="icon-btn" title=""></button>
+    <button id="prune" class="icon-btn" title=""></button>
+    <button id="clear" class="icon-btn" title=""></button>
   </div>
 </header>
 
@@ -418,8 +429,7 @@
 <footer>
   <div class="composer">
     <textarea id="prompt" rows="1" aria-label=""></textarea>
-    <button id="send"></button>
-    <button id="stop" disabled></button>
+    <button id="send" class="icon-btn send-btn" title=""></button>
   </div>
 </footer>
 
@@ -888,15 +898,17 @@ function applyLang() {
 
   $("dot").className = "dot " + statusState;
   $("who").textContent = t(statusKey, statusParams);
-  $("prune").textContent = t("btnPrune");
+  $("prune").innerHTML = ICON_PRUNE;
   $("prune").title = t("btnPruneTitle");
+  $("prune").setAttribute("aria-label", t("btnPruneTitle"));
+  $("rollback").innerHTML = ICON_UNDO;
   $("rollback").title = t("rollbackTitle");
   $("rollback").setAttribute("aria-label", t("rollbackTitle"));
   $("spinner").setAttribute("aria-label", t("loading"));
-  $("clear").textContent = t("btnClear");
+  $("clear").innerHTML = ICON_PLUS;
   $("clear").title = t("btnClearTitle");
-  $("send").textContent = t("btnSend");
-  $("stop").textContent = t("btnStop");
+  $("clear").setAttribute("aria-label", t("btnClearTitle"));
+  updateSendButton();
   $("prompt").placeholder = t("promptPlaceholder");
   $("prompt").ariaLabel = t("promptAria");
   $("sys-summary").textContent = t("summarySystem");
@@ -1149,7 +1161,8 @@ function noteAction(text, label, onClick, sess = S) {   // nota com botão (ex.:
   div.className = "sysnote";
   div.appendChild(document.createTextNode(text + " "));
   const b = document.createElement("button");
-  b.type = "button"; b.className = "note-btn"; b.textContent = label;
+  b.type = "button"; b.className = "note-btn"; b.innerHTML = ICON_RETRY;
+  b.title = label; b.setAttribute("aria-label", label);
   b.addEventListener("click", onClick);
   div.appendChild(b);
   sess.view.appendChild(div);
@@ -1398,13 +1411,13 @@ async function ask(text, sess = S) {
   bubble.className = "msg assistant";
   sess.view.appendChild(bubble);
   renderAssistant(bubble, "", sess);
-  $("send").disabled = true; $("stop").disabled = false;
   const sp = $("spinner");
   sp.setAttribute("aria-label", t("loading"));
   sp.hidden = false;
 
   const controller = new AbortController();
   inFlight = controller;
+  updateSendButton();
   let acc = "";
   try {
     const resp = await fetch(API_URL + "/chat/completions", {
@@ -1483,10 +1496,10 @@ async function ask(text, sess = S) {
     inFlight = null;
     genSession = null;
     $("spinner").hidden = true;
-    $("send").disabled = false; $("stop").disabled = true;
+    updateSendButton();
     box.focus();
     renderMeter();
-    keepScroll();
+    keepScroll(sess);
   }
 }
 function friendlyError(status, body) {
@@ -1515,6 +1528,30 @@ const ICON_CHECK = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" 
 const ICON_RETRY = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>';
+const ICON_SEND = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+const ICON_STOP = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">' +
+  '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>';
+const ICON_UNDO = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>';
+const ICON_PRUNE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>' +
+  '<line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/>' +
+  '<line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>';
+const ICON_PLUS = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+function updateSendButton() {
+  const b = $("send");
+  if (!b) return;
+  b.innerHTML = inFlight ? ICON_STOP : ICON_SEND;
+  b.title = t(inFlight ? "btnStop" : "btnSend");
+  b.setAttribute("aria-label", t(inFlight ? "btnStop" : "btnSend"));
+  b.classList.toggle("stopping", !!inFlight);
+}
 function attachCopy(bubble, raw) {
   const btn = document.createElement("button");
   btn.type = "button";
@@ -1613,8 +1650,9 @@ async function loadSheet() {
 }
 
 // ── eventos ────────────────────────────────────────────────────────────────
-$("send").addEventListener("click", send);
-$("stop").addEventListener("click", () => inFlight?.abort());
+$("send").addEventListener("click", () => {   // botão único: envia ou para
+  if (inFlight) inFlight.abort(); else send();
+});
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && inFlight) inFlight.abort();
 });
