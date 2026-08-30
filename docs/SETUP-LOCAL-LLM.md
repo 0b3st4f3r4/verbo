@@ -207,8 +207,10 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
 - **Respostas em markdown completo**: títulos, listas, citações, tabelas, links
   e **diagramas Mermaid** (vendido em `scripts/vendor/`, MIT — tema acompanha a
   UI). Botão **copiar** em cada resposta devolve o markdown bruto. Delimitadores
-  LaTeX que o modelo vaza (`\( \)`, `\[ \]`, `$$ $$`) são convertidos para
-  texto legível (×, ≤, α, itálico) — sem tocar em blocos de código.
+  LaTeX que o modelo vaza (`\( \)`, `\[ \]`, `$$ $$`) são **renderizados com
+  KaTeX** (vendido em `scripts/vendor/katex/`, MIT — fração empilhada, radicais
+  e símbolos reais; TeX inválido fica como texto cru) — sem tocar em blocos de
+  código.
 - **Perguntas sugeridas**: o prompt de sistema instrui o modelo a terminar cada
   resposta com 7 perguntas de acompanhamento num bloco marcado (`[q]…[/q]`); a
   UI extrai o bloco, remove-o do texto exibido/copiado/histórico e renderiza as

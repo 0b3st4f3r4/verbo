@@ -1,0 +1,13 @@
+Vendored: KaTeX (renderização de matemática da UI de consulta local)
+======================================================================
+
+Arquivos:  katex.min.js, katex.min.css, fonts/*.woff2
+Versão:    0.16.11 (dist do pacote npm; ttf/woff removidos — woff2 basta)
+Origem:    https://registry.npmjs.org/katex/-/katex-0.16.11.tgz
+Licença:   MIT — Copyright (c) Khan Academy
+           https://github.com/KaTeX/KaTeX/blob/master/LICENSE
+
+Vendido para manter a UI 100% local: nenhuma requisição sai da máquina.
+Os 20 arquivos .woff2 são suficientes (katex.min.css declara woff2 antes
+de woff/ttf; navegadores modernos usam o primeiro). Atualização: substitua
+os arquivos pelo novo dist e ajuste a versão aqui.

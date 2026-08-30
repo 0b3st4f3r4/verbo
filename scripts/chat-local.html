@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>VerboLang · Consulta local</title>
 <link rel="icon" type="image/svg+xml" href="verbolog.svg">
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
 <!--
   chat-local.html — UI de consulta direta ao modelo local (vLLM :8000).
   Single-file, sem dependências: streaming SSE via fetch, markdown mínimo
@@ -213,6 +214,8 @@
     text-align: center;
   }
   .mermaid-box svg { max-width: 100%; height: auto; }
+  .katex-src.mdisp { display: block; text-align: center; margin: 8px 0; overflow-x: auto; }
+  .katex { font-size: 1.05em; }
   pre.mermaid-src { outline: 1px dashed var(--border); }
   pre.mermaid-src.mermaid-error { outline-color: var(--bad); }
   .sugg { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
@@ -377,6 +380,7 @@
 </footer>
 
 <script src="vendor/mermaid.min.js"></script>
+<script src="vendor/katex/katex.min.js"></script>
 <script>
 "use strict";
 // ── configuração (fragmento #k=…&u=…&m=…&c=…) ─────────────────────────────
@@ -987,43 +991,29 @@ function inline(s) {
     codes.push(c);
     return "\x00" + (codes.length - 1) + "\x00";
   });
+  const maths = [];                                 // protege a matemática
+  s = s.replace(/([\x03\x05])([^\x03\x05]+)\1/g, (_, d, tex) => {
+    maths.push({ tex, disp: d === "\x05" });
+    return "\x04" + (maths.length - 1) + "\x04";
+  });
   s = s
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?:;]|$)/g, "$1<em>$2</em>")
     .replace(/~~([^~]+)~~/g, "<del>$1</del>")
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
-             '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-    .replace(/\x01([^\x01]+)\x01/g, "<em>$1</em>");  // matemática LaTeX
-  return s.replace(/\x00(\d+)\x00/g, (_, i) => "<code>" + codes[+i] + "</code>");
+             '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  s = s.replace(/\x00(\d+)\x00/g, (_, i) => "<code>" + codes[+i] + "</code>");
+  return s.replace(/\x04(\d+)\x04/g, (_, i) =>      // placeholder → KaTeX
+    '<span class="katex-src' + (maths[+i].disp ? " mdisp" : "") + '">' +
+    maths[+i].tex + "</span>");
 }
-// ── LaTeX vazado (\( \), \[ \], $$ $$) → texto legível ────────────────────
-const MATH_MACROS = [
-  ["\\rightarrow", "→"], ["\\to", "→"], ["\\times", "×"], ["\\cdot", "·"],
-  ["\\div", "÷"], ["\\pm", "±"], ["\\leq", "≤"], ["\\le", "≤"],
-  ["\\geq", "≥"], ["\\ge", "≥"], ["\\neq", "≠"], ["\\ne", "≠"],
-  ["\\approx", "≈"], ["\\infty", "∞"], ["\\partial", "∂"], ["\\nabla", "∇"],
-  ["\\alpha", "α"], ["\\beta", "β"], ["\\gamma", "γ"], ["\\delta", "δ"],
-  ["\\Delta", "Δ"], ["\\theta", "θ"], ["\\lambda", "λ"], ["\\mu", "μ"],
-  ["\\pi", "π"], ["\\sigma", "σ"], ["\\omega", "ω"], ["\\Omega", "Ω"],
-  ["\\sum", "Σ"], ["\\prod", "Π"], ["\\sqrt", "√"], ["\\cup", "∪"],
-  ["\\cap", "∩"], ["\\in", "∈"], ["\\ln", "ln"], ["\\log", "log"],
-  ["\\sin", "sin"], ["\\cos", "cos"], ["\\tan", "tan"], ["\\exp", "exp"],
-  ["\\left", ""], ["\\right", ""], ["\\quad", "  "], ["\\qquad", "    "],
-  ["\\,", " "], ["\\;", " "], ["\\!", ""], ["\\ ", " "]
-];
-MATH_MACROS.sort((a, b) => b[0].length - a[0].length); // \left antes de \le
-function simplifyMath(m) {
-  m = m.replace(/\\(?:text|mathrm|mathbf|mathit|operatorname)\s*\{([^{}]*)\}/g, "$1");
-  m = m.replace(/\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, "($1)/($2)");
-  for (const [k, v] of MATH_MACROS) m = m.split(k).join(v);
-  return m.replace(/\{|\}/g, "").replace(/\s+/g, " ").trim();
-}
+// ── LaTeX vazado (\( \), \[ \], $$ $$) → KaTeX local (fallback: TeX cru) ──
 function stripLatex(src) {
-  const wrap = (_, m) => "\x01" + simplifyMath(m) + "\x01";
+  const mk = (ch) => (_, m) => ch + m.replace(/\s+/g, " ").trim() + ch;
   return src
-    .replace(/\\\(([\s\S]*?)\\\)/g, wrap)
-    .replace(/\\\[([\s\S]*?)\\\]/g, wrap)
-    .replace(/\$\$([\s\S]*?)\$\$/g, wrap);
+    .replace(/\\\(([\s\S]*?)\\\)/g, mk("\x03"))   // inline
+    .replace(/\\\[([\s\S]*?)\\\]/g, mk("\x05"))   // display
+    .replace(/\$\$([\s\S]*?)\$\$/g, mk("\x05"));
 }
 function md(src) {
   // protege cercas de código do tratamento LaTeX (durante o streaming,
@@ -1141,6 +1131,19 @@ async function enhanceMermaid(scope) {
     }
   }
 }
+function enhanceMath(scope) {                // KaTeX: TeX cru se falhar
+  if (!window.katex) return;
+  for (const el of scope.querySelectorAll(".katex-src")) {
+    if (el.dataset.rendered) continue;
+    try {
+      katex.render(el.textContent, el, {
+        throwOnError: true,
+        displayMode: el.classList.contains("mdisp")
+      });
+      el.dataset.rendered = "1";
+    } catch { /* TeX inválido: o texto bruto permanece */ }
+  }
+}
 function renderAssistant(bubble, text) {
   if (!text) {
     bubble.innerHTML = '<span class="dots" aria-label="…"><i></i><i></i><i></i></span>';
@@ -1228,6 +1231,7 @@ async function ask(text) {
     history.push({ role: "assistant", content: clean });
     if (items.length) renderSugg(bubble, items);
     enhanceMermaid(bubble);
+    enhanceMath(bubble);
     attachCopy(bubble, clean);
     markLastAnswer(bubble, text);
   } catch (err) {
@@ -1238,6 +1242,7 @@ async function ask(text) {
         history.push({ role: "assistant", content: clean });
         if (items.length) renderSugg(bubble, items);
         enhanceMermaid(bubble);
+        enhanceMath(bubble);
         attachCopy(bubble, clean);
         markLastAnswer(bubble, text);
       }
