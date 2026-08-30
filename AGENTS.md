@@ -6,26 +6,23 @@
 
 O desenvolvimento da VerboLang é conduzido por cinco agentes especializados, cada um com responsabilidades bem definidas e métricas de avaliação baseadas em resultados objetivos de engenharia. As métricas substituem as antigas “moedas abstratas” e são mensuráveis por ferramentas de CI/CD, análise estática, testes automatizados e revisões de código.
 
-```
-                      +-----------------------------------+
-                      |     Arquiteto Dialético (AD)      |
-                      |   (Garante Alinhamento Teórico)   |
-                      +-----------------+-----------------+
-                                        |
-         +------------------------------+------------------------------+
-         |                              |                              |
-+--------v---------+           +--------v---------+           +--------v---------+
-| Engenheiro de    |           | Especialista em  |           | Auditor do       |
-| I/O Físico e FXP |           | Compiladores (EC)|           | Caderno (AC)     |
-| (EIF)            |           | (Parser & Grafo) |           | (Log e Física)   |
-+--------+---------+           +--------+---------+           +--------+---------+
-         |                              |                              |
-         +------------------------------+------------------------------+
-                                        |
-                      +-----------------v-----------------+
-                      |    Garantia de Qualidade (GQT)    |
-                      |     (TDD, BDD & E2E Termo)        |
-                      +-----------------------------------+
+```mermaid
+flowchart TB
+    AD["Arquiteto Dialético (AD)<br/>garante o alinhamento teórico"]
+    subgraph CONSTRUCAO["Construção"]
+        direction LR
+        EIF["EIF — I/O Físico e FXP<br/>sensores e atores"]
+        EC["EC — Compiladores<br/>parser e grafo de verbos"]
+        AC["AC — Caderno<br/>log e física"]
+    end
+    GQT["GQT — Qualidade Termodinâmica<br/>TDD · BDD · E2E"]
+
+    AD --> EIF
+    AD --> EC
+    AD --> AC
+    EIF --> GQT
+    EC --> GQT
+    AC --> GQT
 ```
 
 ### 1.1 Arquiteto Dialético (AD)
@@ -183,6 +180,17 @@ A interação entre os agentes segue um fluxo de desenvolvimento orientado a ent
 4. **Auditoria Contínua (AC → AD)**  
    O AC fornece relatórios de overhead do logging, precisão energética e integridade dos registros de sensores/atores.  
    **Critério de aceite:** Overhead ≤ 1% CPU, precisão ≥ 98%, e todos os comandos de atuação são registrados com sucesso.
+
+```mermaid
+flowchart LR
+    R["1 · Requisitos<br/>AD + GQT<br/><i>cenários BDD executáveis</i>"]
+    D["2 · Desenvolvimento<br/>EC + EIF + AC<br/><i>testes unitários sem regressão</i>"]
+    I["3 · Integração e validação<br/>GQT + AD<br/><i>E2E aprovado pelo AD</i>"]
+    A["4 · Auditoria contínua<br/>AC → AD<br/><i>overhead ≤ 1% · precisão ≥ 98%</i>"]
+
+    R --> D --> I --> A
+    A -.->|"realimenta os critérios"| R
+```
 
 ### 2.2 Definição de “Pronto” (Done) para Cada Etapa
 

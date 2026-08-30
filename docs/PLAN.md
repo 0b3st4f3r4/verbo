@@ -6,6 +6,17 @@
 
 Este documento define o roadmap de desenvolvimento técnico para a implementação da **VerboLang** em Rust ou C, estruturado em cinco etapas sequenciais. A arquitetura adota o **FXP (Flux Protocol)** como barramento de I/O que unifica **sensores** (entrada) e **atores** (saída), eliminando a necessidade de módulos separados para hardware. Inclui análise de riscos e estratégias de mitigação para leitura de sensores, atuação de atores, testes térmicos e a gestão de memória (“zero heap”). O objetivo é garantir desenvolvimento seguro, mensurável e alinhado aos princípios do Materialismo Computacional.
 
+```mermaid
+flowchart LR
+    E1["Etapa 1<br/>suíte TDD/BDD/E2E<br/>mocks + simulador FXP"]
+    E2["Etapa 2<br/>núcleo da linguagem<br/>lexer · parser · AST · runtime"]
+    E3["Etapa 3<br/>FXP real<br/>sensores e atores"]
+    E4["Etapa 4<br/>Caderno de produção<br/>+ validação E2E"]
+    E5["Etapa 5<br/>profiling termodinâmico<br/>e otimização"]
+
+    E1 --> E2 --> E3 --> E4 --> E5
+```
+
 ---
 
 ## Etapa 1: Pesquisa & Arquitetura de Escopo via Código em TDD, BDD & E2E

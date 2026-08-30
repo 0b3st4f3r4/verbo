@@ -59,6 +59,25 @@ A pesquisa de ago/2026 avaliou os candidatos abaixo para esta máquina (6 GB VRA
 | **Orquestrador** | GLM-5.3/flash (cloud, via DSH) | Revisão AD (ontologia), arquitetura, decisões de especificação, refatorações grandes, contexto longo | por token |
 | **Local único** | Qwen3-4B-2507 FP8 (vLLM, GPU-only) | **Testes de comunicação inter-LLM via VerboLang** (PoC `verbolang-llm-poc.py`: cada agente é um ator no FXP, sensores medem o diálogo, `subvert` derruba loops) e bulk offline: rascunhos Gherkin, casos de erro da EBNF, stubs Rust/C e FXP — privado (nada sai da máquina), custo zero por token | energia |
 
+```mermaid
+flowchart TB
+    DEV(["Você e a equipe — via DSH"])
+    subgraph CLOUD["Cloud"]
+        GLM["GLM-5.3/Flash<br/>orquestrador: revisão AD,<br/>arquitetura, especificação"]
+    end
+    subgraph LOCAL["Local — Acer Nitro V 15 · 6 GB VRAM"]
+        VLLM["vLLM :8000 — Qwen3-4B-2507 FP8<br/>(scripts/serve-local-llm.sh)"]
+        POC["prototype/verbolang-llm-poc.py<br/>Proponente ↔ Crítico"]
+        CAD[("caderno_*.jsonl<br/>cadeia SHA-256")]
+    end
+
+    DEV -->|"decisão e revisão · custo por token"| GLM
+    DEV -->|"bulk offline · custo = energia"| VLLM
+    POC -->|"act()"| VLLM
+    POC -.->|"nó cloud (VBL_CRITICO_* ou global)"| GLM
+    POC -->|"auditoria de cada turno"| CAD
+```
+
 Divisão prática: o GLM cloud decide e revisa; o Qwen3-4B executa o volume local.
 Quando a qualidade do 4B não bastar para uma tarefa pesada (ex.: o parser completo
 da Etapa 2), a tarefa escala para o GLM — critério do AD, sem modelo local intermediário.

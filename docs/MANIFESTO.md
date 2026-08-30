@@ -14,6 +14,17 @@ Contra essa tendência, propomos o **Materialismo Computacional**: uma abordagem
 
 ## As Leis do Código Real
 
+```mermaid
+flowchart TB
+    MC["Materialismo Computacional<br/>— o código dança com a matéria —"]
+    MC --> L1["Lei 1 · O Verbo é primordial<br/>todo dado tem horizon"]
+    MC --> L2["Lei 2 · Honestidade termodinâmica<br/>tudo medido no Caderno"]
+    MC --> L3["Lei 3 · Três conjugações<br/>event · equilibrium · nonequilibrium"]
+    MC --> L4["Lei 4 · Alívio como veredito<br/>dissolver é ato de honestidade"]
+    MC --> L5["Lei 5 · subvert<br/>correção de trajetória física"]
+    MC --> L6["Lei 6 · Sensores e atores<br/>o FXP fecha o ciclo"]
+```
+
 ### 1. O Verbo é Primordial (A Abolição do Inerte)
 Nada na matéria é estático; portanto, nada no software pode fingir sê-lo. Rejeitamos o conceito de dado inerte — a fantasia de que estruturas podem existir indefinidamente sem custo ou transformação. No runtime, tudo é **verbo**: processo ativo com horizonte de validade definido. O dado é apenas um recorte temporário de um fluxo contínuo, uma fotografia de um rio que continua correndo.
 

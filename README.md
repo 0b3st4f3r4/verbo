@@ -8,23 +8,23 @@ custo energético e consequências termodinâmicas explícitas. A integridade do
 se mede em selos de conformidade, mas em **Joules, Celsius e ciclos de CPU** — registrados
 de forma auditável no **Caderno**.
 
-```
-     sensores (entrada)                 atores (saída)
-            │                                ▲
-            ▼                                │
-        ┌─────────────  FXP (Flux Protocol) ─────────────┐
-        │        barramento único de I/O físico          │
-        └───────────────────────┬────────────────────────┘
-                                ▲│
-                 leituras ▷ ────┘└──── ▷ comandos act()
-                                │
-                 ┌──────────────▼──────────────┐
-                 │  Runtime VerboLang (tick)   │
-                 │  formas · revisões · keep() │
-                 └──────────────┬──────────────┘
-                                ▼
-                 Caderno — log termodinâmico
-                 (cadeia de integridade SHA-256)
+```mermaid
+flowchart TB
+    subgraph MUNDO["Mundo físico"]
+        direction LR
+        S["Sensores<br/>(entrada)"]
+        A["Atores<br/>(saída)"]
+    end
+
+    FXP["FXP — Flux Protocol<br/>barramento único de I/O<br/>nomes simbólicos → endpoints"]
+    RT["Runtime VerboLang<br/>tick de 1 s virtual<br/>formas · revisões · keep()"]
+    CAD[("Caderno<br/>log termodinâmico<br/>cadeia SHA-256")]
+
+    S -->|"leituras"| FXP
+    FXP -->|"valores auditados"| RT
+    RT -->|"act(ator, valor)"| FXP
+    FXP -->|"comandos"| A
+    RT -->|"Joules · transições · atuações"| CAD
 ```
 
 ## As três conjugações da matéria
@@ -74,7 +74,7 @@ python3 prototype/verbolang-complete-blueprint.py
 
 ### PoC: comunicação entre LLMs via VerboLang
 
-O [`verbolang-llm-poc.py`](verbolang-llm-poc.py) coloca **dois agentes LLM**
+O [`prototype/verbolang-llm-poc.py`](prototype/verbolang-llm-poc.py) coloca **dois agentes LLM**
 (Proponente ↔ Crítico) para conversar sob o runtime VerboLang — sem alterar a
 spec: cada agente é um **ator** no FXP (um `POST /chat/completions`), o estado
 da conversa são **sensores** numéricos (turnos, tokens, latência, risco de
@@ -83,6 +83,26 @@ loop) e a conversa é uma forma `nonequilibrium` com regras de revisão:
 - `when dialogo_loop_risk > 0.85 -> subvert` — repetição sem propósito (§4.5)
 - `when dialogo_tokens > 2500 -> notify_shutdown` — orçamento estourado
 - `horizon 8s` — Alívio Termodinâmico: a conversa se dissolve ao esgotar
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant F as FXP-LLM (Runtime)
+    participant P as Proponente (LLM)
+    participant C as Crítico (LLM)
+    participant Cad as Caderno
+
+    loop rodada de diálogo — um turno por tick, alternando
+        F->>P: act(Proponente, mensagem) — POST /chat/completions
+        P-->>F: proposta
+        F->>Cad: tokens, latência, Joules estimados, hash
+        F->>C: act(Crítico, proposta)
+        C-->>F: risco material + condição de aceite
+        F->>Cad: auditoria do turno
+    end
+    Note over F: revisões por tick: loop_risk acima do limiar → subvert<br/>tokens acima do orçamento → notify_shutdown
+    Note over F: horizon esgotado → Alívio Termodinâmico
+```
 
 ```bash
 bash scripts/serve-local-llm.sh        # terminal 1 — sobe o qwen3-4b local
@@ -124,6 +144,10 @@ embeddings com o chat desligado ou em outra máquina.
 | [`prototype/verbolang-llm-poc.py`](prototype/verbolang-llm-poc.py) | PoC: comunicação inter-LLM (agentes LLM como atores/sensores no FXP) |
 | [`scripts/serve-local-llm.sh`](scripts/serve-local-llm.sh) | Sobe o modelo local Qwen3-4B-Instruct-2507-FP8 via vLLM |
 | [`LICENSE`](LICENSE) | Licença GPL-3.0 (copyleft) |
+
+> **Ordem de leitura sugerida:** [`docs/MANIFESTO.md`](docs/MANIFESTO.md) →
+> [`docs/FORMAL.md`](docs/FORMAL.md) → [`docs/PLAN.md`](docs/PLAN.md) →
+> [`AGENTS.md`](AGENTS.md).
 
 ## Roadmap
 

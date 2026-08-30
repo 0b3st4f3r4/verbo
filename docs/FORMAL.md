@@ -106,6 +106,34 @@ physical_unit        = 'W' | '°C' ;
 - **`equilibrium`**: persistente, sem manutenção, com custo em bytes.
 - **`nonequilibrium`**: requer `keep()` contínuo; colapsa se exceder `maintenance_deadline`.
 
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "event (transiente)" as EV
+    state "equilibrium (sustentado)" as EQ
+    state "nonequilibrium (laborativo)" as NEQ
+    state "Dissolvida — Alívio Termodinâmico" as DIS
+
+    [*] --> EV
+    [*] --> EQ
+    [*] --> NEQ
+
+    EV --> EQ: reclassify_as_equilibrium
+    EQ --> NEQ: reclassify_as_nonequilibrium
+    NEQ --> EQ: reclassify_as_equilibrium (persiste em disco)
+    NEQ --> NEQ: keep() renova a manutenção
+
+    EV --> DIS: horizon esgotado · dissolve
+    EQ --> DIS: horizon esgotado · dissolve · revisão
+    NEQ --> DIS: colapso — manutenção expira
+
+    note right of DIS
+        subvert: substitui o valor pelo poético canônico,
+        dissolve NO MESMO TICK e NÃO cancela as
+        ações seguintes da regra (ex.: act)
+    end note
+```
+
 ### 4.2 Ciclo de Vida (tick)
 
 A cada tick (1 segundo virtual por padrão):
@@ -117,6 +145,27 @@ A cada tick (1 segundo virtual por padrão):
    - Verifica prazos de manutenção e horizonte.
    - Executa ações correspondentes.
 3. Ações de `act` são traduzidas em mensagens FXP de saída e enviadas ao ator alvo.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant RT as Runtime
+    participant FXP as FXP
+    participant C as Caderno
+
+    Note over RT,C: tick = 1 s virtual
+    RT->>FXP: leitura dos sensores referenciados
+    FXP-->>RT: valores — ou falha de I/O (condição não avaliada)
+    loop cada forma ativa
+        RT->>C: vazamento energético (potência × duração)
+        RT->>RT: avalia as regras when
+        alt condição disparada
+            RT->>FXP: ações — dissolve · subvert · reclassify · act(ator, valor)
+            FXP-->>C: comando, valor, timestamp, custo da atuação
+        end
+        RT->>RT: verifica maintenance_deadline e horizon
+    end
+```
 
 ### 4.3 Condições de Revisão com Ação para Atores
 
