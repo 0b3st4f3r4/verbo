@@ -943,11 +943,6 @@ function makeSession() {
     id: ++seq, userTitle: null, history: [], lastTokens: null,
     stick: true, view, scrollTopSave: 0
   };
-  view.addEventListener("scroll", () => {
-    if (S !== sess) return;
-    sess.stick = view.scrollHeight - view.scrollTop - view.clientHeight < 80;
-    $("jump").hidden = sess.stick;
-  });
   log.appendChild(view);
   sessions.push(sess);
   activateSession(sess);
@@ -956,13 +951,13 @@ function makeSession() {
 function activateSession(sess) {
   if (S === sess) { renderTabs(); return; }
   if (S) {
-    S.scrollTopSave = S.view.scrollTop;
+    S.scrollTopSave = log.scrollTop;
     S.view.style.display = "none";
   }
   S = sess;
   sess.view.style.display = "flex";
-  if (sess.stick) sess.view.scrollTop = sess.view.scrollHeight;
-  else sess.view.scrollTop = sess.scrollTopSave || 0;
+  if (sess.stick) log.scrollTop = log.scrollHeight;
+  else log.scrollTop = sess.scrollTopSave || 0;
   $("jump").hidden = sess.stick;
   refreshEmpty();
   renderMeter();
@@ -1127,7 +1122,7 @@ function note(text, sess = S) {
   const div = document.createElement("div");
   div.className = "sysnote"; div.textContent = text;
   sess.view.appendChild(div);
-  sess.stick = true; scrollToBottom(sess);
+  sess.stick = true; scrollToBottom();
 }
 function noteAction(text, label, onClick, sess = S) {   // nota com botão (ex.: Reenviar)
   if (!sess) return;
@@ -1140,7 +1135,7 @@ function noteAction(text, label, onClick, sess = S) {   // nota com botão (ex.:
   b.addEventListener("click", onClick);
   div.appendChild(b);
   sess.view.appendChild(div);
-  sess.stick = true; scrollToBottom(sess);
+  sess.stick = true; scrollToBottom();
 }
 function lastBubble(cls, sess = S) {
   if (!sess) return null;
@@ -1164,9 +1159,15 @@ function renderChips() {
 }
 
 // ── scroll ─────────────────────────────────────────────────────────────────
-function scrollToBottom(sess = S) { if (sess) sess.view.scrollTop = sess.view.scrollHeight; }
-function keepScroll(sess = S) { if (sess && sess.stick) scrollToBottom(sess); }
-$("jump").addEventListener("click", () => { if (S) { S.stick = true; scrollToBottom(S); } });
+// quem rola é #log (as views das abas não rolam); "stick" é por sessão
+function scrollToBottom() { log.scrollTop = log.scrollHeight; }
+function keepScroll(sess = S) { if (sess && sess.stick) scrollToBottom(); }
+log.addEventListener("scroll", () => {          // chegou ao fim → fixa
+  if (!S) return;
+  S.stick = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+  $("jump").hidden = S.stick;
+});
+$("jump").addEventListener("click", () => { if (S) { S.stick = true; scrollToBottom(); } });
 
 // ── markdown (escape primeiro; blocos: código, mermaid, título, tabela,
 //    lista, citação, hr; inline: código, negrito, itálico, tachado, link) ──
@@ -1489,7 +1490,7 @@ function addBubble(role, text, sess = S) {
   div.className = "msg " + role;
   div.textContent = text;
   sess.view.appendChild(div);
-  sess.stick = true; scrollToBottom(sess);
+  sess.stick = true; scrollToBottom();
   return div;
 }
 const ICON_COPY = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" ' +
