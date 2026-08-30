@@ -194,12 +194,13 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
 - A chave vai no fragmento da URL (`#k=…`), que o navegador não envia ao
   servidor estático. URL manual:
   `http://127.0.0.1:8188/scripts/chat.html#k=<chave>&u=<base-url>&m=<modelo>&c=<ctx>`
-- **Alternância "Modelo puro ↔ + VerboLang"**: seletor compacto no rodapé,
-  ao lado do botão de enviar. O modo "+ VerboLang" injeta o cheat sheet
-  canônico ([`VBL-CHEATSHEET.md`](VBL-CHEATSHEET.md)) como prompt de
-  sistema e conta o custo dele no medidor de contexto. O prompt de sistema
-  editável fica num painel retrátil, aberto pelo ícone de controles (⚙ do
-  compositor). Lembre: o modelo local
+- **Alternância "Modelo puro ↔ + VerboLang"**: seletor de ícones flutuante no
+  canto inferior da página (chip = modelo puro; livro = + VerboLang; tooltip
+  traz o estado, inclusive o custo do cheat sheet em tokens). O modo
+  "+ VerboLang" injeta o cheat sheet canônico
+  ([`VBL-CHEATSHEET.md`](VBL-CHEATSHEET.md)) como prompt de
+  sistema e conta o custo dele no medidor de contexto. O prompt de sistema é
+  fixo e localizado (sem editor na UI). Lembre: o modelo local
   **não conhece a linguagem** sem isso (demanda em [`PLAN.md`](PLAN.md) §7) —
   para consultas sobre a VerboLang, ligue o modo e mantenha folga no medidor.
   As perguntas sugeridas na home acompanham o modo (gerais no puro; da

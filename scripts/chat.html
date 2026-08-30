@@ -169,21 +169,19 @@
   }
   .seg-btn + .seg-btn { border-left: 1px solid var(--border-soft); }
   .seg-btn[aria-pressed="true"] { background: var(--panel-2); color: var(--accent); font-weight: 600; }
-  .sheet-status { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
-  /* painel do prompt de sistema (abre pela engrenagem no compositor) */
-  #sys-panel {
-    width: var(--col); max-width: var(--col); margin: 0 auto 8px;
-    background: var(--panel); border: 1px solid var(--border-soft);
-    border-radius: 10px; padding: 8px 10px;
-    display: flex; flex-direction: column; gap: 6px;
+  /* seletor de modo flutuante (canto inferior, espelho do ↓) */
+  .seg-float {
+    position: fixed; z-index: 5; bottom: 92px;
+    inset-inline-start: max(18px, calc(50vw - var(--col) / 2 + 18px));
+    flex-direction: column; border-radius: 19px;
   }
-  #system {
-    width: 100%; background: var(--code-bg); color: var(--text);
-    border: 1px solid var(--border-soft); border-radius: 8px;
-    padding: 7px 10px; font: 13px/1.45 inherit; resize: vertical; min-height: 36px;
+  .seg-float .seg-btn {
+    width: 38px; height: 38px; padding: 0; min-height: 0;
+    display: grid; place-items: center;
   }
-  #sys-btn.on { color: var(--accent); border-color: var(--accent); }
-  .composer .seg-btn { min-height: 42px; padding: 6px 10px; }
+  .seg-float .seg-btn + .seg-btn {
+    border-left: 0; border-top: 1px solid var(--border-soft);
+  }
 
   #log {
     flex: 1; overflow-y: auto; overscroll-behavior: contain;
@@ -360,9 +358,7 @@
     .brand h1 { font-size: 13px; }
     .actions button, .actions select { padding: 6px 9px; font-size: 12px; }
     .actions .icon-btn { width: 32px; height: 32px; padding: 0; }
-    .composer { flex-wrap: wrap; }
-    .composer .seg { order: 5; width: 100%; }
-    .composer .seg-btn { flex: 1; min-height: 38px; }
+    .seg-float { bottom: 108px; inset-inline-start: 16px; }
     #jump { bottom: 108px; right: 16px; }
     .spinner { bottom: 108px; right: 60px; }
   }
@@ -415,17 +411,13 @@
 <button id="jump" hidden>↓</button>
 <div id="spinner" class="spinner" hidden role="status"></div>
 
+<div class="seg seg-float" role="group" id="mode-group">
+  <button class="seg-btn" id="mode-puro" aria-pressed="true"></button>
+  <button class="seg-btn" id="mode-vbl" aria-pressed="false"></button>
+</div>
+
 <footer>
-  <div id="sys-panel" hidden>
-    <span class="sheet-status" id="sheet-status"></span>
-    <textarea id="system" rows="2"></textarea>
-  </div>
   <div class="composer">
-    <div class="seg" role="group" id="mode-group">
-      <button class="seg-btn" id="mode-puro" aria-pressed="true"></button>
-      <button class="seg-btn" id="mode-vbl" aria-pressed="false"></button>
-    </div>
-    <button id="sys-btn" class="icon-btn" title=""></button>
     <textarea id="prompt" rows="1" aria-label=""></textarea>
     <button id="send" class="icon-btn send-btn" title=""></button>
   </div>
@@ -461,7 +453,6 @@ const I18N = {
       btnClear: "Nova", btnClearTitle: "Nova conversa (zera o contexto)",
       btnSend: "Enviar", btnStop: "Parar",
       promptPlaceholder: "Escreva sua pergunta…  (Enter envia · Shift+Enter quebra linha · Esc para)",
-      summarySystem: "prompt de sistema",
       sysDefault: "Você é um assistente objetivo. Responda em português do Brasil.",
       modePuro: "Modelo puro", modeVbl: "+ VerboLang",
       modeGroupAria: "Modo do modelo", meterAria: "Uso do contexto",
@@ -492,7 +483,6 @@ const I18N = {
       tabCloseTitle: "Fechar sessão", tabDefault: "Conversa {n}",
       followupReminder: "Lembre-se: termine a resposta com o bloco [q] contendo 7 perguntas numeradas e depois [/q].",
       followupRecovery: "Gere exatamente 7 perguntas curtas de acompanhamento sobre o texto a seguir, uma por linha, numeradas de 1 a 7. Responda SOMENTE com a lista.",
-      extraInstr: "Instruções adicionais do operador:",
       copyBtn: "copiar", copyTitle: "copiar resposta (markdown)", copied: "copiado ✓",
       emptyReply: "(resposta vazia)"
     },
@@ -520,7 +510,6 @@ const I18N = {
       btnClear: "New", btnClearTitle: "New conversation (resets the context)",
       btnSend: "Send", btnStop: "Stop",
       promptPlaceholder: "Type your question…  (Enter sends · Shift+Enter newline · Esc stops)",
-      summarySystem: "system prompt",
       sysDefault: "You are an objective assistant. Answer in English.",
       modePuro: "Pure model", modeVbl: "+ VerboLang",
       modeGroupAria: "Model mode", meterAria: "Context usage",
@@ -551,7 +540,6 @@ const I18N = {
       tabCloseTitle: "Close session", tabDefault: "Chat {n}",
       followupReminder: "Remember: end the reply with the [q] block containing 7 numbered questions and then [/q].",
       followupRecovery: "Generate exactly 7 short follow-up questions about the following text, one per line, numbered 1 to 7. Reply with the list ONLY.",
-      extraInstr: "Additional operator instructions:",
       copyBtn: "copy", copyTitle: "copy reply (markdown)", copied: "copied ✓",
       emptyReply: "(empty reply)"
     },
@@ -579,7 +567,6 @@ const I18N = {
       btnClear: "新对话", btnClearTitle: "开始新对话（清空上下文）",
       btnSend: "发送", btnStop: "停止",
       promptPlaceholder: "输入你的问题…（Enter 发送 · Shift+Enter 换行 · Esc 停止）",
-      summarySystem: "系统提示词",
       sysDefault: "你是一个客观的助手。用中文回答。",
       modePuro: "纯模型", modeVbl: "+ VerboLang",
       modeGroupAria: "模型模式", meterAria: "上下文用量",
@@ -598,7 +585,6 @@ const I18N = {
       overflow: "对话约 {est} tokens（上限 {ctx}）。请使用 ✂ 修剪或开始新对话。",
       err401: "401 —— 密钥无效（URL 的 #k=… 片段）。",
       err400: "400 —— 对话超出 {ctx} tokens 的上下文。请使用 ✂ 修剪或开始新对话。",
-      extraInstr: "操作员的附加指令：",
       copyBtn: "复制", copyTitle: "复制回复（markdown）", copied: "已复制 ✓",
       followupInstr: "每条回复都必须以完全如下格式的结尾块收束，其中包含 7 个由回复内容引出的简短后续问题：\n[q]\n1. 问题？\n2. 问题？\n3. 问题？\n4. 问题？\n5. 问题？\n6. 问题？\n7. 问题？\n[/q]\n在 [/q] 之后不要写任何内容，也不要对该块作说明。该块必须以 [q] 开始、以 [/q] 结束。",
       followupVbl: "这些问题应探索与回复相关的 VerboLang 语法：形式、变体（event/equilibrium/nonequilibrium）、review、act、FXP。",
@@ -637,7 +623,6 @@ const I18N = {
       btnClear: "Новый", btnClearTitle: "Новый диалог (сбрасывает контекст)",
       btnSend: "Отправить", btnStop: "Стоп",
       promptPlaceholder: "Введите вопрос… (Enter — отправить · Shift+Enter — новая строка · Esc — стоп)",
-      summarySystem: "системный промпт",
       sysDefault: "Вы объективный ассистент. Отвечайте по-русски.",
       modePuro: "Чистая модель", modeVbl: "+ VerboLang",
       modeGroupAria: "Режим модели", meterAria: "Использование контекста",
@@ -656,7 +641,6 @@ const I18N = {
       overflow: "Диалог ~{est} токенов (потолок {ctx}). Обрежьте (✂) или начните новый диалог.",
       err401: "401 — неверный ключ (фрагмент URL #k=…).",
       err400: "400 — диалог превысил контекст {ctx} токенов. Обрежьте (✂) или начните новый диалог.",
-      extraInstr: "Дополнительные инструкции оператора:",
       copyBtn: "копировать", copyTitle: "копировать ответ (markdown)", copied: "скопировано ✓",
       followupInstr: "Завершайте КАЖДЫЙ ответ финальным блоком точно в этом формате, содержащим 7 коротких уточняющих вопросов, вытекающих из содержания самого ответа:\n[q]\n1. вопрос?\n2. вопрос?\n3. вопрос?\n4. вопрос?\n5. вопрос?\n6. вопрос?\n7. вопрос?\n[/q]\nПосле [/q] ничего не пишите и не комментируйте блок. Блок обязательно открывается [q] и закрывается [/q].",
       followupVbl: "Вопросы должны исследовать грамматику VerboLang, связанную с ответом: формы, спряжения (event/equilibrium/nonequilibrium), review, act, FXP.",
@@ -695,7 +679,6 @@ const I18N = {
       btnClear: "नई", btnClearTitle: "नई बातचीत (संदर्भ रीसेट)",
       btnSend: "भेजें", btnStop: "रोकें",
       promptPlaceholder: "अपना प्रश्न लिखें… (Enter भेजें · Shift+Enter नई पंक्ति · Esc रोकें)",
-      summarySystem: "सिस्टम प्रॉम्प्ट",
       sysDefault: "आप एक वस्तुनिष्ठ सहायक हैं। हिन्दी में उत्तर दें।",
       modePuro: "शुद्ध मॉडल", modeVbl: "+ VerboLang",
       modeGroupAria: "मॉडल मोड", meterAria: "संदर्भ उपयोग",
@@ -714,7 +697,6 @@ const I18N = {
       overflow: "बातचीत ~{est} टोकन (सीमा {ctx})। ✂ छाँटें या नई बातचीत शुरू करें।",
       err401: "401 — अमान्य कुंजी (URL का #k=… भाग)।",
       err400: "400 — बातचीत {ctx} टोकन की सीमा पार कर गई। ✂ छाँटें या नई बातचीत शुरू करें।",
-      extraInstr: "ऑपरेटर के अतिरिक्त निर्देश:",
       copyBtn: "कॉपी", copyTitle: "उत्तर कॉपी करें (markdown)", copied: "कॉपी हो गया ✓",
       followupInstr: "हर उत्तर को इस सटीक प्रारूप के अंतिम खंड के साथ समाप्त करें, जिसमें उत्तर की सामग्री से लिए गए 7 छोटे अनुवर्ती प्रश्न हों:\n[q]\n1. प्रश्न?\n2. प्रश्न?\n3. प्रश्न?\n4. प्रश्न?\n5. प्रश्न?\n6. प्रश्न?\n7. प्रश्न?\n[/q]\n[/q] के बाद कुछ न लिखें और इस खंड पर टिप्पणी न करें। खंड अनिवार्य रूप से [q] से खुलता है और [/q] पर बंद होता है।",
       followupVbl: "प्रश्न उत्तर से संबंधित VerboLang व्याकरण का अन्वेषण करें: रूप, कॉन्जुगेशन (event/equilibrium/nonequilibrium), review, act, FXP।",
@@ -753,7 +735,6 @@ const I18N = {
       btnClear: "Nuut", btnClearTitle: "Nuwe gesprek (stel konteks terug)",
       btnSend: "Stuur", btnStop: "Stop",
       promptPlaceholder: "Tik jou vraag… (Enter stuur · Shift+Enter nuwe reël · Esc stop)",
-      summarySystem: "stelselprompt",
       sysDefault: "Jy is 'n objektiewe assistent. Antwoord in Afrikaans.",
       modePuro: "Pure model", modeVbl: "+ VerboLang",
       modeGroupAria: "Modelmodus", meterAria: "Konteksgebruik",
@@ -772,7 +753,6 @@ const I18N = {
       overflow: "Gesprek by ~{est} tokens (plafon {ctx}). Snoei (✂) of begin 'n nuwe gesprek.",
       err401: "401 — ongeldige sleutel (URL #k=…-fragment).",
       err400: "400 — die gesprek het die konteks van {ctx} tokens oorskry. Snoei (✂) of begin 'n nuwe gesprek.",
-      extraInstr: "Bykomende operateursinstruksies:",
       copyBtn: "kopieer", copyTitle: "kopieer antwoord (markdown)", copied: "gekopieer ✓",
       followupInstr: "Beëindig ELKE antwoord met 'n finale blok in hierdie presiese formaat, met 7 kort opvolgvrae wat uit die inhoud van die antwoord self voortvloei:\n[q]\n1. vraag?\n2. vraag?\n3. vraag?\n4. vraag?\n5. vraag?\n6. vraag?\n7. vraag?\n[/q]\nSkryf niks na [/q] nie en kommentaar nie oor die blok nie. Die blok MOET met [q] begin en met [/q] eindig.",
       followupVbl: "Die vrae moet die VerboLang-grammatika wat met die antwoord verband hou verken: vorms, konjugasies (event/equilibrium/nonequilibrium), review, act, FXP.",
@@ -811,7 +791,6 @@ const I18N = {
       btnClear: "جديد", btnClearTitle: "محادثة جديدة (تصفير السياق)",
       btnSend: "إرسال", btnStop: "إيقاف",
       promptPlaceholder: "اكتب سؤالك… (Enter للإرسال · Shift+Enter سطر جديد · Esc للإيقاف)",
-      summarySystem: "موجه النظام",
       sysDefault: "أنت مساعد موضوعي. أجب بالعربية.",
       modePuro: "نموذج خالص", modeVbl: "+ VerboLang",
       modeGroupAria: "وضع النموذج", meterAria: "استخدام السياق",
@@ -830,7 +809,6 @@ const I18N = {
       overflow: "المحادثة عند ~{est} توكن (السقف {ctx}). قلّم (✂) أو ابدأ محادثة جديدة.",
       err401: "401 — مفتاح غير صالح (جزء #k=… من الرابط).",
       err400: "400 — تجاوزت المحادثة سياق {ctx} توكن. قلّم (✂) أو ابدأ محادثة جديدة.",
-      extraInstr: "تعليمات إضافية من المشغّل:",
       copyBtn: "نسخ", copyTitle: "نسخ الرد (markdown)", copied: "تم النسخ ✓",
       followupInstr: "اختم كل رد بكتلة نهائية بهذا التنسيق تمامًا، تحتوي على 7 أسئلة متابعة قصيرة مستمدة من محتوى الرد نفسه:\n[q]\n1. سؤال؟\n2. سؤال؟\n3. سؤال؟\n4. سؤال؟\n5. سؤال؟\n6. سؤال؟\n7. سؤال؟\n[/q]\nلا تكتب شيئًا بعد [/q] ولا تعلّق على الكتلة. تبدأ الكتلة إلزاميًا بـ [q] وتنتهي بـ [/q].",
       followupVbl: "يجب أن تستكشف الأسئلة قواعد VerboLang المتعلقة بالرد: الصيغ، التصريفات (event/equilibrium/nonequilibrium)، review، act، FXP.",
@@ -916,11 +894,12 @@ function applyLang() {
   updateSendButton();
   $("prompt").placeholder = t("promptPlaceholder");
   $("prompt").ariaLabel = t("promptAria");
-  $("sys-btn").innerHTML = ICON_SLIDERS;
-  $("sys-btn").title = t("summarySystem");
-  $("sys-btn").setAttribute("aria-label", t("summarySystem"));
-  $("mode-puro").textContent = t("modePuro");
-  $("mode-vbl").textContent = t("modeVbl");
+  $("mode-puro").innerHTML = ICON_CPU;
+  $("mode-puro").title = t("modePuro");
+  $("mode-puro").setAttribute("aria-label", t("modePuro"));
+  $("mode-vbl").innerHTML = ICON_BOOK;
+  $("mode-vbl").title = t("modeVbl");
+  $("mode-vbl").setAttribute("aria-label", t("modeVbl"));
   $("mode-group").setAttribute("aria-label", t("modeGroupAria"));
   $("meter").setAttribute("aria-label", t("meterAria"));
   $("log").setAttribute("aria-label", t("logAria"));
@@ -1031,26 +1010,20 @@ function estimateTokens(text) { return Math.ceil((text || "").length / 4); }
 function sheetTokens() { return vblMode && sheetText ? estimateTokens(sheetText) : 0; }
 function contextEstimate(sess = S) {
   if (!sess) return 0;
-  return estimateTokens($("system").value) + 16 + sheetTokens()
+  return estimateTokens(vblMode && sheetText ? "" : t("sysDefault")) + 16 + sheetTokens()
     + estimateTokens(t("followupInstr"))
     + (vblMode ? estimateTokens(t("followupVbl")) : 0)
     + estimateTokens(t("followupReminder"))
     + sess.history.reduce(
       (acc, msg) => acc + estimateTokens(msg.content) + 4, 0);
 }
-function systemContent() {
-  const extra = $("system").value.trim();
+function systemContent() {          // prompt fixo: sem editor desde a remoção da caixa
   const parts = [];
   if (vblMode && sheetText) parts.push(sheetText.trim());
-  if (extra) {
-    parts.push(vblMode && sheetText
-      ? t("extraInstr") + "\n" + extra
-      : extra);
-  }
+  else parts.push(t("sysDefault"));
   if (vblMode) parts.push(t("followupVbl"));
   parts.push(t("followupInstr"));
-  return parts.join("\n\n---\n\n")
-    || t("sysDefault");
+  return parts.join("\n\n---\n\n");
 }
 
 // ── perguntas sugeridas: bloco [q]…[/q] no fim da resposta vira botões ────
@@ -1561,13 +1534,17 @@ const ICON_GLOBE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" 
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>' +
   '<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
-const ICON_SLIDERS = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+const ICON_CPU = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-  '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>' +
-  '<line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>' +
-  '<line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>' +
-  '<line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/>' +
-  '<line x1="17" y1="16" x2="23" y2="16"/></svg>';
+  '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>' +
+  '<line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>' +
+  '<line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>' +
+  '<line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>' +
+  '<line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>';
+const ICON_BOOK = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>' +
+  '<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
 function updateSendButton() {
   const b = $("send");
   if (!b) return;
@@ -1650,18 +1627,16 @@ function setVblMode(on) {
 }
 $("mode-puro").addEventListener("click", () => setVblMode(false));
 $("mode-vbl").addEventListener("click", () => setVblMode(true));
-$("sys-btn").addEventListener("click", () => {   // painel do prompt de sistema
-  const p = $("sys-panel");
-  p.hidden = !p.hidden;
-  $("sys-btn").classList.toggle("on", !p.hidden);
-  if (!p.hidden) $("system").focus();
-});
 let sheetState = "loading";
-function updateSheetStatus() {
-  const el = $("sheet-status");
-  if (sheetState === "loading") { el.textContent = "…"; return; }
-  if (sheetState === "missing") { el.textContent = t("sheetMissing"); return; }
-  el.textContent = t("sheetTokens", { n: fmt(estimateTokens(sheetText)) });
+function updateSheetStatus() {   // sem caixa: o tooltip do modo carrega o estado
+  const b = $("mode-vbl");
+  if (sheetState === "loading") return;
+  if (sheetState === "missing") {
+    b.title = t("modeVbl") + " — " + t("sheetMissing");
+  } else {
+    b.title = t("modeVbl") + " · " + t("sheetTokens", { n: fmt(estimateTokens(sheetText)) });
+  }
+  b.setAttribute("aria-label", b.title);
 }
 async function loadSheet() {
   const candidates = ["../docs/VBL-CHEATSHEET.md", "docs/VBL-CHEATSHEET.md", "VBL-CHEATSHEET.md"];
@@ -1690,7 +1665,6 @@ $("prompt").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 });
 $("prompt").addEventListener("input", autosize);
-$("system").addEventListener("input", renderMeter);
 $("theme-btn").addEventListener("click", () =>
   applyTheme(THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length]));
 $("lang-btn").addEventListener("click", () => {   // cicla os 7 idiomas
@@ -1727,10 +1701,6 @@ $("prune").addEventListener("click", () => {
 // ── partida ────────────────────────────────────────────────────────────────
 (async function boot() {
   applyTheme(theme);
-  if (!localStorage.getItem("vllm.sysinit")) {
-    $("system").value = t("sysDefault");
-    localStorage.setItem("vllm.sysinit", "1");
-  }
   applyLang();
   makeSession();               // primeira aba
   setVblMode(vblMode);
