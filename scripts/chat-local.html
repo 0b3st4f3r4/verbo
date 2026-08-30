@@ -278,6 +278,19 @@
     box-shadow: var(--shadow); font-size: 16px; line-height: 1;
   }
 
+  /* círculo de carregamento (resposta em andamento) */
+  .spinner {
+    position: fixed; z-index: 5; bottom: 92px;
+    right: max(66px, calc(50vw - var(--col) / 2 + 66px));
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   /* ── rodapé ────────────────────────────────────────────────────────── */
   footer {
     display: flex; gap: 10px; align-items: flex-end;
@@ -310,6 +323,7 @@
     .brand h1 { font-size: 13px; }
     .actions button, .actions select { padding: 6px 9px; font-size: 12px; }
     #jump { bottom: 108px; right: 16px; }
+    .spinner { bottom: 108px; right: 60px; }
   }
   @media (pointer: coarse) {
     button, .chip, select { min-height: 40px; }
@@ -373,6 +387,7 @@
 </main>
 
 <button id="jump" hidden>↓</button>
+<div id="spinner" class="spinner" hidden role="status"></div>
 
 <footer>
   <div class="composer">
@@ -437,6 +452,7 @@ const I18N = {
       rollbackTitle: "Desfazer a última troca (a pergunta volta ao campo)",
       rollbackNothing: "Nada a desfazer.",
       retry: "Reenviar", retryTitle: "Gerar novamente esta resposta",
+      loading: "gerando…",
       followupReminder: "Lembre-se: termine a resposta com o bloco [q] contendo 7 perguntas numeradas e depois [/q].",
       followupRecovery: "Gere exatamente 7 perguntas curtas de acompanhamento sobre o texto a seguir, uma por linha, numeradas de 1 a 7. Responda SOMENTE com a lista.",
       extraInstr: "Instruções adicionais do operador:",
@@ -492,6 +508,7 @@ const I18N = {
       rollbackTitle: "Undo the last exchange (the question returns to the input)",
       rollbackNothing: "Nothing to undo.",
       retry: "Retry", retryTitle: "Regenerate this reply",
+      loading: "generating…",
       followupReminder: "Remember: end the reply with the [q] block containing 7 numbered questions and then [/q].",
       followupRecovery: "Generate exactly 7 short follow-up questions about the following text, one per line, numbered 1 to 7. Reply with the list ONLY.",
       extraInstr: "Additional operator instructions:",
@@ -548,6 +565,7 @@ const I18N = {
       rollbackTitle: "撤销最近一轮对话（问题回到输入框）",
       rollbackNothing: "没有可撤销的内容。",
       retry: "重试", retryTitle: "重新生成此回复",
+      loading: "生成中…",
       followupReminder: "记住：以 [q] 块结束回复，其中包含 7 个编号问题，然后是 [/q]。",
       followupRecovery: "针对以下文本生成恰好 7 个简短的后续问题，每行一个，编号 1 到 7。只回复列表。",
       emptyReply: "（空回复）"
@@ -602,6 +620,7 @@ const I18N = {
       rollbackTitle: "Отменить последний обмен (вопрос вернётся в поле ввода)",
       rollbackNothing: "Отменять нечего.",
       retry: "Повторить", retryTitle: "Сгенерировать этот ответ заново",
+      loading: "генерация…",
       followupReminder: "Помните: завершите ответ блоком [q] с 7 пронумерованными вопросами, затем [/q].",
       followupRecovery: "Сгенерируйте ровно 7 коротких уточняющих вопросов к следующему тексту, по одному на строку, с номерами от 1 до 7. Ответьте ТОЛЬКО списком.",
       emptyReply: "(пустой ответ)"
@@ -656,6 +675,7 @@ const I18N = {
       rollbackTitle: "अंतिम अदला-बदली पूर्ववत करें (प्रश्न इनपुट में वापस आएगा)",
       rollbackNothing: "पूर्ववत करने को कुछ नहीं।",
       retry: "पुनः प्रयास", retryTitle: "यह उत्तर फिर से बनाएँ",
+      loading: "जनरेट हो रहा है…",
       followupReminder: "याद रखें: उत्तर को [q] खंड के साथ समाप्त करें जिसमें 7 क्रमांकित प्रश्न हों, फिर [/q]।",
       followupRecovery: "निम्नलिखित पाठ के बारे में ठीक 7 छोटे अनुवर्ती प्रश्न बनाएँ, प्रति पंक्ति एक, 1 से 7 क्रमांकित। केवल सूची के साथ उत्तर दें।",
       emptyReply: "(खाली उत्तर)"
@@ -710,6 +730,7 @@ const I18N = {
       rollbackTitle: "Ontdoen die laaste uitruil (die vraag keer na die invoerveld terug)",
       rollbackNothing: "Niks om te ontdoen nie.",
       retry: "Herprobeer", retryTitle: "Genereer hierdie antwoord weer",
+      loading: "genereer…",
       followupReminder: "Onthou: eindig die antwoord met die [q]-blok wat 7 genommerde vrae bevat en dan [/q].",
       followupRecovery: "Genereer presies 7 kort opvolgvrae oor die volgende teks, een per reël, genommer 1 tot 7. Antwoord SLEGS met die lys.",
       emptyReply: "(leë antwoord)"
@@ -764,6 +785,7 @@ const I18N = {
       rollbackTitle: "التراجع عن آخر تبادل (يعود السؤال إلى حقل الإدخال)",
       rollbackNothing: "لا شيء للتراجع عنه.",
       retry: "إعادة المحاولة", retryTitle: "إعادة توليد هذا الرد",
+      loading: "جارٍ التوليد…",
       followupReminder: "تذكير: أنهِ الرد بكتلة [q] تحتوي على 7 أسئلة مرقمة ثم [/q].",
       followupRecovery: "أنشئ بالضبط 7 أسئلة متابعة قصيرة عن النص التالي، سؤال في كل سطر، مرقمة من 1 إلى 7. أجب بالقائمة فقط.",
       emptyReply: "(رد فارغ)"
@@ -823,6 +845,7 @@ function applyLang() {
   $("prune").title = t("btnPruneTitle");
   $("rollback").title = t("rollbackTitle");
   $("rollback").setAttribute("aria-label", t("rollbackTitle"));
+  $("spinner").setAttribute("aria-label", t("loading"));
   $("clear").textContent = t("btnClear");
   $("clear").title = t("btnClearTitle");
   $("send").textContent = t("btnSend");
@@ -946,6 +969,9 @@ function parseQuestionList(text) {           // saída da chamada de recuperaç�
 function recoverSuggestions(bubble, answerText) {
   if (!API_KEY || !answerText) return;
   const sys = t("followupRecovery") + (vblMode ? "\n" + t("followupVbl") : "");
+  const sp = $("spinner");
+  sp.setAttribute("aria-label", t("loading"));
+  sp.hidden = false;                          // 2ª chamada também é trabalho
   fetch(API_URL + "/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY },
@@ -963,7 +989,9 @@ function recoverSuggestions(bubble, answerText) {
     if (!j || !bubble.isConnected) return;    // bolha já foi embora (rollback etc.)
     const items = parseQuestionList(j.choices?.[0]?.message?.content || "");
     if (items.length) renderSugg(bubble, items);
-  }).catch(() => {});
+  }).catch(() => {}).finally(() => {
+    if (!inFlight) sp.hidden = true;          // não apague o da geração corrente
+  });
 }
 function renderMeter() {
   const est = Math.max(contextEstimate(), lastPromptTokens ?? 0);
@@ -1240,6 +1268,9 @@ async function ask(text) {
   log.appendChild(bubble);
   renderAssistant(bubble, "");
   $("send").disabled = true; $("stop").disabled = false;
+  const sp = $("spinner");
+  sp.setAttribute("aria-label", t("loading"));
+  sp.hidden = false;
 
   const controller = new AbortController();
   inFlight = controller;
@@ -1319,6 +1350,7 @@ async function ask(text) {
     }
   } finally {
     inFlight = null;
+    $("spinner").hidden = true;
     $("send").disabled = false; $("stop").disabled = true;
     box.focus();
     renderMeter();
