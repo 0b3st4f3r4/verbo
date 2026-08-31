@@ -101,14 +101,21 @@ um medidor externo independente — essa exigiria wattímetro de referência.
 acoplado ao soak de 24 h (30 s, 2 993 amostras) e a uma instância idêntica
 curta (45 s, 4 470 amostras, símbolos completos —
 [`perf-soak2-report.txt`](../logs/etapa5/lab/perf-soak2-report.txt)).
-Achado principal: `__memcmp_avx2_movbe` domina (~28 %) — comparação de strings
-nas buscas `BTreeMap`/`ordem.retain`/heap do escalonador, coerente com a
-análise da dissolução O(N) registrada em
-[ETAPA-5-RELATORIO.md](ETAPA-5-RELATORIO.md) §5; `memmove` (~6 %) e
-malloc/free (~3 %) completam o perfil de mutação estrutural por tick.
-Símbolos do binário antigo aparecem como "(deleted)" no acoplamento ao soak
-de 24 h (o binário foi substituído pelo rebuild das correções — o processo
-roda o inode original, função idêntica).
+Perfil confirmado por símbolo:
+
+| Overhead | Símbolo | Interpretação |
+|---|---|---|
+| 28,8 % | `__memcmp_avx2_movbe` | comparação de strings (`BTreeMap` de formas, `ordem.retain`, heap de prazos) |
+| 22,7 % | `Vec<Reverse<Entrada>>::from_iter` ← **`Scheduler::remover_forma::{closure#0}`** | **reconstrução do heap a cada dissolução — a dissolução O(N) prevista na análise da Etapa 5, agora medida por profiling** |
+| ~6 % | `__memmove_avx_unaligned_erms` | mutação de `Vec`/`retain` |
+| ~3 % | `_int_malloc`/`_int_free` | alocações do churn (formas nascem/morrem a cada 3 ticks) |
+
+Isso fecha a evidência do gargalo declarado em
+[ETAPA-5-RELATORIO.md](ETAPA-5-RELATORIO.md) §5: a correção estrutural
+(tombstones + compaction amortizada) tem alvo quantificado. Símbolos do
+binário antigo aparecem como "(deleted)" no acoplamento ao soak de 24 h
+(o binário foi substituído pelo rebuild das correções — o processo roda o
+inode original, função idêntica).
 
 ## 6. Execução longa (24 h)
 

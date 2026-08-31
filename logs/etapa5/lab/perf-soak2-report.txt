@@ -1,0 +1,188 @@
+Warning:
+Kernel address maps (/proc/{kallsyms,modules}) were restricted.
+
+Check /proc/sys/kernel/kptr_restrict before running 'perf record'.
+
+As no suitable kallsyms nor vmlinux was found, kernel samples
+can't be resolved.
+
+Samples in kernel modules can't be resolved as well.
+
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 4K of event 'cpu/cycles/P'
+# Event count (approx.): 196864606027
+#
+# Overhead  Command   Shared Object     Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+# ........  ........  ................  ...........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+    28.76%  vbl-soak  libc.so.6         [.] __memcmp_avx2_movbe
+            |          
+             --0.81%--__memcmp_avx2_movbe
+
+    22.70%  vbl-soak  vbl-soak          [.] <alloc::vec::Vec<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>, core::iter::adapters::filter::Filter<alloc::collections::binary_heap::Drain<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>>, <vbl_runtime::scheduler::Scheduler>::remover_forma::{closure#0}>>>::from_iter
+            |          
+             --5.58%--<alloc::vec::Vec<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>, core::iter::adapters::filter::Filter<alloc::collections::binary_heap::Drain<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>>, <vbl_runtime::scheduler::Scheduler>::remover_forma::{closure#0}>>>::from_iter
+                       |          
+                       |--2.95%--0x5af611f52acf
+                       |          
+                        --1.37%--0x6
+
+    10.93%  vbl-soak  vbl-soak          [.] <alloc::vec::Vec<alloc::rc::Rc<str>>>::retain::<<vbl_runtime::engine::Engine<vbl_runtime::sim::FxpSimulator, vbl_runtime::caderno::NoopCaderno>>::dissolve_form::{closure#0}>
+            |          
+             --3.07%--<alloc::vec::Vec<alloc::rc::Rc<str>>>::retain::<<vbl_runtime::engine::Engine<vbl_runtime::sim::FxpSimulator, vbl_runtime::caderno::NoopCaderno>>::dissolve_form::{closure#0}>
+
+    10.49%  vbl-soak  vbl-soak          [.] <alloc::collections::binary_heap::BinaryHeap<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>> as core::iter::traits::collect::FromIterator<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>>>::from_iter::<alloc::vec::into_iter::IntoIter<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>>>
+            |          
+             --2.98%--<alloc::collections::binary_heap::BinaryHeap<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>> as core::iter::traits::collect::FromIterator<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>>>::from_iter::<alloc::vec::into_iter::IntoIter<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>>>
+                       |          
+                        --2.28%--0x7
+
+     5.62%  vbl-soak  libc.so.6         [.] __memmove_avx_unaligned_erms
+     4.78%  vbl-soak  vbl-soak          [.] <vbl_runtime::engine::Engine<vbl_runtime::sim::FxpSimulator, vbl_runtime::caderno::NoopCaderno>>::tick
+            |          
+             --1.15%--<vbl_runtime::engine::Engine<vbl_runtime::sim::FxpSimulator, vbl_runtime::caderno::NoopCaderno>>::tick
+
+     2.24%  vbl-soak  libc.so.6         [.] _int_malloc
+     0.77%  vbl-soak  libc.so.6         [.] _int_free_merge_chunk
+     0.76%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Owned, alloc::string::String, vbl_runtime::json::Json, alloc::collections::btree::node::marker::LeafOrInternal>>::bulk_push::<alloc::collections::btree::dedup_sorted_iter::DedupSortedIter<alloc::string::String, vbl_runtime::json::Json, alloc::vec::into_iter::IntoIter<(alloc::string::String, vbl_runtime::json::Json)>>, alloc::alloc::Global>
+     0.66%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::BTreeMap<alloc::string::String, vbl_runtime::forma::Form>>::insert
+     0.61%  vbl-soak  vbl-soak          [.] <vbl_runtime::engine::Engine<vbl_runtime::sim::FxpSimulator, vbl_runtime::caderno::NoopCaderno>>::bind
+     0.57%  vbl-soak  libc.so.6         [.] _int_realloc
+     0.52%  vbl-soak  libc.so.6         [.] unlink_chunk.isra.0
+     0.51%  vbl-soak  libc.so.6         [.] realloc
+     0.49%  vbl-soak  vbl-soak          [.] core::fmt::write
+     0.48%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::BTreeMap<alloc::string::String, u64>>::insert
+     0.45%  vbl-soak  libc.so.6         [.] malloc
+     0.43%  vbl-soak  libc.so.6         [.] cfree@GLIBC_2.2.5
+     0.39%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::IntoIter<alloc::string::String, vbl_runtime::json::Json>>::dying_next
+     0.39%  vbl-soak  vbl-soak          [.] <alloc::collections::binary_heap::BinaryHeap<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>>>::pop
+     0.34%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::BTreeMap<alloc::string::String, vbl_runtime::json::Json> as core::iter::traits::collect::FromIterator<(alloc::string::String, vbl_runtime::json::Json)>>::from_iter::<core::iter::adapters::map::Map<core::array::iter::IntoIter<(&str, vbl_runtime::json::Json), 1>, <vbl_runtime::json::Json>::obj<[(&str, vbl_runtime::json::Json); 1]>::{closure#0}>>
+     0.31%  vbl-soak  vbl-soak          [.] alloc::fmt::format::format_inner
+     0.29%  vbl-soak  libc.so.6         [.] _int_free_maybe_trim
+     0.27%  vbl-soak  vbl-soak          [.] <alloc::string::String as core::fmt::Write>::write_str
+     0.25%  vbl-soak  vbl-soak          [.] <core::iter::adapters::map::Map<core::array::iter::IntoIter<(&str, vbl_runtime::json::Json), 1>, <vbl_runtime::json::Json>::obj<[(&str, vbl_runtime::json::Json); 1]>::{closure#0}> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::for_each::call<(alloc::string::String, vbl_runtime::json::Json), <alloc::vec::Vec<(alloc::string::String, vbl_runtime::json::Json)>>::extend_trusted<core::iter::adapters::map::Map<core::array::iter::IntoIter<(&str, vbl_runtime::json::Json), 1>, <vbl_runtime::json::Json>::obj<[(&str, vbl_runtime::json::Json); 1]>::{closure#0}>>::{closure#0}>::{closure#0}>
+     0.25%  vbl-soak  vbl-soak          [.] __rustc::__rdl_alloc
+     0.23%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, vbl_runtime::forma::Form, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::Edge>>::insert_recursing::<alloc::alloc::Global, <alloc::collections::btree::map::entry::VacantEntry<alloc::string::String, vbl_runtime::forma::Form>>::insert_entry::{closure#0}>
+     0.22%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::BTreeMap<alloc::string::String, u64>>::remove::<str>
+     0.21%  vbl-soak  vbl-soak          [.] <vbl_runtime::engine::Engine<vbl_runtime::sim::FxpSimulator, vbl_runtime::caderno::NoopCaderno>>::dissolve_form
+     0.20%  vbl-soak  vbl-soak          [.] vbl_soak::main
+     0.20%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::vec::Vec<(vbl_runtime::scheduler::Prazo, u64)>>>::remove::<str>
+     0.20%  vbl-soak  vbl-soak          [.] <alloc::vec::Vec<(alloc::string::String, vbl_runtime::json::Json)> as alloc::vec::spec_from_iter::SpecFromIter<(alloc::string::String, vbl_runtime::json::Json), core::iter::adapters::map::Map<core::array::iter::IntoIter<(&str, vbl_runtime::json::Json), 1>, <vbl_runtime::json::Json>::obj<[(&str, vbl_runtime::json::Json); 1]>::{closure#0}>>>::from_iter
+     0.18%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, u64, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::KV>>::remove_leaf_kv::<<alloc::collections::btree::map::entry::OccupiedEntry<alloc::string::String, u64>>::remove_kv::{closure#0}, alloc::alloc::Global>
+     0.18%  vbl-soak  vbl-soak          [.] <alloc::vec::into_iter::IntoIter<(alloc::string::String, vbl_runtime::json::Json)> as core::ops::drop::Drop>::drop
+     0.16%  vbl-soak  vbl-soak          [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.16%  vbl-soak  libc.so.6         [.] _int_free_chunk
+     0.16%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::IntoIter<alloc::string::String, vbl_runtime::json::Json> as core::ops::drop::Drop>::drop
+     0.14%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::BalancingContext<alloc::string::String, vbl_runtime::forma::Form>>::merge_tracking_child_edge::<alloc::alloc::Global>
+     0.13%  vbl-soak  vbl-soak          [.] core::ptr::drop_glue::<vbl_runtime::json::Json>
+     0.13%  vbl-soak  vbl-soak          [.] <alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+     0.11%  vbl-soak  vbl-soak          [.] core::ptr::drop_glue::<vbl_runtime::json::Json>
+     0.11%  vbl-soak  vbl-soak          [.] <core::fmt::Formatter>::pad
+     0.11%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, vbl_runtime::forma::Form, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::KV>>::remove_leaf_kv::<<alloc::collections::btree::map::entry::OccupiedEntry<alloc::string::String, vbl_runtime::forma::Form>>::remove_kv::{closure#0}, alloc::alloc::Global>
+     0.09%  vbl-soak  [unknown]         [k] 0xffffffff8ae001bd
+     0.09%  vbl-soak  vbl-soak          [.] <core::fmt::Formatter>::pad_integral
+     0.09%  vbl-soak  libc.so.6         [.] __libc_malloc2
+     0.09%  vbl-soak  vbl-soak          [.] <vbl_runtime::engine::Engine<vbl_runtime::sim::FxpSimulator, vbl_runtime::caderno::NoopCaderno>>::registrar_forma
+     0.09%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::entry::OccupiedEntry<alloc::string::String, u64>>::remove_kv
+     0.09%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, alloc::vec::Vec<(vbl_runtime::scheduler::Prazo, u64)>, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::Edge>>::insert_recursing::<alloc::alloc::Global, <alloc::collections::btree::map::entry::VacantEntry<alloc::string::String, alloc::vec::Vec<(vbl_runtime::scheduler::Prazo, u64)>>>::insert_entry::{closure#0}>
+     0.09%  vbl-soak  vbl-soak          [.] __rustc::__rdl_realloc
+     0.09%  vbl-soak  vbl-soak          [.] <alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+     0.07%  vbl-soak  vbl-soak          [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.07%  vbl-soak  [unknown]         [.] 0x000000009ba508c2
+     0.07%  vbl-soak  vbl-soak          [.] <alloc::vec::Vec<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>> as alloc::vec::spec_from_iter::SpecFromIter<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>, alloc::vec::into_iter::IntoIter<core::cmp::Reverse<vbl_runtime::scheduler::Entrada>>>>::from_iter
+     0.07%  vbl-soak  vbl-soak          [.] <alloc::string::String as core::clone::Clone>::clone
+     0.07%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::BTreeMap<alloc::string::String, vbl_runtime::forma::Form>>::remove::<str>
+     0.07%  vbl-soak  [unknown]         [k] 0xffffffff8af04109
+     0.06%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, alloc::vec::Vec<(vbl_runtime::scheduler::Prazo, u64)>, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::KV>>::remove_leaf_kv::<<alloc::collections::btree::map::entry::OccupiedEntry<alloc::string::String, alloc::vec::Vec<(vbl_runtime::scheduler::Prazo, u64)>>>::remove_kv::{closure#0}, alloc::alloc::Global>
+     0.06%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::entry::OccupiedEntry<alloc::string::String, vbl_runtime::forma::Form>>::remove_kv
+     0.05%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, u64, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::Edge>>::insert_recursing::<alloc::alloc::Global, <alloc::collections::btree::map::entry::VacantEntry<alloc::string::String, u64>>::insert_entry::{closure#0}>
+     0.05%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::BalancingContext<alloc::string::String, u64>>::merge_tracking_child_edge::<alloc::alloc::Global>
+     0.05%  vbl-soak  vbl-soak          [.] __rustc::__rust_no_alloc_shim_is_unstable_v2
+     0.05%  vbl-soak  [unknown]         [k] 0xffffffff8b2afe60
+     0.05%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::entry::VacantEntry<alloc::string::String, vbl_runtime::forma::Form>>::insert_entry
+     0.05%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::entry::Entry<alloc::string::String, alloc::vec::Vec<(vbl_runtime::scheduler::Prazo, u64)>>>::or_default
+     0.05%  vbl-soak  vbl-soak          [.] alloc::rc::rc_inner_layout_for_value_layout
+     0.05%  vbl-soak  vbl-soak          [.] <vbl_runtime::scheduler::Scheduler>::remover_forma
+     0.05%  vbl-soak  vbl-soak          [.] <alloc::raw_vec::RawVec<(vbl_runtime::scheduler::Prazo, u64)>>::grow_one
+     0.04%  vbl-soak  vbl-soak          [.] __rustc::__rdl_dealloc
+     0.04%  vbl-soak  vbl-soak          [.] <usize as core::fmt::Display>::fmt
+     0.04%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, alloc::vec::Vec<(vbl_runtime::scheduler::Prazo, u64)>, alloc::collections::btree::node::marker::LeafOrInternal>, alloc::collections::btree::node::marker::KV>>::remove_kv_tracking::<<alloc::collections::btree::map::entry::OccupiedEntry<alloc::string::String, alloc::vec::Vec<(vbl_runtime::scheduler::Prazo, u64)>>>::remove_kv::{closure#0}, alloc::alloc::Global>
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b7ce553
+     0.02%  vbl-soak  vbl-soak          [.] __rustc::__rust_dealloc
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b376a21
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b728f0c
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b2055b4
+     0.02%  vbl-soak  vbl-soak          [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8c50379c
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b727750
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b2c2ee9
+     0.02%  vbl-soak  [unknown]         [.] 0x000000009bfdb914
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8af0410b
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b9dc9be
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8ae011b2
+     0.02%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::BalancingContext<alloc::string::String, alloc::vec::Vec<(vbl_runtime::scheduler::Prazo, u64)>>>::merge_tracking_child_edge::<alloc::alloc::Global>
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8c51ba20
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8c50ccfa
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b7c2120
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b2ab2c5
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8c50cd32
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b2aa305
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8baddee3
+     0.02%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::entry::VacantEntry<alloc::string::String, u64>>::insert_entry
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8c522068
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b727db4
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b35f704
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b2c335c
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b27881c
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b3be386
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b2afe3a
+     0.02%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::BTreeMap<alloc::string::String, u64>>::remove::<alloc::string::String>
+     0.02%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::map::entry::OccupiedEntry<alloc::string::String, alloc::vec::Vec<(vbl_runtime::scheduler::Prazo, u64)>>>::remove_kv
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b37994e
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b301b8a
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8c51f863
+     0.02%  vbl-soak  vbl-soak          [.] <vbl_runtime::caderno::NoopCaderno as vbl_runtime::caderno::Caderno>::record
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b6e63e9
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8af04104
+     0.02%  vbl-soak  vbl-soak          [.] std::io::default_read_to_end::<std::fs::File>
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b729718
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8c517ba8
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8c522062
+     0.02%  vbl-soak  libc.so.6         [.] alloc_perturb
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b33cd15
+     0.02%  vbl-soak  vbl-soak          [.] <alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::string::String, u64, alloc::collections::btree::node::marker::LeafOrInternal>, alloc::collections::btree::node::marker::KV>>::remove_kv_tracking::<<alloc::collections::btree::map::entry::OccupiedEntry<alloc::string::String, u64>>::remove_kv::{closure#0}, alloc::alloc::Global>
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b2d92ca
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b1afa20
+     0.02%  vbl-soak  vbl-soak          [.] <vbl_runtime::scheduler::Scheduler>::agendar
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8b6dfe03
+     0.02%  vbl-soak  [unknown]         [k] 0xffffffff8bade13f
+     0.01%  vbl-soak  [unknown]         [k] 0xffffffff8b1c5017
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b635ef4
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b624003
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8c51d060
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b20943b
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b562050
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8c51d044
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b554e16
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b554e19
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8c51d041
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b562055
+     0.00%  perf-exe  [unknown]         [k] 0xffffffff8b554e15
+     0.00%  perf-exe  [unknown]         [k] 0xffffffff8b562050
+     0.00%  perf-exe  [unknown]         [k] 0xffffffff8c520620
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b33aac1
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b554e10
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b554e15
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b554e29
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b562056
+     0.00%  vbl-soak  [unknown]         [k] 0xffffffff8b56208c
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
+exit=0
