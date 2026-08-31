@@ -11,11 +11,16 @@ mantendo os lados em degradê sobre a placa.
 
 ## Conceito
 
-- **Painel de vidro fosco (glass-morphism)**: aurora borrada
-  azul-verde-vermelha atrás de um painel translúcido (o blur do
+- **Disco de vidro fosco (glass-morphism)**: aurora borrada
+  azul-verde-vermelha atrás de um disco translúcido (o blur do
   `backdrop-filter` é simulado desfocando as manchas — renderiza em
   qualquer lugar), com luz de borda superior, contorno claro e reflexo
-  diagonal.
+  diagonal. **O centro do disco é o nó violeta** (o meta no coração da
+  marca, na fileira do horizonte). O raio (`glass_r`, fração do
+  semiquadro) é dimensionado para as luzes das pontas ficarem inteiras:
+  halo do vértice + folga (~8 px no emblema) não tocam a borda do disco,
+  a linha do horizonte termina na própria corda do círculo — nada
+  cortado no raio.
 - **Placa de metal escovado no lugar do preto**: o interior do triângulo é
   um aço frio (`#3f4a58→#252d37`) com ranhuras horizontais (o mesmo eixo do
   horizonte) e um brilho diagonal de metal.
@@ -68,7 +73,7 @@ python3 design/validate.py   # renderiza com inkscape e roda sondas de pixel
 Todos os parâmetros de desenho estão nos dicionários `EMB` e `ICO` em
 `gen.py` (raio, largura/profundidade dos dips — inclusive `w_main`/`depth`
 do pássaro central, alinhamento via `row_y()`, pulsos, wash, vazamentos,
-nós, linha do horizonte, vidro: `glass_*`/`blob_*`/`sheen_op`, metal:
-`metal_*`/`groove_*`/`trace_shadow_*`) e a paleta no topo do arquivo. O
-banner é composto em `banner.py`, ancorado na altura da fileira
-(`gen.row_y`).
+nós, linha do horizonte, disco de vidro: `glass_r`/`glass_*`/`blob_*`/
+`sheen_op`, metal: `metal_*`/`groove_*`/`trace_shadow_*`) e a paleta no topo
+do arquivo. O banner é composto em `banner.py`, ancorado na altura da
+fileira (`gen.row_y`).

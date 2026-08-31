@@ -6,10 +6,13 @@ fundo agora e vidro translucente, tudo e compostos sobre o escuro da UI
 (#11161d) antes de medir — o caso de uso real da marca.
 Sai com exito 0 apenas se todas as verificacoes passarem.
 """
+import math
 import os
 import subprocess
 import sys
 from PIL import Image
+
+import gen  # geometria canônica — as sondas derivam de gen.EMB (sem drift)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -21,9 +24,14 @@ FILES = {
     "banner": (os.path.join(ROOT, "docs", "verbolog-banner.svg"), 880),
 }
 
-# geometria esperada (espelha gen.EMB)
-ROW_Y = 208.5 + 190.0 / 4 - 54.0 / 2          # 229.0
+# geometria esperada (derivada de gen.EMB — sem valores mágicos)
+_EMB = gen.EMB
+ROW_Y = gen.row_y(_EMB)                       # 229.0 — fileira dos ápices
+CX, CY = _EMB["C"][0], ROW_Y                  # centro do disco = nó violeta
+RG = 512 / 2 * _EMB["glass_r"]                # raio do disco de vidro
 APICES = {(220.5, ROW_Y), (256.0, ROW_Y), (291.5, ROW_Y)}
+TL_X, TL_Y = _EMB["C"][0] - _EMB["R"] * gen.SQ3_2, _EMB["C"][1] - _EMB["R"] / 2
+TR_X = _EMB["C"][0] + _EMB["R"] * gen.SQ3_2
 
 def render(key):
     svg, w = FILES[key]
@@ -96,6 +104,45 @@ def main():
         print(f"  emblema [{'OK' if ok else 'FALHOU'}] {name}: {c}")
         if not ok:
             failures.append(name)
+
+    # vidro CIRCULAR: os cantos do quadro ficam FORA do disco (transparentes)
+    raw = Image.open(os.path.join(HERE, "preview-emblem.png")).convert("RGBA")
+    cantos = [raw.getpixel(pt)[3] for pt in ((8, 8), (503, 8), (8, 503), (503, 503))]
+    ok = all(a < 10 for a in cantos)
+    print(f"  emblema [{'OK' if ok else 'FALHOU'}] disco de vidro (cantos fora do circulo): alpha={cantos}")
+    if not ok:
+        failures.append("vidro nao e circular (cantos com tinta)")
+
+    # centro do disco = NO VIOLETA: a borda do disco deve passar exatamente
+    # onde a geometria manda (topo em cy-rg ~3; laterais em cx±rg ~30/482)
+    bordas = {
+        "topo y=1":  raw.getpixel((int(CX), 1))[3],
+        "topo y=6":  raw.getpixel((int(CX), 6))[3],
+        "esq x=27":  raw.getpixel((int(CX - RG) - 3, int(CY)))[3],
+        "esq x=33":  raw.getpixel((int(CX - RG) + 3, int(CY)))[3],
+        "dir x=485": raw.getpixel((int(CX + RG) + 3, int(CY)))[3],
+        "dir x=479": raw.getpixel((int(CX + RG) - 3, int(CY)))[3],
+    }
+    fora = bordas["topo y=1"] < 10 and bordas["esq x=27"] < 10 and bordas["dir x=485"] < 10
+    dentro = bordas["topo y=6"] > 15 and bordas["esq x=33"] > 15 and bordas["dir x=479"] > 15
+    ok = fora and dentro
+    print(f"  emblema [{'OK' if ok else 'FALHOU'}] disco centrado no no violeta ({CX:.0f},{CY:.0f}): {bordas}")
+    if not ok:
+        failures.append("disco fora de centro (bordas nao batem com cx±rg, cy-rg)")
+
+    # luzes das pontas INTEIRAS: amostra junto a borda do disco, na direcao dos
+    # vertices superiores (pontos mais apertados) — vidro com halo tenue, nada
+    # brilhante cortado no raio
+    for nome, (vx, vy) in (("borda do disco p/ vertice azul", (TL_X, TL_Y)),
+                           ("borda do disco p/ vertice vermelho", (TR_X, TL_Y))):
+        dx, dy = vx - CX, vy - CY
+        d = math.hypot(dx, dy)
+        sx, sy = CX + dx / d * (RG - 6), CY + dy / d * (RG - 6)
+        c = avg(px, sx, sy, r=2)
+        ok = lum(c) < 160
+        print(f"  emblema [{'OK' if ok else 'FALHOU'}] {nome} ({sx:.0f},{sy:.0f}): {c} (lum {lum(c):.0f})")
+        if not ok:
+            failures.append(nome)
 
     # --- icone a 32 px (favicon, sobre escuro) ---
     ic = comp(render("icon")).resize((32, 32))

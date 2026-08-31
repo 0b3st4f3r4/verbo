@@ -1,13 +1,14 @@
 <!--
 verbolog-triangle.svg — emblema mestre da marca VerboLang.
   Triângulo invertido (ponta do V para baixo, verde) em metal
-  escovado com ranhuras, sobre painel de vidro fosco com aurora
-  borrada azul-verde-vermelha. Vértices: azul #4da3ff (sup. esq.),
-  vermelho #ff5a52 (sup. dir.), verde #3fb96f. Arestas com stop
-  médio (teal, amarelo, violeta). Os três pássaros (dips) têm ápices
-  alinhados na linha tracejada do horizonte; o nó violeta central é
-  o nó principal. O vazamento interno mantém o centro sóbrio — o
-  triângulo vaza para dentro, nunca se fecha. Gerador: design/gen.py.
+  escovado com ranhuras, sobre disco de vidro fosco com aurora
+  borrada azul-verde-vermelha. O CENTRO DO DISCO é o nó violeta
+  (o meta no coração da marca), na fileira do horizonte. Vértices:
+  azul #4da3ff (sup. esq.), vermelho #ff5a52 (sup. dir.), verde
+  #3fb96f. Arestas com stop médio (teal, amarelo, violeta). Os três
+  pássaros (dips) têm ápices alinhados na linha tracejada do
+  horizonte. O raio do disco (glass_r) mantém as luzes das pontas
+  inteiras — nada corta na borda. Gerador: design/gen.py.
 Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="VerboLang">
@@ -29,7 +30,7 @@ Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
     <filter id="ebw" filterUnits="userSpaceOnUse" x="-256" y="-256" width="1024" height="1024"><feGaussianBlur stdDeviation="8.0"/></filter>
     <filter id="ebl1" filterUnits="userSpaceOnUse" x="-256" y="-256" width="1024" height="1024"><feGaussianBlur stdDeviation="6.0"/></filter>
     <filter id="ebl2" filterUnits="userSpaceOnUse" x="-256" y="-256" width="1024" height="1024"><feGaussianBlur stdDeviation="2.2"/></filter>
-    <clipPath id="epane"><rect x="0" y="0" width="512" height="512" rx="112.0"/></clipPath>
+    <clipPath id="epane"><circle cx="256.00" cy="229.00" r="226.05"/></clipPath>
     <clipPath id="etri"><polygon points="91.46 113.50 420.54 113.50 256.00 398.50"/></clipPath>
     <linearGradient id="egA" gradientUnits="userSpaceOnUse" x1="91.46" y1="113.50" x2="256.00" y2="398.50">
       <stop offset="0" stop-color="#4da3ff"/>
@@ -52,9 +53,9 @@ Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
     <circle cx="360.50" cy="123.00" r="117.80" fill="#ff5a52" opacity="0.6" filter="url(#ebb)"/>
     <circle cx="256.00" cy="345.30" r="129.58" fill="#3fb96f" opacity="0.6" filter="url(#ebb)"/>
   </g>
-  <rect x="0" y="0" width="512" height="512" rx="112.0" fill="url(#eglass)"/>
-  <rect x="3.0" y="3.0" width="506.00" height="506.00" rx="109.00" fill="none" stroke="url(#erim)" stroke-width="3.0"/>
-  <rect x="0" y="0" width="512" height="512" rx="112.0" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="2.0"/>
+  <circle cx="256.00" cy="229.00" r="226.05" fill="url(#eglass)"/>
+  <circle cx="256.00" cy="229.00" r="223.05" fill="none" stroke="url(#erim)" stroke-width="3.0"/>
+  <circle cx="256.00" cy="229.00" r="226.05" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="2.0"/>
   <polygon points="81.9,0 225.3,0 81.9,512 -61.4,512" fill="#ffffff" opacity="0.05" clip-path="url(#epane)"/>
   <g clip-path="url(#etri)">
     <polygon points="91.46 113.50 420.54 113.50 256.00 398.50" fill="url(#emetal)"/>
@@ -84,7 +85,7 @@ Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
     <line x1="0" y1="395.50" x2="512" y2="395.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
     <polygon points="92.2,0 204.8,0 51.2,512 -61.4,512" fill="#ffffff" opacity="0.06"/>
   </g>
-  <line x1="16.0" y1="229.00" x2="496.0" y2="229.00" stroke="#8a93a3" stroke-opacity="0.35" stroke-width="3.2" stroke-dasharray="6.4 22.4"/>
+  <line x1="45.95" y1="229.00" x2="466.05" y2="229.00" stroke="#8a93a3" stroke-opacity="0.35" stroke-width="3.2" stroke-dasharray="6.4 22.4"/>
   <g clip-path="url(#etri)">
     <path d="M 91.46 113.50 L 256.00 398.50" fill="none" stroke="url(#egA)" stroke-width="58.0" opacity="0.19" filter="url(#ebw)"/>
     <path d="M 256.00 398.50 L 420.54 113.50" fill="none" stroke="url(#egB)" stroke-width="58.0" opacity="0.19" filter="url(#ebw)"/>

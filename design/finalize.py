@@ -17,7 +17,7 @@ icon = gen.build("i", 64, gen.ICO)
 icon = icon.replace(
     '<svg xmlns',
     header("verbolog.svg — marca do projeto VerboLang.\n"
-           "  Triângulo de metal escovado com ranhuras sobre painel de vidro\n"
+           "  Triângulo de metal escovado com ranhuras sobre disco de vidro\n"
            "  fosco (aurora borrada azul-verde-vermelha) — ressoa como o V da\n"
            "  marca. Cada lado é um traço de osciloscópio que mergulha num V\n"
            "  (um pássaro); os três ápices formam uma fileira alinhada sobre a\n"
@@ -30,13 +30,14 @@ emb = emb.replace(
     '<svg xmlns',
     header("verbolog-triangle.svg — emblema mestre da marca VerboLang.\n"
            "  Triângulo invertido (ponta do V para baixo, verde) em metal\n"
-           "  escovado com ranhuras, sobre painel de vidro fosco com aurora\n"
-           "  borrada azul-verde-vermelha. Vértices: azul #4da3ff (sup. esq.),\n"
-           "  vermelho #ff5a52 (sup. dir.), verde #3fb96f. Arestas com stop\n"
-           "  médio (teal, amarelo, violeta). Os três pássaros (dips) têm ápices\n"
-           "  alinhados na linha tracejada do horizonte; o nó violeta central é\n"
-           "  o nó principal. O vazamento interno mantém o centro sóbrio — o\n"
-           "  triângulo vaza para dentro, nunca se fecha. Gerador: design/gen.py.") + '<svg xmlns', 1)
+           "  escovado com ranhuras, sobre disco de vidro fosco com aurora\n"
+           "  borrada azul-verde-vermelha. O CENTRO DO DISCO é o nó violeta\n"
+           "  (o meta no coração da marca), na fileira do horizonte. Vértices:\n"
+           "  azul #4da3ff (sup. esq.), vermelho #ff5a52 (sup. dir.), verde\n"
+           "  #3fb96f. Arestas com stop médio (teal, amarelo, violeta). Os três\n"
+           "  pássaros (dips) têm ápices alinhados na linha tracejada do\n"
+           "  horizonte. O raio do disco (glass_r) mantém as luzes das pontas\n"
+           "  inteiras — nada corta na borda. Gerador: design/gen.py.") + '<svg xmlns', 1)
 open(os.path.join(ROOT, "docs", "verbolog-triangle.svg"), "w").write(emb)
 
 # 3) banner

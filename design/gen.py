@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Gerador da marca VerboLang — triângulo invertido de metal sobre vidro fosco.
+"""Gerador da marca VerboLang — triângulo invertido de metal sobre disco de vidro.
 
 Conceito: triângulo equilátero INVERTIDO (ponto para baixo — ressoa como o V
 da marca original) como placa de metal escovado com ranhuras, apoiado num
-painel de vidro fosco (glass-morphism) com aurora borrada azul-verde-vermelha
-por trás. Cada lado é um traço de osciloscópio que mergulha num V (pássaro);
-os três ápices ficam ALINHADOS na linha do horizonte (tracejada). Cores puras
-nos vértices: azul (sup. esq.), vermelho (sup. dir.), verde (inferior). O nó
-central violeta é o nó principal. Simetria bilateral no eixo vertical.
+disco de vidro fosco (glass-morphism circular) com aurora borrada
+azul-verde-vermelha por trás. Cada lado é um traço de osciloscópio que
+mergulha num V (pássaro); os três ápices ficam ALINHADOS na linha do
+horizonte (tracejada). Cores puras nos vértices: azul (sup. esq.), vermelho
+(sup. dir.), verde (inferior). O nó central violeta é o nó principal.
+Simetria bilateral no eixo vertical. O centro do disco É o nó violeta (o
+meta no coração da marca); o raio (glass_r) garante as luzes das pontas
+inteiras: halo do vértice + folga não tocam a borda.
 """
 import math
 
@@ -92,6 +95,14 @@ def build(pre, size, p):
     sides = [(gid, Side(A, B, C, dict(p, w=w, depth=d, **ov)), cols, main, ov)
              for gid, A, B, cols, w, d, main, ov in specs]
 
+    # disco de vidro: centro NO nó violeta (o meta no coração da marca — o
+    # nó principal assenta na fileira do horizonte) e raio dimensionado para
+    # que as luzes das pontas (halos dos vértices + cap dos traços) fiquem
+    # INTEIRAS dentro do vidro, sem o disco estourar o quadro
+    cx = C[0]
+    cy = ry
+    rg = (size / 2) * p["glass_r"]
+
     freg = f'x="-256" y="-256" width="{size + 512}" height="{size + 512}"'
     grads = []
     for gid, side, (c1, cm, c2), _main, _ov in sides:
@@ -120,7 +131,7 @@ def build(pre, size, p):
     <filter id="{pre}bw" filterUnits="userSpaceOnUse" {freg}><feGaussianBlur stdDeviation="{p['blur_wash']}"/></filter>
     <filter id="{pre}bl1" filterUnits="userSpaceOnUse" {freg}><feGaussianBlur stdDeviation="{p['blur_l1']}"/></filter>
     <filter id="{pre}bl2" filterUnits="userSpaceOnUse" {freg}><feGaussianBlur stdDeviation="{p['blur_l2']}"/></filter>
-    <clipPath id="{pre}pane"><rect x="0" y="0" width="{size}" height="{size}" rx="{p['rx']}"/></clipPath>
+    <clipPath id="{pre}pane"><circle cx="{cx:.2f}" cy="{cy:.2f}" r="{rg:.2f}"/></clipPath>
     <clipPath id="{pre}tri"><polygon points="{fmt(TL)} {fmt(TR)} {fmt(Bot)}"/></clipPath>
 {chr(10).join(grads)}
   </defs>'''
@@ -139,12 +150,12 @@ def build(pre, size, p):
         out.append(f'    <circle cx="{bx:.2f}" cy="{by:.2f}" r="{br:.2f}" fill="{bc}" '
                    f'opacity="{p["blob_op"]}" filter="url(#{pre}bb)"/>')
     out.append('  </g>')
-    # vidro: fill translucido + luz de borda superior + contorno + reflexo diagonal
-    out.append(f'  <rect x="0" y="0" width="{size}" height="{size}" rx="{p["rx"]}" fill="url(#{pre}glass)"/>')
+    # vidro: disco translucido + luz de borda superior + contorno + reflexo diagonal
+    out.append(f'  <circle cx="{cx:.2f}" cy="{cy:.2f}" r="{rg:.2f}" fill="url(#{pre}glass)"/>')
     ins = p["rim_inset"]
-    out.append(f'  <rect x="{ins}" y="{ins}" width="{size - 2 * ins:.2f}" height="{size - 2 * ins:.2f}" '
-               f'rx="{max(p["rx"] - ins, 4):.2f}" fill="none" stroke="url(#{pre}rim)" stroke-width="{p["rim_w"]}"/>')
-    out.append(f'  <rect x="0" y="0" width="{size}" height="{size}" rx="{p["rx"]}" fill="none" '
+    out.append(f'  <circle cx="{cx:.2f}" cy="{cy:.2f}" r="{rg - ins:.2f}" '
+               f'fill="none" stroke="url(#{pre}rim)" stroke-width="{p["rim_w"]}"/>')
+    out.append(f'  <circle cx="{cx:.2f}" cy="{cy:.2f}" r="{rg:.2f}" fill="none" '
                f'stroke="#ffffff" stroke-opacity="{p["border_op"]}" stroke-width="{p["border_w"]}"/>')
     sheen = (size * 0.16, size * 0.44, -size * 0.12, size * 0.16)  # banda diagonal
     out.append(f'  <polygon points="{sheen[0]:.1f},0 {sheen[1]:.1f},0 {sheen[3]:.1f},{size} {sheen[2]:.1f},{size}" '
@@ -168,8 +179,11 @@ def build(pre, size, p):
                f'fill="#ffffff" opacity="{p["metal_sheen_op"]}"/>')
     out.append('  </g>')
 
-    # linha do horizonte: passa pelos tres pontos (apices alinhados), sobre o metal
-    out.append(f'  <line x1="{p["horizon_pad"]}" y1="{ry:.2f}" x2="{size - p["horizon_pad"]}" y2="{ry:.2f}" '
+    # linha do horizonte: passa pelos tres pontos (apices alinhados), sobre o
+    # metal; termina na corda do disco — nenhum traco cortado na borda do vidro
+    dy_h = ry - cy
+    chord = math.sqrt(max(rg * rg - dy_h * dy_h, 0.0)) - p["horizon_pad"]
+    out.append(f'  <line x1="{cx - chord:.2f}" y1="{ry:.2f}" x2="{cx + chord:.2f}" y2="{ry:.2f}" '
                f'stroke="{HORIZON}" stroke-opacity="{p["horizon_op"]}" stroke-width="{p["horizon_w"]}" '
                f'stroke-dasharray="{p["horizon_dash"]}"/>')
 
@@ -219,7 +233,7 @@ def build(pre, size, p):
     return "\n".join(out)
 
 
-EMB = dict(C=(256.0, 208.5), R=190.0, rx=112.0,
+EMB = dict(C=(256.0, 208.5), R=190.0, glass_r=0.883,
            w=40.0, depth=54.0, w_main=52.0, rr=11.0, bw=17.0, bh=11.0,
            stroke=7.5, wash_w=58.0, wash_op=0.19,
            leak1_w=22.0, leak1_op=0.30, leak2_w=9.5, leak2_op=0.50,
@@ -235,7 +249,7 @@ EMB = dict(C=(256.0, 208.5), R=190.0, rx=112.0,
            metal_sheen_op=0.06,
            trace_shadow_w=13.0, trace_shadow_op=0.35, blur_shadow=3.0)
 
-ICO = dict(C=(32.0, 27.5), R=22.0, rx=14.0,
+ICO = dict(C=(32.0, 27.5), R=22.0, glass_r=0.875,
            w=5.0, depth=6.75, w_main=6.5, rr=1.4, bw=3.6, bh=2.0,
            stroke=2.2, wash_w=7.5, wash_op=0.20,
            leak1_w=4.6, leak1_op=0.30, leak2_w=2.2, leak2_op=0.50,

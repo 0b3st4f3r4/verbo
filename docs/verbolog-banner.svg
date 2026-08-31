@@ -32,7 +32,7 @@ Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
     <filter id="bbw" filterUnits="userSpaceOnUse" x="-256" y="-256" width="1024" height="1024"><feGaussianBlur stdDeviation="8.0"/></filter>
     <filter id="bbl1" filterUnits="userSpaceOnUse" x="-256" y="-256" width="1024" height="1024"><feGaussianBlur stdDeviation="6.0"/></filter>
     <filter id="bbl2" filterUnits="userSpaceOnUse" x="-256" y="-256" width="1024" height="1024"><feGaussianBlur stdDeviation="2.2"/></filter>
-    <clipPath id="bpane"><rect x="0" y="0" width="512" height="512" rx="112.0"/></clipPath>
+    <clipPath id="bpane"><circle cx="256.00" cy="229.00" r="226.05"/></clipPath>
     <clipPath id="btri"><polygon points="91.46 113.50 420.54 113.50 256.00 398.50"/></clipPath>
     <linearGradient id="bgA" gradientUnits="userSpaceOnUse" x1="91.46" y1="113.50" x2="256.00" y2="398.50">
       <stop offset="0" stop-color="#4da3ff"/>
@@ -55,9 +55,9 @@ Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
     <circle cx="360.50" cy="123.00" r="117.80" fill="#ff5a52" opacity="0.6" filter="url(#bbb)"/>
     <circle cx="256.00" cy="345.30" r="129.58" fill="#3fb96f" opacity="0.6" filter="url(#bbb)"/>
   </g>
-  <rect x="0" y="0" width="512" height="512" rx="112.0" fill="url(#bglass)"/>
-  <rect x="3.0" y="3.0" width="506.00" height="506.00" rx="109.00" fill="none" stroke="url(#brim)" stroke-width="3.0"/>
-  <rect x="0" y="0" width="512" height="512" rx="112.0" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="2.0"/>
+  <circle cx="256.00" cy="229.00" r="226.05" fill="url(#bglass)"/>
+  <circle cx="256.00" cy="229.00" r="223.05" fill="none" stroke="url(#brim)" stroke-width="3.0"/>
+  <circle cx="256.00" cy="229.00" r="226.05" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="2.0"/>
   <polygon points="81.9,0 225.3,0 81.9,512 -61.4,512" fill="#ffffff" opacity="0.05" clip-path="url(#bpane)"/>
   <g clip-path="url(#btri)">
     <polygon points="91.46 113.50 420.54 113.50 256.00 398.50" fill="url(#bmetal)"/>
@@ -87,7 +87,7 @@ Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
     <line x1="0" y1="395.50" x2="512" y2="395.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
     <polygon points="92.2,0 204.8,0 51.2,512 -61.4,512" fill="#ffffff" opacity="0.06"/>
   </g>
-  <line x1="16.0" y1="229.00" x2="496.0" y2="229.00" stroke="#8a93a3" stroke-opacity="0.35" stroke-width="3.2" stroke-dasharray="6.4 22.4"/>
+  <line x1="45.95" y1="229.00" x2="466.05" y2="229.00" stroke="#8a93a3" stroke-opacity="0.35" stroke-width="3.2" stroke-dasharray="6.4 22.4"/>
   <g clip-path="url(#btri)">
     <path d="M 91.46 113.50 L 256.00 398.50" fill="none" stroke="url(#bgA)" stroke-width="58.0" opacity="0.19" filter="url(#bbw)"/>
     <path d="M 256.00 398.50 L 420.54 113.50" fill="none" stroke="url(#bgB)" stroke-width="58.0" opacity="0.19" filter="url(#bbw)"/>
