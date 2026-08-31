@@ -252,6 +252,13 @@ impede carregá-la inteira. Regras para a equipe de agentes:
   `web/docs.html` serve a documentação renderizada (FORMAL, Manifesto,
   cheat sheets — markdown do repo via `web/md.js`, testado em
   `tests/unit/web/md.test.js`).
+- A documentação **publicada** é o livro mdBook (`site/`) em
+  <https://verbolang.org/docs>: montado dos arquivos do repo por
+  `scripts/build_site.py`, portaria `make site-check` (contrato em
+  `tests/unit/test_site_build.py` + `tests/unit/web/site.test.js`) e
+  preview `make site`. Ao mudar `docs/**` ou a trilha (`site/content/**`),
+  rode a portaria — links novos precisam resolver dentro do livro ou no
+  repo (o montador falha com link quebrado).
 
 ## 6. Economia de contexto para agentes (rtk)
 

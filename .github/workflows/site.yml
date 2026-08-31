@@ -1,0 +1,87 @@
+# Site de documentação (GitHub Pages) — verbolang.org/docs.
+#
+# O livro mdBook (site/) é montado por scripts/build_site.py a partir do
+# próprio repositório (trilha didática + docs/ + web/vendor) e publicado
+# sob /docs — o artefato usa caminhos relativos, então funciona sob a base
+# que o domínio determinar (verbolang.org/docs ou <conta>.github.io/verbo/).
+#
+# Dispara em push para main (quando o livro pode mudar), em tag v* (a
+# release republica o site) e manualmente. O deploy usa o environment
+# `github-pages` — ative "GitHub Pages → Source: GitHub Actions" uma vez
+# (o configure-pages com enablement faz isso no primeiro run).
+name: Site (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "examples/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "web/vendor/**"
+      - "web/fonts/**"
+      - "web/verbolog.svg"
+      - "scripts/build_site.py"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# um deploy por vez; não cancele um deploy em andamento
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+env:
+  MDBOOK_VERSION: "0.5.4"
+
+jobs:
+  construir:
+    name: Montar e compilar o livro
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar mdbook v${MDBOOK_VERSION} (binário oficial)
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSL "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Portaria — checagens do livro (SUMMARY, links, base-path)
+        run: make site-check
+
+      - name: Montar src e compilar
+        run: |
+          python3 scripts/build_site.py
+          mdbook build site
+
+      - name: Preparar artefato do Pages (livro em /docs + landing raiz)
+        run: python3 scripts/build_site.py --pages _pages
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _pages
+
+  publicar:
+    name: Publicar (deploy-pages)
+    needs: construir
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

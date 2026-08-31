@@ -31,7 +31,10 @@ help:
 > @echo "VerboLang — atalhos:"
 > @echo "  make check   valida shell + JS inline da UI (rápido, offline)"
 > @echo "  make smoke   testa endpoints locais (precisa do servidor no ar)"
-> @echo "  make release-check  bateria antes da tag: check + testes web + smoke (docs/RELEASES.md)"
+> @echo "  make release-check  bateria antes da tag: check + testes web + site-check + smoke (docs/RELEASES.md)"
+> @echo "  make site-check  valida o livro do site (SUMMARY, links, assets — sem compilar)"
+> @echo "  make site-build  monta site/src e compila o livro (mdbook ≥ 0.5)"
+> @echo "  make site        compila e serve o livro em http://127.0.0.1:$(SITE_PORT)/"
 > @echo "  make setup   cria .venv e instala requirements-dev.txt"
 > @echo "  make test    suíte completa: unitários (pytest) + BDD (behave)"
 > @echo "  make test-unit  apenas testes unitários (pytest)"
@@ -75,6 +78,7 @@ release-check:
   echo "── release-check: bateria da release ──"; \
   $(MAKE) --no-print-directory check; \
   node --test tests/unit/web/*.test.js; \
+  $(MAKE) --no-print-directory site-check; \
   $(MAKE) --no-print-directory smoke; \
   echo "✓ release-check OK — atualize o CHANGELOG.md e marque a tag anotada"
 
@@ -100,6 +104,31 @@ setup:
 > @$(PYTHON) -m venv .venv
 > @.venv/bin/pip install -r requirements-dev.txt
 > @echo "venv pronto (.venv) — use make test"
+
+# ── site de documentação (site/, mdBook — verbolang.org/docs) ─────────────
+# mdbook ≥ 0.5 (testado em 0.5.4): cargo install mdbook --locked
+#   make site-check  portaria hermética: montagem + validação (sem compilar)
+#   make site-build  monta src/ e compila o livro em site/book/
+#   make site        build + servidor local em http://127.0.0.1:$(SITE_PORT)/
+MDBOOK ?= mdbook
+SITE_PORT ?= 8288
+
+site-check:
+> @python3 scripts/build_site.py --check
+> @node --check site/theme/i18n.js && node --check site/theme/verbolang.js && node --check site/theme/mermaid-init.js
+> @node --test tests/unit/web/site.test.js
+
+site-build: site-check
+> @python3 scripts/build_site.py
+> @if command -v $(MDBOOK) >/dev/null 2>&1; then \
+>   $(MDBOOK) build site; \
+> else \
+>   echo "mdbook não encontrado — instale com: cargo install mdbook --locked (≥ 0.5)"; exit 1; \
+> fi
+
+site: site-build
+> @echo "livro em site/book — servindo em http://127.0.0.1:$(SITE_PORT)/ (Ctrl+C encerra)"
+> @python3 -m http.server $(SITE_PORT) --directory site/book
 
 test:
 > @$(PYTHON_BIN) -m pytest -q tests/unit

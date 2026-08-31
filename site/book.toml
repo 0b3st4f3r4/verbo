@@ -1,0 +1,40 @@
+# book.toml — o livro de documentação da VerboLang (site/, mdBook ≥ 0.5).
+#
+# Publicado em verbolang.org/docs via GitHub Pages
+# (.github/workflows/site.yml) e compilável localmente:
+#   make site          # monta src + compila + serve
+#
+# O conteúdo é pt-BR (fonte canônica); o cromo é traduzido pelo tema
+# (site/theme/i18n.js — as 7 línguas da família). O montador
+# (scripts/build_site.py) gera src/ a partir de content/ + docs/ + web/
+# com links relativos — o livro funciona sob qualquer base, inclusive /docs.
+
+[book]
+title = "VerboLang"
+authors = ["Silvano Neto"]
+description = "A linguagem onde nenhum dado é inerte — documentação didática, especificação formal e projeto."
+language = "pt-BR"
+src = "src"
+
+[build]
+build-dir = "book"
+# capítulo listado no SUMMARY e ausente na árvore = erro, não aviso
+create-missing = false
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+# documentação técnica: `->` e `--ticks` são literais, não tipografia
+smart-punctuation = false
+additional-css = ["src/assets/site.css"]
+additional-js = ["src/assets/verbolang.js", "src/assets/mermaid-init.js", "src/assets/i18n.js"]
+git-repository-url = "https://github.com/0b3st4f3r4/verbo"
+git-repository-icon = "fab-github"
+edit-url-template = "https://github.com/0b3st4f3r4/verbo/edit/main/site/content/{path}"
+
+[output.html.search]
+enable = true
+
+[output.html.fold]
+enable = true
+level = 0

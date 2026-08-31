@@ -99,3 +99,27 @@ jobs:
       # A validação do cheat sheet (PLAN §7) exige o LLM local e roda como
       # job manual na máquina do desenvolvedor:
       #   make serve  →  make validate-cheatsheet
+
+  site:
+    name: Site (mdBook — portaria do livro)
+    runs-on: ubuntu-latest
+    env:
+      MDBOOK_VERSION: "0.5.4"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar mdbook v${MDBOOK_VERSION} (binário oficial)
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSL "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # checagens herméticas (montagem + validação, sem compilar)
+      - name: site-check (SUMMARY, links, assets, base-path)
+        run: make site-check
+
+      # compilação completa: SUMMARY estrito (create-missing=false),
+      # config 0.5 válida e todo capítulo renderiza
+      - name: site-build (mdbook build)
+        run: make site-build

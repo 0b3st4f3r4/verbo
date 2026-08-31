@@ -60,6 +60,24 @@ Quando a CPU ultrapassa 85 °C, o runtime substitui o valor da forma pelo valor 
 canônico, dissolve-a no mesmo tick e envia o comando de limitação de potência ao ator
 `CpuPowerCap`. Tudo — leitura, subversão, atuação, Joules dissipados — vai para o Caderno.
 
+## Documentação no ar — verbolang.org/docs
+
+O livro didático do projeto é publicado em **verbolang.org/docs** (GitHub
+Pages): uma trilha em sete capítulos (da visão geral às receitas), as seções
+de Referência (FORMAL, manifesto, cheat sheets, schemas, ADR) e de Projeto
+(este README, PLAN, RELEASES, CHANGELOG) — tudo montado dos arquivos do
+próprio repositório por [`scripts/build_site.py`](scripts/build_site.py) e
+compilado com [mdBook](https://rust-lang.github.io/mdBook/). No local:
+
+```bash
+make site        # valida, compila (site/book/) e serve em http://127.0.0.1:8288/
+```
+
+O CI repete a portaria (`make site-check`) a cada push e o workflow
+[`.github/workflows/site.yml`](.github/workflows/site.yml) republica o livro
+a cada mudança relevante — os links internos são relativos, então o site
+funciona sob qualquer base.
+
 ## Protótipo de referência
 
 O blueprint em Python emula engine, FXP e Caderno, e serve como especificação
@@ -144,6 +162,10 @@ embeddings com o chat desligado ou em outra máquina.
 | [`docs/FXP-SCHEMA-v1.md`](docs/FXP-SCHEMA-v1.md) | Schema v1 do Flux Protocol: frames, opcodes, flags, timeouts, config e rastreabilidade |
 | [`docs/NOTEBOOK-FORMAT-v1.md`](docs/NOTEBOOK-FORMAT-v1.md) | Formato binário `.vcad` do Caderno de produção: frames, cadeia SHA-256, rodapé e verificação externa |
 | [`core/`](core/) | Núcleo em Rust (Etapa 2+): `vbl-lang`, `vbl-runtime`, `vbl-fxp` (protocolo, drivers, barramento) e `vbl-cli` |
+| [`examples/`](examples/) | Programas `.vl` executáveis — do pensamento livre (`example1`) aos cenários FXP com `subvert` e sensor ausente (`example6`) |
+| [`site/`](site/content/SUMMARY.md) | Livro de documentação (mdBook): trilha didática em [`content/`](site/content/), tema da marca em [`theme/`](site/theme/), `src/`/`book/` são gerados (git-ignorados) |
+| [`scripts/build_site.py`](scripts/build_site.py) | Monta o livro a partir do repo (reescrita de links, mapa repo→livro) e valida SUMMARY/links/base-path (`--check`) |
+| [`.github/workflows/site.yml`](.github/workflows/site.yml) | Publica o livro em verbolang.org/docs (GitHub Pages) em push/tag/manual |
 | [`docs/setup/SETUP-LOCAL-LLM.md`](docs/setup/SETUP-LOCAL-LLM.md) | Pipeline de LLMs: GLM-5.3/Flash (cloud) + Qwen3-4B-2507 (local) |
 | [`prototype/verbolang-complete-blueprint.py`](prototype/verbolang-complete-blueprint.py) | Protótipo de referência (FXP, runtime, Caderno, bloco `main`) |
 | [`prototype/verbolang-llm-poc.py`](prototype/verbolang-llm-poc.py) | PoC: comunicação inter-LLM (agentes LLM como atores/sensores no FXP) |

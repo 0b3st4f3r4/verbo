@@ -1,0 +1,269 @@
+/*
+ * site.css — a marca VerboLang sobre o tema do mdBook 0.5.
+ *
+ * O livro herda a linguagem visual da família (web/): vidro fosco com
+ * aurora borrada, horizonte tracejado, espectro azul→teal→verde→amarelo→
+ * vermelho e o violeta do meta. A página da documentação é a da RAZÃO
+ * (ciano, o lado frio e claro do triângulo) — como o docs.html do
+ * dashboard. Temas do mdBook mapeados: light/rust → tema claro da marca;
+ * coal/navy/ayu → tema escuro.
+ *
+ * Fontes auto-hospedadas (SIL OFL 1.1, web/fonts/LICENSE-FONTS.txt),
+ * copiadas pelo montador para assets/fonts/ e emitidas pelo mdBook em
+ * src/assets/ — por isso o ../.. nos url() (relativos a ESTE arquivo).
+ * Parte do projeto VerboLang — GNU GPL-3.0 (ver LICENSE).
+ */
+
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../../assets/fonts/inter-latin-400.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("../../assets/fonts/inter-latin-600.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../../assets/fonts/inter-latin-700.woff2") format("woff2"); }
+@font-face { font-family: "Iosevka"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../../assets/fonts/iosevka-latin-400.woff2") format("woff2"); }
+
+/* ── tokens da marca, por tema do mdBook ──────────────────────────────── */
+
+:root {
+  --vbl-accent: #35c9c1;
+  --vbl-ok: #3fb96f;
+  --vbl-warn: #e0c94f;
+  --vbl-bad: #ff5a52;
+  --vbl-meta: #a55cff;
+  --vbl-tok-k: #35c9c1;
+  --vbl-tok-s: #3fb96f;
+  --vbl-tok-c: #8fa1b5;
+}
+
+html.coal, html.navy, html.ayu {
+  color-scheme: dark;
+  --bg: #0e1319;
+  --fg: #dde6f0;
+  --vbl-border: #29323e;
+  --vbl-dim: #8fa1b5;
+  --vbl-panel: #171d24;
+  --vbl-panel-2: #1b232c;
+  --vbl-code-bg: #0d1116;
+  --vbl-aur1: rgba(77,163,255,.14);
+  --vbl-aur2: rgba(255,90,82,.12);
+  --vbl-aur3: rgba(63,185,111,.10);
+
+  --sidebar-bg: #121922;
+  --sidebar-fg: #aebccd;
+  --sidebar-non-existant: #46525f;
+  --sidebar-active: var(--vbl-accent);
+  --sidebar-spacer: #18212b;
+  --sidebar-header-border-color: var(--vbl-border);
+
+  --icons: #6d7f92;
+  --icons-hover: var(--vbl-accent);
+  --links: var(--vbl-accent);
+
+  --inline-code-color: #b9cfe6;
+  --theme-popup-bg: var(--vbl-panel);
+  --theme-popup-border: var(--vbl-border);
+  --theme-hover: var(--vbl-panel-2);
+
+  --quote-bg: var(--vbl-panel);
+  --quote-border: var(--vbl-accent);
+
+  --table-border-color: var(--vbl-border);
+  --table-header-bg: var(--vbl-panel-2);
+  --table-alternate-bg: #131a22;
+
+  --searchbar-bg: #10161d;
+  --searchbar-border-color: var(--vbl-border);
+  --searchbar-fg: var(--fg);
+  --searchbar-shadow-color: rgba(0,0,0,.35);
+  --searchresults-header-fg: var(--vbl-dim);
+  --searchresults-li-bg: var(--vbl-panel);
+  --search-mark-bg: var(--vbl-warn);
+
+  --blockquote-note-color: var(--vbl-accent);
+  --blockquote-tip-color: var(--vbl-ok);
+  --blockquote-warning-color: var(--vbl-warn);
+  --blockquote-caution-color: var(--vbl-bad);
+  --blockquote-important-color: var(--vbl-meta);
+}
+
+html.light, html.rust {
+  color-scheme: light;
+  --bg: #f2f5f8;
+  --fg: #1b2530;
+  --vbl-border: #cfd7e0;
+  --vbl-dim: #5a6a7b;
+  --vbl-panel: #ffffff;
+  --vbl-panel-2: #eaeef3;
+  --vbl-code-bg: #eef2f6;
+  --vbl-tok-k: #0a7d75;
+  --vbl-tok-s: #23804d;
+  --vbl-tok-c: #5a6a7b;
+  --vbl-aur1: rgba(77,163,255,.10);
+  --vbl-aur2: rgba(255,90,82,.08);
+  --vbl-aur3: rgba(63,185,111,.08);
+
+  --sidebar-bg: #e9eef4;
+  --sidebar-fg: #3c4a5a;
+  --sidebar-non-existant: #9aa6b2;
+  --sidebar-active: #0a7d75;
+  --sidebar-spacer: #dde5ed;
+  --sidebar-header-border-color: var(--vbl-border);
+
+  --icons: #7c8a99;
+  --icons-hover: #0a7d75;
+  --links: #0a7d75;
+
+  --inline-code-color: #23445c;
+  --theme-popup-bg: #ffffff;
+  --theme-popup-border: var(--vbl-border);
+  --theme-hover: var(--vbl-panel-2);
+
+  --quote-bg: var(--vbl-panel-2);
+  --quote-border: #0a7d75;
+
+  --table-border-color: var(--vbl-border);
+  --table-header-bg: var(--vbl-panel-2);
+  --table-alternate-bg: #f5f8fb;
+
+  --searchbar-bg: #ffffff;
+  --searchbar-border-color: var(--vbl-border);
+  --searchbar-fg: var(--fg);
+  --searchbar-shadow-color: rgba(27,37,48,.10);
+  --searchresults-header-fg: var(--vbl-dim);
+  --searchresults-li-bg: #ffffff;
+  --search-mark-bg: #e7d27a;
+
+  --blockquote-note-color: #0a7d75;
+  --blockquote-tip-color: #23804d;
+  --blockquote-warning-color: #a06f12;
+  --blockquote-caution-color: #c04343;
+  --blockquote-important-color: #7a3cf0;
+}
+
+/* ── tipografia da família ─────────────────────────────────────────────── */
+
+html, body {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+code, pre, kbd, samp, .sidebar .chapter-item .toggle {
+  font-family: "Iosevka", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ── aurora borrada (fundo fixo da marca) ──────────────────────────────── */
+
+body {
+  background:
+    radial-gradient(46rem 30rem at 14% -8%, var(--vbl-aur1), transparent 62%),
+    radial-gradient(46rem 30rem at 86% -8%, var(--vbl-aur2), transparent 62%),
+    radial-gradient(40rem 26rem at 50% 112%, var(--vbl-aur3), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+/* ── vidro fosco: barra superior e barra lateral ───────────────────────── */
+
+.menu-bar {
+  background: color-mix(in srgb, var(--vbl-panel) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border-bottom: 1px solid var(--vbl-border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .menu-bar { background: var(--vbl-panel); }
+}
+
+.sidebar {
+  background: color-mix(in srgb, var(--sidebar-bg) 88%, transparent);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border-right: 1px solid var(--vbl-border);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .sidebar { background: var(--sidebar-bg); }
+}
+
+/* títulos de parte no sumário (Trilha · Referência · Projeto) */
+.sidebar .part-title, .sidebar .part-title a {
+  font-family: "Iosevka", ui-monospace, monospace;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--vbl-dim);
+}
+.sidebar .chapter-item.active > a { color: var(--sidebar-active); }
+
+/* ── o cartão do conteúdo ──────────────────────────────────────────────── */
+
+.page > .content {
+  background: color-mix(in srgb, var(--vbl-panel) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border: 1px solid var(--vbl-border);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 4px 14px rgba(0,0,0,.18);
+  margin-top: 1rem;
+  padding: 1.6rem 2rem 2rem;
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .page > .content { background: var(--vbl-panel); }
+}
+
+.content h1, .content h2 {
+  border-bottom: 1px dashed var(--vbl-dim);
+  padding-bottom: .35rem;
+  opacity: 1;
+}
+.content h2, .content h3 { line-height: 1.25; }
+.content a { text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.content blockquote { border-radius: 0 9px 9px 0; }
+.content img { max-width: 100%; }
+
+/* código: cercas com borda, tokens da marca */
+.content pre {
+  background: var(--vbl-code-bg);
+  border: 1px solid var(--vbl-border);
+  border-radius: 8px;
+}
+.content code { border-radius: 5px; }
+.tok-k { color: var(--vbl-tok-k); font-weight: 600; }
+.tok-s { color: var(--vbl-tok-s); }
+.tok-c { color: var(--vbl-tok-c); font-style: italic; }
+
+/* diagramas mermaid: caixa centrada; erro honesto em tracejado vermelho */
+.mermaid-box { margin: 1em 0; text-align: center; }
+.mermaid-box svg { max-width: 100%; height: auto; }
+pre.mermaid-error { outline: 1px dashed var(--vbl-bad); }
+
+/* navegação anterior/próxima */
+.nav-wrapper { color: var(--vbl-dim); }
+.nav-wrapper a { color: var(--links); }
+
+/* ── landing (content/README.md) ───────────────────────────────────────── */
+
+.vbl-hero { text-align: center; margin: 1.5rem 0 2rem; }
+.vbl-hero img { width: min(340px, 70%); height: auto; }
+.vbl-hero h1 { border-bottom: 0; margin-bottom: .2rem; }
+.vbl-hero .vbl-versao {
+  display: inline-block;
+  font-family: "Iosevka", ui-monospace, monospace;
+  font-size: .78rem;
+  color: var(--vbl-accent);
+  border: 1px solid var(--vbl-border);
+  border-radius: 999px;
+  padding: .3rem .8rem;
+  background: color-mix(in srgb, var(--vbl-panel) 74%, transparent);
+}
+.vbl-cards { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); padding: 0; list-style: none; }
+.vbl-cards li {
+  border: 1px solid var(--vbl-border);
+  border-radius: 12px;
+  padding: .8rem 1rem;
+  background: color-mix(in srgb, var(--vbl-panel-2) 82%, transparent);
+}
+.vbl-cards a { font-weight: 600; }
+.vbl-cards .vbl-num {
+  font-family: "Iosevka", ui-monospace, monospace;
+  color: var(--vbl-accent);
+  margin-right: .4rem;
+}

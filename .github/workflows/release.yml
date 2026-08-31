@@ -18,6 +18,8 @@ jobs:
   artefatos:
     name: Artefatos da release
     runs-on: ubuntu-latest
+    env:
+      MDBOOK_VERSION: "0.5.4"
     steps:
       - uses: actions/checkout@v4
 
@@ -54,17 +56,34 @@ jobs:
         working-directory: core
         run: cargo build --release -p vbl-cli
 
+      # O livro didático entra na release pronto para ler (site/book — estático,
+      # serve com qualquer http.server ou pelo webui.py em /site/book/) e as
+      # fontes do site para recompilar localmente.
+      - name: Instalar mdbook v${MDBOOK_VERSION} (binário oficial)
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSL "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Compilar o site (montagem + mdbook)
+        run: |
+          python3 scripts/build_site.py
+          mdbook build site
+
       # O pacote carrega o verbo inteiro: o binário, o dashboard de vidro
-      # (web/, com vendor e fontes), a documentação, os exemplos e os
-      # scripts — extraído, `python3 scripts/webui.py` serve a raiz do
-      # diretório como no repositório.
+      # (web/, com vendor e fontes), a documentação, o livro didático
+      # compilado (site/ — book + fontes), os exemplos e os scripts —
+      # extraído, `python3 scripts/webui.py` serve a raiz do diretório como
+      # no repositório (livro em /site/book/index.html).
       - name: Empacotar (binário + dashboard + documentos) e carimbar SHA-256
         run: |
           V="${GITHUB_REF_NAME}"
           DIR="verblang-${V}"
           mkdir -p "${DIR}"
           cp core/target/release/vbl "${DIR}/"
-          cp -r docs examples scripts web "${DIR}/"
+          cp -r docs examples scripts web site "${DIR}/"
+          rm -rf "${DIR}/site/src"   # intermediário da montagem — o book já o tem compilado
           cp LICENSE README.md CHANGELOG.md "${DIR}/"
           tar -czf "verblang-${V}-linux-x86_64.tar.gz" "${DIR}"
           sha256sum "verblang-${V}-linux-x86_64.tar.gz" > "SHA256SUMS-${V}"

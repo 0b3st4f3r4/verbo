@@ -1,0 +1,16 @@
+// Exemplo 6 — falha de sensor (FORMAL §4.7): forma que depende de um
+// sensor FORA do registro do FXP. Rode com --allow-unregistered para ver
+// a condição NÃO ser avaliada (alerta no Caderno) em vez de leitura zero:
+//   vbl run examples/example6_sensor_ausente.vl \
+//       --allow-unregistered --ticks 3 --ledger tmp-logs/sensor-ausente.vcad
+nonequilibrium VigiaSolar {
+    value: "colheita_dependente_de_sol",
+    horizon: 30s,
+    source_path: "solar_panel",
+    maintenance_deadline: 10s,
+    exchange_mode: "cooperation"
+}
+
+review VigiaSolar {
+    when solar_panel < 20% -> dissolve
+}
