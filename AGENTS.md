@@ -233,9 +233,11 @@ a especificação não está no seu treino e a janela de 4096 tokens do servidor
 impede carregá-la inteira. Regras para a equipe de agentes:
 
 - Ao delegar tarefas da linguagem ao modelo local, **injete o contexto
-  necessário no prompt** — preferencialmente o cheat sheet canônico
-  [`docs/VBL-CHEATSHEET.md`](docs/VBL-CHEATSHEET.md) (demanda e caminhos em
-  [`docs/PLAN.md`](docs/PLAN.md) §7).
+  necessário no prompt** — preferencialmente o cheat sheet denso para agentes
+  [`docs/VBL-CHEATSHEET-AGENTES.md`](docs/VBL-CHEATSHEET-AGENTES.md)
+  (~1.200 tokens; o canônico completo
+  [`docs/VBL-CHEATSHEET.md`](docs/VBL-CHEATSHEET.md) é a referência humana;
+  demanda e caminhos em [`docs/PLAN.md`](docs/PLAN.md) §7).
 - **Nunca presuma** que sintaxe ou semântica produzidas pelo modelo local estão
   corretas: toda saída usada como artefato passa pela validação do GQT contra a
   `FORMAL.md`.

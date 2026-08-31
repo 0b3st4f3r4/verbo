@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Validação do cheat sheet canônico contra o modelo local (docs/PLAN.md §7).
+"""Validação do cheat sheet contra o modelo local (docs/PLAN.md §7).
 
 Executa o banco fixo de 20 prompts (docs/CHEATSHEET-PROMPTS.yaml) N vezes
-contra um endpoint OpenAI-compatível (o vLLM local do projeto), injetando
-docs/VBL-CHEATSHEET.md como prompt de sistema, e avalia:
+contra um endpoint OpenAI-compatível (o vLLM local do projeto), injetando a
+versão densa para agentes (docs/VBL-CHEATSHEET-AGENTES.md — a mesma que a UI
+injeta no modo "+ VerboLang") como prompt de sistema, e avalia:
 
 - prompts de sintaxe: o primeiro bloco de código da resposta deve passar no
   mini-validador `tests/vlcheck.py` (verificador sintático dedicado — o
@@ -132,11 +133,11 @@ def avaliar(prompt: dict, resposta: str) -> dict:
             resultado["motivos"].append("sem bloco de código .vl")
         else:
             codigo = "\n".join(blocos)
-            erros = vlcheck.validar(blocos[0])
+            erros = vlcheck.validate(blocos[0])
             if erros:
                 resultado["ok"] = False
                 resultado["motivos"].append(
-                    "sintaxe: " + "; ".join(f"{e.codigo} L{e.linha} ({e.mensagem})"
+                    "sintaxe: " + "; ".join(f"{e.code} L{e.line} ({e.message})"
                                             for e in erros[:4]))
     ok_rubrica, detalhes = rubrica_passa(resposta, prompt["rubrica"], codigo)
     resultado["rubrica"] = detalhes
@@ -185,7 +186,7 @@ def main() -> int:
                           "qwen3-4b"))
     parser.add_argument("--api-key-env", default="LOCAL_VLLM_KEY")
     parser.add_argument("--banco", default="docs/CHEATSHEET-PROMPTS.yaml")
-    parser.add_argument("--cheatsheet", default="docs/VBL-CHEATSHEET.md")
+    parser.add_argument("--cheatsheet", default="docs/VBL-CHEATSHEET-AGENTES.md")
     parser.add_argument("--saida", default="docs/CHEATSHEET-VALIDATION.md")
     parser.add_argument("--execucoes", type=int, default=None,
                         help="sobrepõe execucoes_por_prompt do banco")

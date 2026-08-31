@@ -166,8 +166,9 @@ embeddings com o chat desligado ou em outra máquina.
 | [`web/`](web/README.md) | Dashboard do runtime: entrada ([`index.html`](web/index.html)), **chat** single-file ([`chat.html`](web/chat.html): streaming SSE, medidor de contexto, alternância puro ↔ +VerboLang) e **métricas em tempo real** do Caderno ([`metrics.html`](web/metrics.html)) |
 | [`scripts/webui.py`](scripts/webui.py) | Ponte do dashboard: estático na raiz do repo + métricas SSE do Caderno (`.vcad`/JSONL) — só stdlib |
 | [`web/verbolog.svg`](web/verbolog.svg) | Marca do projeto (logo e favicon da UI) |
-| [`docs/verbolog-triangle.svg`](docs/verbolog-triangle.svg) | Emblema mestre da marca: triângulo invertido de gradientes azul-verde-vermelho, três pássaros alinhados no horizonte (gerador em [`design/`](design/)) |
-| [`docs/VBL-CHEATSHEET.md`](docs/VBL-CHEATSHEET.md) | VerboLang em uma página — cheat sheet canônico injetável como prompt de sistema |
+| [`docs/verbolog-triangle.svg`](docs/verbolog-triangle.svg) | Emblema mestre da marca: triângulo invertido de metal escovado sobre vidro fosco, lados em degradê azul-verde-vermelho, três pássaros alinhados no horizonte (gerador em [`design/`](design/)) |
+| [`docs/VBL-CHEATSHEET-AGENTES.md`](docs/VBL-CHEATSHEET-AGENTES.md) | Cheat sheet denso para agentes (~1.200 tokens) — a versão injetada pela UI e pelo validador |
+| [`docs/VBL-CHEATSHEET.md`](docs/VBL-CHEATSHEET.md) | VerboLang em uma página — cheat sheet canônico completo (referência humana, fonte do denso) |
 | [`LICENSE`](LICENSE) | Licença GPL-3.0 (copyleft) |
 
 > **Ordem de leitura sugerida:** [`docs/MANIFESTO.md`](docs/MANIFESTO.md) →
@@ -228,10 +229,10 @@ Configuração completa em [`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md).
 > **Atenção:** o modelo local **não conhece a VerboLang** — a especificação não
 > está no seu treino e a janela de 4096 tokens impede carregá-la inteira.
 > Tarefas da linguagem exigem injetar contexto no prompt: use o modo
-> **"+ VerboLang"** da UI de consulta (injeta o
-> [`docs/VBL-CHEATSHEET.md`](docs/VBL-CHEATSHEET.md)) ou o cheat sheet no seu
-> próprio prompt. Demanda e caminhos (cheat sheet, RAG, fine-tune) em
-> [`docs/PLAN.md` §7](docs/PLAN.md).
+> **"+ VerboLang"** da UI de consulta (injeta o denso
+> [`docs/VBL-CHEATSHEET-AGENTES.md`](docs/VBL-CHEATSHEET-AGENTES.md)) ou o
+> cheat sheet no seu próprio prompt. Demanda e caminhos (cheat sheet, RAG,
+> fine-tune) em [`docs/PLAN.md` §7](docs/PLAN.md).
 
 `bash scripts/serve-local-llm.sh` sobe **primeiro o dashboard**
 ([`web/`](web/index.html) — independentemente do modelo) e depois o modelo:
