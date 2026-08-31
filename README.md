@@ -249,12 +249,16 @@ pesquisa e desenvolvimento + 6 anos de suporte + 6 meses de descontinuação =
 `vYYYY.0-alphaN`/`-betaN`/`-rc`; o stable nasce em Janeiro; o suporte vai de
 trimestral (1º ano) a anual (4º–6º anos); na despedida, TODAS as minors da
 linha recebem um último patch, na ordem em que nasceram, até
-`vYYYY.final.final` (Jun do 7º ano). Estado atual:
-**pré-alpha**, a caminho da primeira linha, `v2027.0` — a bateria antes de
-qualquer tag é `make release-check`, toda release registra entrada no
-[`CHANGELOG.md`](CHANGELOG.md) e, ao empurrar a tag, o CI
+`vYYYY.final.final` (Jun do 7º ano). Estado atual: linha **`v2027.0`** na
+fase **alpha** — a primeira tag, `v2027.0.0-alpha.0` (31/08/2026), já
+publica os quatro crates no crates.io com a mesma versão e republica o
+livro em verbolang.org/docs. A bateria antes de qualquer tag é
+`make release-check` (agora com a portaria do site), toda release registra
+entrada no [`CHANGELOG.md`](CHANGELOG.md) e, ao empurrar a tag, o CI
 (`.github/workflows/release.yml`) cria os artefatos (binário `vbl` +
-dashboard + documentos, com SHA-256) na release.
+dashboard + livro + documentos, com SHA-256) na release, o
+`.github/workflows/publish.yml` publica o núcleo no crates.io e o
+`.github/workflows/site.yml` atualiza o site.
 
 ## Desenvolvimento assistido por LLMs
 

@@ -118,20 +118,22 @@ cada despedida usa o próximo patch real daquela minor)
 ## Cortando uma release (checklist)
 
 1. `make release-check` — bateria completa: `check` (shell + JS da UI),
-   testes unitários do web (`node --test`) e `smoke` (endpoints com o
-   servidor no ar). Para minors estáveis, rodar também a suíte do núcleo
-   (`make rust-check`).
+   testes unitários do web (`node --test`), portaria do livro do site
+   (`make site-check`) e `smoke` (endpoints com o servidor no ar). Para
+   minors estáveis, rodar também a suíte do núcleo (`make rust-check`).
 2. `CHANGELOG.md` — mover o "Não lançado" para a nova tag com data.
 3. `git tag -a vYYYY.N.0 -m "vYYYY.N.0 — <fase>: o que esta release promete"`
    (pré-lançamento carrega o identificador: `v2027.0.0-alpha.1`).
 4. `git push origin vYYYY.N.0` — o CI (`.github/workflows/release.yml`) repete
    a portaria (check + TDD + BDD + clippy/testes/E2E do núcleo), compila o
-   `vbl` em modo release, empacota binário + dashboard + documentos +
-   exemplos + scripts, carimba SHA-256 e anexa à release da tag
-   (`-alpha/-beta/-rc` saem como pré-lançamento). Em paralelo, o
-   `.github/workflows/publish.yml` publica os módulos Rust no crates.io
-   (seção abaixo) — a tag `vX.Y.Z` deve confabular com a `version` do
-   `[workspace.package]` (`core/Cargo.toml`), única fonte de versão.
+   `vbl` em modo release, empacota binário + dashboard + documentos + livro
+   didático compilado (site/) + exemplos + scripts, carimba SHA-256 e anexa
+   à release da tag (`-alpha/-beta/-rc` saem como pré-lançamento). Em
+   paralelo, o `.github/workflows/publish.yml` publica os módulos Rust no
+   crates.io (seção abaixo) e o `.github/workflows/site.yml` republica o
+   livro em verbolang.org/docs — a tag `vX.Y.Z` deve confabular com a
+   `version` do `[workspace.package]` (`core/Cargo.toml`), única fonte de
+   versão.
 5. Acompanhar os dois workflows até o verde; o publish é idempotente — se
    falhar no meio da fila, re-execute o job (os crates já publicados são
    pulados).
@@ -145,14 +147,14 @@ O núcleo (`core/`) publica quatro crates: `vbl-lang`, `vbl-runtime`,
 carregam `version` + `path` no `[workspace.dependencies]` (o `path` manda no
 workspace, o `version` entra no manifesto publicado).
 
-**Estreia pública em `0.1.0-alpha.0`** — o análogo SemVer da gramática
-`-alpha.N` acima (as versões internas `0.y.z` anteriores nunca foram
-lançadas).
-Duas consequências: tags da fase interna são `v0.1.0-alpha.N` (o gate do
+**Estreia pública em `2027.0.0-alpha.0`** — o primeiro pré-lançamento da
+linha, já na gramática `vYYYY.0.0-alpha.N` do calendário (as versões
+internas `0.y.z` anteriores nunca foram lançadas).
+Duas consequências: as tags da fase alpha são `v2027.0.0-alpha.N` (o gate do
 workflow compara a tag, sem o `v`, com a versão do workspace); e o cargo
 **não** resolve pré-release por padrão — quem depender dos crates na fase
-alpha precisa fixar `= "0.1.0-alpha.N"` (o req `^0.1.0-alpha.0` das deps
-internas casa as alphas seguintes do mesmo trio).
+alpha precisa fixar `= "2027.0.0-alpha.N"` (o req `^2027.0.0-alpha.0` das deps
+internas casa os pré-lançamentos seguintes do mesmo trio).
 
 **Ordem de dependência** (o workflow respeita, esperando a indexação de cada
 versão antes do dependente): `vbl-lang → vbl-runtime → vbl-fxp → vbl-cli`.
@@ -195,8 +197,9 @@ pacote (verify build) exatamente como o registry fará.
 
 ## Onde estamos
 
-Desenvolvimento **pré-alpha** (versões internas `0.y.z[-alpha.N]` de
-conveniência, sem compromisso de calendário — hoje, `0.1.0-alpha.0`). A
-primeira linha oficial é a **`v2027.0`** (major `2027` no cargo): a base
-atual corresponde à janela `alpha.0`/`alpha.1` (pesquisa, experimentação e
-definição de escopo) — Jul–Set do ano anterior ao stable.
+Linha **`v2027.0`** (major `2027` no cargo), fase **alpha.0** — a tag
+`v2027.0.0-alpha.0` (Jul + Ago 2026: pesquisa, experimentação e definição de
+escopo) foi cortada em 31/08/2026. A próxima janela é a `alpha.1`
+(Setembro). O site de documentação didática (verbolang.org/docs) acompanha a
+linha: o workflow `site.yml` republica o livro a cada push relevante e a
+cada tag.

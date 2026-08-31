@@ -609,7 +609,7 @@ checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
 name = "vbl-cli"
-version = "0.1.0-alpha.0"
+version = "2027.0.0-alpha.0"
 dependencies = [
  "tokio",
  "vbl-fxp",
@@ -619,7 +619,7 @@ dependencies = [
 
 [[package]]
 name = "vbl-fxp"
-version = "0.1.0-alpha.0"
+version = "2027.0.0-alpha.0"
 dependencies = [
  "criterion",
  "vbl-lang",
@@ -628,11 +628,11 @@ dependencies = [
 
 [[package]]
 name = "vbl-lang"
-version = "0.1.0-alpha.0"
+version = "2027.0.0-alpha.0"
 
 [[package]]
 name = "vbl-runtime"
-version = "0.1.0-alpha.0"
+version = "2027.0.0-alpha.0"
 dependencies = [
  "criterion",
  "sha2",
