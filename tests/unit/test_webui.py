@@ -469,3 +469,135 @@ def test_sse_fluxo_completo(tmp_path):
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+# ── 11. cobertura complementar: ramos de guarda e rotas de erro ───────────
+def test_parse_canonical_line_malformada():
+    with pytest.raises(ValueError):
+        webui.parse_canonical_line("so-um-campo", HASH_ZERO)
+    with pytest.raises(ValueError):
+        webui.parse_canonical_line(f"1{SEP}LEAK", HASH_ZERO)  # 2 campos < 3
+
+
+def test_parse_jsonl_ignora_linhas_vazias_e_nao_dict():
+    data = b'\n{"seq": 1, "kind": "INFO", "msg": "ok"}\n\n[1,2]\n"texto"\n'
+    eventos, rodape = webui.parse_jsonl(data)
+    assert rodape is True
+    assert [e["seq"] for e in eventos] == [1]
+
+
+def test_aggregate_leak_com_joules_nao_numerico():
+    eventos = [{"kind": "LEAK", "joules": "não-numérico", "seq": 1},
+               {"kind": "LEAK", "seq": 2}]              # sem joules
+    agg = webui.aggregate(eventos, completo=True)
+    assert agg["joules"] == 0.0                         # TypeError/ValueError → ignora
+    assert agg["por_kind"]["LEAK"] == 2
+
+
+def test_resolve_src_rejeita_symlink_que_escapa(tmp_path, tmp_path_factory):
+    fora = tmp_path_factory.mktemp("fora-da-raiz")      # fora da raiz servida
+    (fora / "segredo.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "atalho").symlink_to(fora)
+    with pytest.raises(ValueError, match="escapa da raiz"):
+        webui.resolve_src(tmp_path, "logs/atalho/segredo.txt")
+
+
+def test_tailer_reinicia_se_arquivo_desaparece(tmp_path):
+    alvo = tmp_path / "demo.vcad"
+    alvo.write_bytes(eventos_em_bytes(EVENTOS_DEMO[:2], footer=False))
+    t = webui.SourceTailer(alvo)
+    t.poll()
+    assert t.snapshot()["eventos"] == 2
+    alvo.unlink()                                       # arquivo some
+    assert t.poll() == []
+    alvo.write_bytes(eventos_em_bytes(EVENTOS_DEMO[:1], footer=False))
+    assert [e["seq"] for e in t.poll()] == [0]          # estado reiniciado
+
+
+def test_tailer_vcad_header_ainda_nao_gravado(tmp_path):
+    alvo = tmp_path / "demo.vcad"
+    alvo.write_bytes(b"")                               # existe, mas vazio
+    t = webui.SourceTailer(alvo)
+    assert t.poll() == []
+    alvo.write_bytes(b"VCAD")                           # header parcial (4 < 5 B)
+    assert t.poll() == []
+
+
+def test_tailer_jsonl_linha_vazia_e_corrompida(tmp_path):
+    alvo = tmp_path / "demo.vcad.jsonl"
+    alvo.write_bytes(b'{"seq": 1, "kind": "INFO", "msg": "ok"}\n\n{quebrada\n')
+    t = webui.SourceTailer(alvo)
+    novos = t.poll()
+    assert [e["seq"] for e in novos] == [1]             # vazia e quebrada ignoradas
+
+
+def test_api_events_rejeita_src_inseguro(servidor):
+    _, porta, *_ = servidor
+    resp, corpo, conn = requisicao(porta, "/api/events?src=../fora")
+    assert resp.status == 400
+    assert "erro" in json.loads(corpo)
+    conn.close()
+
+
+def test_api_events_heartbeat_visivel(tmp_path, monkeypatch):
+    monkeypatch.setattr(webui, "HEARTBEAT_S", 0.05)     # ping quase todo loop
+    (tmp_path / "logs").mkdir()
+    alvo = tmp_path / "logs" / "vivo.vcad"
+    alvo.write_bytes(eventos_em_bytes(EVENTOS_DEMO[:1], footer=False))
+    srv = webui.make_server(tmp_path, port=0, poll=0.05)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
+        conn.request("GET", "/api/events?src=logs/vivo.vcad")
+        resp = conn.getresponse()
+        assert resp.status == 200
+        # lê bytes crus por até ~2 s procurando o comentário de heartbeat
+        prazo, vistos = time.time() + 2.0, b""
+        while time.time() < prazo and b": ping" not in vistos:
+            pedaco = resp.fp.readline()
+            if not pedaco:
+                break
+            vistos += pedaco
+        assert b": ping" in vistos
+        conn.close()
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_api_events_sobrevive_a_cliente_que_foge(tmp_path):
+    (tmp_path / "logs").mkdir()
+    alvo = tmp_path / "logs" / "vivo.vcad"
+    alvo.write_bytes(eventos_em_bytes(EVENTOS_DEMO, footer=False))
+    srv = webui.make_server(tmp_path, port=0, poll=0.05)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
+        conn.request("GET", "/api/events?src=logs/vivo.vcad")
+        resp = conn.getresponse()
+        resp.read(1)                                    # lê um byte e some
+        conn.close()                                    # sem enfrentar o stream
+        time.sleep(0.3)                                 # handler tenta escrever → BrokenPipe
+        # o servidor segue de pé para os próximos clientes
+        resp2, corpo, conn2 = requisicao(srv.server_address[1], "/api/sources")
+        assert resp2.status == 200
+        conn2.close()
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_main_sobe_e_encerra_com_ctrl_c(monkeypatch):
+    fechado = {}
+
+    class ServidorFalso:
+        def serve_forever(self):
+            raise KeyboardInterrupt                     # Ctrl+C do operador
+
+        def server_close(self):
+            fechado["ok"] = True
+
+    monkeypatch.setattr(webui, "make_server", lambda *a, **k: ServidorFalso())
+    webui.main(["9999", "--root", "/tmp", "--poll", "0.1"])
+    assert fechado["ok"] is True
