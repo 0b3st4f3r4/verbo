@@ -438,7 +438,7 @@ impl DeviceRegistry {
 /// cache_ttl_ms = 100
 /// cpu_temp.mode = real
 /// cpu_temp.endpoint = auto            # ou thermal_zone:/sys/class/thermal/thermal_zone0
-/// human_attention.alias_of = attention
+/// human_attention.alias_de = attention
 /// ReserveFan.mode = real
 /// ReserveFan.endpoint = unix:/tmp/fxpd.sock
 /// ReserveFan.max = 255

@@ -74,3 +74,43 @@ impl Script {
         self.schedule.keys().all(|t| *t <= clock)
     }
 }
+
+// ── suíte do roteiro do mundo simulado ────────────────────────────────────
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vbl_runtime::fxp::{ActOutcome, Fxp as _, Value};
+    use vbl_runtime::ledger::ChainLedger;
+
+    #[test]
+    fn roteiro_completo_constrói_simulador_determinístico() {
+        let mut script = Script::default();
+        script.set("cpu_temp", 90.0);
+        script.at(3, "attention", 15.0);
+        script.at(3, "cpu_power", 420.0);
+        script.fail_actor("Fan");
+        script.fallback("Fan", "ReserveFan");
+        script.register_actor("ReserveFan");
+        let mut ledger = ChainLedger::new();
+        let mut sim = script.build_simulator();
+        // valor inicial aplicado no build
+        assert_eq!(sim.read_sensor("cpu_temp", &mut ledger), Ok(90.0));
+        // agendado para o tick 3 ainda não vale antes…
+        assert_eq!(sim.read_sensor("attention", &mut ledger), Ok(100.0));
+        sim.on_tick(&mut ledger);
+        sim.on_tick(&mut ledger);
+        assert_eq!(sim.read_sensor("attention", &mut ledger), Ok(100.0));
+        sim.on_tick(&mut ledger);
+        // …e vale a partir do tick roteirizado
+        assert_eq!(sim.read_sensor("attention", &mut ledger), Ok(15.0));
+        assert_eq!(sim.read_sensor("cpu_power", &mut ledger), Ok(420.0));
+        // ator extra registrado responde na faixa declarada (0..255, safety 200)
+        assert!(matches!(
+            sim.act("ReserveFan", Value::Num(150.0), &mut ledger),
+            ActOutcome::Delivered
+        ));
+        // o roteiro terminou no tick 3 (nada agendado depois)
+        assert!(script.finished(3));
+        assert!(!script.finished(2));
+    }
+}

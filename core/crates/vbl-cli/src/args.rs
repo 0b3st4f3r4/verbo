@@ -190,3 +190,104 @@ opções de fxp-probe:
   --fxp-config ARQUIVO             registro/config FXP a auditar
   --fxp-mode MODO                  simulado|real|hibrido (padrão: o da config, senão simulado)
 ";
+
+// ── suíte do parser de argumentos (uso, flags e cláusulas de erro) ────────
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(list: &[&str]) -> std::vec::IntoIter<String> {
+        list.iter().map(|s| s.to_string()).collect::<Vec<_>>().into_iter()
+    }
+
+    #[test]
+    fn sem_subcomando_devolve_uso() {
+        assert!(parse_args(args(&[])).is_err());
+    }
+
+    #[test]
+    fn check_flags() {
+        let Command::Check { arquivo, with_registry } =
+            parse_args(args(&["check", "a.vl"])).unwrap()
+        else { panic!("esperado Check") };
+        assert_eq!(arquivo, "a.vl");
+        assert!(with_registry); // padrão: valida contra o registro
+        let Command::Check { arquivo, with_registry } =
+            parse_args(args(&["check", "--no-registry", "b.vl"])).unwrap()
+        else { panic!("esperado Check") };
+        assert_eq!(arquivo, "b.vl");
+        assert!(!with_registry);
+        // dois arquivos → argumento inesperado
+        assert!(parse_args(args(&["check", "a.vl", "b.vl"])).is_err());
+        // sem arquivo
+        assert!(parse_args(args(&["check"])).is_err());
+    }
+
+    #[test]
+    fn run_flags_completos() {
+        let Command::Run { arquivo, ticks, real_ms, persist_dir, ledger, script,
+                           allow_unregistered, fxp_mode, fxp_config } =
+            parse_args(args(&[
+                "run", "p.vl",
+                "--ticks", "7", "--real-ms", "100",
+                "--persist-dir", "/tmp/pp", "--ledger", "log.vcad",
+                "--set", "cpu_temp=90", "--at", "3:attention=15",
+                "--fail-actor", "Fan", "--fallback", "Fan=ReserveFan",
+                "--register-actor", "ReserveFan",
+                "--allow-unregistered",
+                "--fxp-mode", "hibrido", "--fxp-config", "fxp.cfg",
+            ])).unwrap()
+        else { panic!("esperado Run") };
+        assert_eq!(arquivo, "p.vl");
+        assert_eq!(ticks, Some(7));
+        assert_eq!(real_ms, Some(100));
+        assert_eq!(persist_dir, PathBuf::from("/tmp/pp"));
+        assert_eq!(ledger, Some(PathBuf::from("log.vcad")));
+        assert!(allow_unregistered);
+        assert_eq!(fxp_mode.as_deref(), Some("hibrido"));
+        assert_eq!(fxp_config, Some(PathBuf::from("fxp.cfg")));
+        // o roteiro carregou tudo
+        use vbl_runtime::fxp::Fxp as _;
+        let mut sim = script.build_simulator();
+        let mut ledger = vbl_runtime::ledger::ChainLedger::new();
+        assert_eq!(sim.read_sensor("cpu_temp", &mut ledger), Ok(90.0)); // valor inicial
+    }
+
+    #[test]
+    fn run_clausulas_de_erro_dos_valores() {
+        // flags de valor ausente
+        assert!(parse_args(args(&["run", "a.vl", "--ticks"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--real-ms"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--persist-dir"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--ledger"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--set"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--at"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--fail-actor"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--fallback"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--register-actor"])).is_err());
+        // valores malformados
+        assert!(parse_args(args(&["run", "a.vl", "--ticks", "sete"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--real-ms", "rápido"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--set", "sem_igual"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--set", "cpu_temp=quente"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--at", "sem_dois_pontos"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--at", "1:cpu_temp=forte"])).is_err());
+        assert!(parse_args(args(&["run", "a.vl", "--fallback", "so_um"])).is_err());
+        // subcomando desconhecido
+        assert!(parse_args(args(&["voar"])).is_err());
+    }
+
+    #[test]
+    fn fxp_probe_e_ledger_verify() {
+        let Command::FxpProbe { fxp_mode, fxp_config } =
+            parse_args(args(&["fxp-probe", "--fxp-mode", "real", "--fxp-config", "c.cfg"])).unwrap()
+        else { panic!("esperado FxpProbe") };
+        assert_eq!(fxp_mode.as_deref(), Some("real"));
+        assert_eq!(fxp_config, Some(PathBuf::from("c.cfg")));
+        let Command::LedgerVerify { arquivo } =
+            parse_args(args(&["ledger-verify", "log.vcad"])).unwrap()
+        else { panic!("esperado LedgerVerify") };
+        assert_eq!(arquivo, "log.vcad");
+        assert!(parse_args(args(&["ledger-verify"])).is_err());
+    }
+}
