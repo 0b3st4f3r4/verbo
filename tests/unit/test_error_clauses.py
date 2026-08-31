@@ -21,7 +21,7 @@ SENSOR_REGISTRY = {
     "cpu_power": {"quantity": "power", "unit": "W"},
     "attention": {"quantity": "attention", "unit": "%"},
 }
-ACTOR_REGISTRY = {"CpuPowerCap": {}, "Ventoinha": {}, "LedIndicador": {}}
+ACTOR_REGISTRY = {"CpuPowerCap": {}, "Fan": {}, "StatusLed": {}}
 
 
 def _codes(diagnoses):

@@ -28,7 +28,7 @@ A interação com o mundo físico é feita através do **FXP (Flux Protocol)**, 
   - Unidades físicas: `W`, `°C`, `%`
 - **Comentários**: `//` linha, `/* ... */` bloco.
 
-> **Nota:** Não há declaração explícita de atores. Atores são referenciados por um nome simbólico (ex: `CpuPowerCap`, `Ventoinha`) que o FXP conhece e gerencia.
+> **Nota:** Não há declaração explícita de atores. Atores são referenciados por um nome simbólico (ex: `CpuPowerCap`, `Fan`) que o FXP conhece e gerencia.
 
 ---
 
@@ -85,7 +85,7 @@ physical_unit        = 'W' | '°C' ;
 ### Notas sobre a gramática
 
 - `source_path` é um nome **exclusivamente simbólico** (ex: `"cpu_temp"`, `"solar_panel"`) que o FXP mapeia para um sensor físico ou virtual. Caminhos de sistema operacional (ex: `/sys/...`, `/dev/...`) **não** são `source_path` válidos: o mapeamento para endpoints concretos é responsabilidade do registro do FXP (cf. §6).
-- `actor_name` é um identificador simbólico (ex: `CpuPowerCap`, `Ventoinha`) que o FXP reconhece como ator.
+- `actor_name` é um identificador simbólico (ex: `CpuPowerCap`, `Fan`) que o FXP reconhece como ator.
 - Não há declaração explícita de atores; a configuração fica a cargo do FXP, que mantém um diretório de dispositivos e serviços disponíveis.
 - A ação `act` envia um comando FXP com o valor especificado para o ator nomeado.
 - O bloco `main` pode conter `act` diretamente, permitindo atuações periódicas.
@@ -225,7 +225,7 @@ Se um sensor referenciado (`source_path` ou sensor de condição de revisão) n�
 ### Exemplo 1: Pensamento Crítico com Reclassificação
 
 ```verbolang
-nonequilibrium PensarLivre {
+nonequilibrium FreeThinking {
     value: "consciencia_anteneoliberal_ativa",
     horizon: 60s,
     source_path: "attention",
@@ -233,7 +233,7 @@ nonequilibrium PensarLivre {
     exchange_mode: "cooperation"
 }
 
-review PensarLivre {
+review FreeThinking {
     when attention < 30% -> reclassify_as_equilibrium
 }
 ```
@@ -241,7 +241,7 @@ review PensarLivre {
 ### Exemplo 2: Subversão Térmica com Ação para Ator via FXP
 
 ```verbolang
-nonequilibrium TradingEspeculativo {
+nonequilibrium SpeculativeTrading {
     value: "lucro_arbitragem_alta_frequencia",
     horizon: 7s,
     source_path: "cpu_temp",
@@ -249,13 +249,13 @@ nonequilibrium TradingEspeculativo {
     exchange_mode: "extraction"
 }
 
-review TradingEspeculativo {
+review SpeculativeTrading {
     when cpu_temp > 85°C -> subvert,
                             act(CpuPowerCap, 50)   // FXP envia comando para limitar potência
 }
 ```
 
-### Exemplo 3: Ventoinha Acionada por Temperatura
+### Exemplo 3: Fan Acionada por Temperatura
 
 ```verbolang
 nonequilibrium ServidorCritico {
@@ -267,14 +267,14 @@ nonequilibrium ServidorCritico {
 }
 
 review ServidorCritico {
-    when cpu_temp > 70°C -> act(Ventoinha, 200)
+    when cpu_temp > 70°C -> act(Fan, 200)
 }
 ```
 
 ### Exemplo 4: Bloco `main` com atuação periódica
 
 ```verbolang
-nonequilibrium TarefaImportante {
+nonequilibrium ImportantTask {
     value: "dados_sensiveis",
     horizon: 30s,
     source_path: "cpu_power",
@@ -283,8 +283,8 @@ nonequilibrium TarefaImportante {
 }
 
 main {
-    every 4s { keep(TarefaImportante) },
-    every 10s { act(LedIndicador, "verde") }
+    every 4s { keep(ImportantTask) },
+    every 10s { act(StatusLed, "green") }
 }
 ```
 
@@ -318,6 +318,14 @@ equilibrium Registro {
 - O **FXP** deve manter um registro de sensores e atores disponíveis, com mapeamento de nomes simbólicos para endpoints concretos.
 - O registro deve aceitar **aliases** (ex: `attention` → `human_attention`) para compatibilidade entre ferramentas, com um nome canônico único por dispositivo. A leitura por alias é idêntica à do nome canônico; o Caderno registra o nome usado pela regra e o canônico.
 
+> **Nota de nomes (31/08/2026):** os nomes canônicos do registro passaram ao
+> inglês (`Fan`, `StatusLed`, ...; quantidades `temperature`/`power`/`attention`).
+> Os nomes v1 em português (`Ventoinha`, `LedIndicador`) permanecem aceitos como
+> **aliases** no registro mínimo e em qualquer config (`alias_of`), e os logs
+> históricos os preservam como dados. Os estados do LED (`verde`/`vermelho`/
+> `apagado`) e os valores poéticos seguem em português: são payload artístico,
+> não identificadores.
+
 **Registro mínimo obrigatório** (referência objetiva para a métrica de cobertura de dispositivos do AGENTS.md):
 
 Sensores obrigatórios:
@@ -333,8 +341,8 @@ Atores obrigatórios:
 | Nome simbólico | Função | min | max | `safety_limit` |
 |----------------|--------|-----|-----|----------------|
 | `CpuPowerCap` | limite de potência da CPU (W) | 10 | 250 | 200 |
-| `Ventoinha` | velocidade de ventoinha (PWM) | 0 | 255 | 200 |
-| `LedIndicador` | estado textual (ex: `"verde"`) | — | — | — |
+| `Fan` | velocidade de ventoinha (PWM) | 0 | 255 | 200 |
+| `StatusLed` | estado textual (ex: `"green"`) | — | — | — |
 
 Sensores e atores adicionais (ex: `solar_panel`, `disk_bytes`) são extensões opcionais registradas no diretório do FXP. A métrica "100% para os obrigatórios" do AGENTS.md refere-se exatamente às tabelas acima.
 - **HAL** é implementada como parte do FXP, não como entidade separada na linguagem.

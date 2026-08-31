@@ -299,21 +299,27 @@ impl DeviceRegistry {
     pub fn minimum() -> Self {
         let mut r = Self::new();
         for (name, quantity, unit, precision) in [
-            ("cpu_temp", "temperatura", "°C", 2.0),
-            ("cpu_power", "potencia", "W", 5.0),
-            ("attention", "atencao", "%", 0.0),
+            ("cpu_temp", "temperature", "°C", 2.0),
+            ("cpu_power", "power", "W", 5.0),
+            ("attention", "attention", "%", 0.0),
         ] {
             let _ = r.register(DeviceEntry::sensor(name, quantity, unit, precision));
         }
-        for (name, min, max, safety) in [
-            ("CpuPowerCap", Some(10.0), Some(250.0), Some(200.0)),
-            ("Ventoinha", Some(0.0), Some(255.0), Some(200.0)),
-            ("LedIndicador", None, None, None),
+        for (name, min, max, safety, legacy) in [
+            ("CpuPowerCap", Some(10.0), Some(250.0), Some(200.0), None),
+            ("Fan", Some(0.0), Some(255.0), Some(200.0), Some("Ventoinha")),
+            ("StatusLed", None, None, None, Some("LedIndicador")),
         ] {
-            let _ = r.register(DeviceEntry::actor(
+            let mut entry = DeviceEntry::actor(
                 name,
                 ActorLimits { min, max, safety_limit: safety },
-            ));
+            );
+            // Nomes v1 (PT) permanecem aceitos como aliases — configs e
+            // programas antigos seguem válidos (FORMAL §6, nota de nomes).
+            if let Some(alias) = legacy {
+                entry.aliases.push(alias.into());
+            }
+            let _ = r.register(entry);
         }
         r
     }
@@ -433,10 +439,10 @@ impl DeviceRegistry {
 /// cpu_temp.mode = real
 /// cpu_temp.endpoint = auto            # ou thermal_zone:/sys/class/thermal/thermal_zone0
 /// human_attention.alias_of = attention
-/// VentoinhaReserva.mode = real
-/// VentoinhaReserva.endpoint = unix:/tmp/fxpd.sock
-/// VentoinhaReserva.max = 255
-/// fallback.Ventoinha = VentoinhaReserva
+/// ReserveFan.mode = real
+/// ReserveFan.endpoint = unix:/tmp/fxpd.sock
+/// ReserveFan.max = 255
+/// fallback.Fan = ReserveFan
 /// ```
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct FxpConfig {
@@ -651,7 +657,7 @@ impl FxpConfig {
                     }
                 }
             } else {
-                // Extensão nova (ex.: `VentoinhaReserva`, `solar_panel`).
+                // Extensão nova (ex.: `ReserveFan`, `solar_panel`).
                 let mode = d.mode.unwrap_or_default();
                 let endpoint = d.endpoint.clone().unwrap_or_default();
                 let kind = if let Some(g) = &d.quantity {
@@ -675,7 +681,7 @@ impl FxpConfig {
                         },
                     }
                 } else if endpoint.is_remote() {
-                    // Ator remoto sem limites declarados (ex.: LedIndicador remoto).
+                    // Ator remoto sem limites declarados (ex.: StatusLed remoto).
                     DeviceKind::Actor { limits: ActorLimits::default() }
                 } else {
                     return Err(RegistryError::InvalidConfig(format!(

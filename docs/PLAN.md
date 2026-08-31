@@ -31,7 +31,7 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
     ```gherkin
     Funcionalidade: Salvaguarda de Atenção Cognitiva
       Cenário: Mudança de estado devido ao esgotamento da atenção do usuário
-        Dado que a forma laborativa "PensarLivre" está ativa com um deadline de 3s
+        Dado que a forma laborativa "FreeThinking" está ativa com um deadline de 3s
         Quando a leitura do sensor "attention" via FXP cai abaixo de 30% (ex: 15.0%)
         Então o runtime deve disparar uma transição "reclassify_as_equilibrium"
         E o estado da ideia deve ser gravado como `.vl` canônico no diretório de persistência
@@ -44,7 +44,7 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
     ```gherkin
     Funcionalidade: Sabotagem de Processamento Predatório
       Cenário: Sobrecarga térmica em loop de trading especulativo
-        Dado que a tarefa "TradingEspeculativo" está rodando em alta frequência
+        Dado que a tarefa "SpeculativeTrading" está rodando em alta frequência
         Quando o sensor `cpu_temp` atinge 86.5°C (limite de 85.0°C) via FXP
         Então o runtime deve invocar o operador "subvert()"
         E a ação "act(CpuPowerCap, 50)" deve ser enviada ao ator correspondente via FXP
@@ -56,9 +56,9 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
     ```gherkin
     Funcionalidade: Resiliência de Atuação
       Cenário: Ator principal falha e fallback é acionado
-        Dado que o ator "Ventoinha" não está respondendo
-        Quando a temperatura excede 70°C e a ação é "act(Ventoinha, 200)"
-        Então o FXP detecta a falha (heartbeat) e aplica a política de fallback do registro, tentando o ator alternativo "VentoinhaReserva" (extensão opcional)
+        Dado que o ator "Fan" não está respondendo
+        Quando a temperatura excede 70°C e a ação é "act(Fan, 200)"
+        Então o FXP detecta a falha (heartbeat) e aplica a política de fallback do registro, tentando o ator alternativo "ReserveFan" (extensão opcional)
         E o Caderno registra a tentativa primária, a falha e o fallback executado
     ```
 
@@ -104,7 +104,7 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
 
 ### 3.1 Arquitetura do FXP
 
-*   **Registro de Dispositivos:** Um diretório dinâmico que mapeia nomes simbólicos (`cpu_temp`, `cpu_power`, `CpuPowerCap`, `Ventoinha`) para endpoints concretos (sysfs, ioctl, sockets, GPIO, etc.).
+*   **Registro de Dispositivos:** Um diretório dinâmico que mapeia nomes simbólicos (`cpu_temp`, `cpu_power`, `CpuPowerCap`, `Fan`) para endpoints concretos (sysfs, ioctl, sockets, GPIO, etc.).
 *   **Modos de Operação:** Real (hardware físico), Simulado (leituras sintéticas e atores de mentira), Híbrido (alguns reais, outros simulados).
 *   **Comunicação:** Mensagens assíncronas com serialização binária compacta (ex: Cap'n Proto, FlatBuffers) para minimizar overhead.
 
@@ -120,7 +120,7 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
 
 *   Implementar drivers de atuação:
     *   **Controle de potência da CPU:** RAPL power capping (sysfs).
-    *   **Ventoinhas:** PWM via hwmon.
+    *   **Fans:** PWM via hwmon.
     *   **LEDs, relés:** GPIO, sysfs.
 *   **Limites de Segurança:** Cada ator deve ter `min_value`, `max_value`, `safety_limit`. O FXP valida comandos contra esses limites antes de enviar.
 *   **Fallback:** política do registro do FXP (primary → alternativos, com heartbeat); o runtime apenas recebe o resultado (FORMAL §4.3; cf. BDD Caso 3).

@@ -395,7 +395,7 @@ review A { when cpu_temp > 10°C -> notify_shutdown,\n\
            when cpu_temp < 5°C -> reclassify_as_equilibrium,\n\
            when attention < 5% -> reclassify_as_nonequilibrium,\n\
            when cpu_power >= 400W -> subvert,\n\
-           when attention > 90% -> act(LedIndicador, \"verde\") }";
+           when attention > 90% -> act(StatusLed, \"green\") }";
     let (p, d) = parse(source);
     assert!(!d.has_errors(), "{d}");
     let rules = &p.reviews().next().unwrap().rules;
@@ -405,8 +405,8 @@ review A { when cpu_temp > 10°C -> notify_shutdown,\n\
     assert_eq!(rules[3].actions, vec![Action::Subvert]);
     match &rules[4].actions[0] {
         Action::Act { actor, value, .. } => {
-            assert_eq!(actor, "LedIndicador");
-            assert_eq!(value.kind, ExprKind::Str("verde".into()));
+            assert_eq!(actor, "StatusLed");
+            assert_eq!(value.kind, ExprKind::Str("green".into()));
         }
         other => panic!("esperado act, encontrado {other:?}"),
     }
@@ -446,7 +446,7 @@ fn production_action_unknown_rejected() {
 fn production_main_block_keep_act_every() {
     let source = "\
 nonequilibrium T { value: \"dados\", horizon: 30s, source_path: \"cpu_power\", maintenance_deadline: 5s }\n\
-main { keep(T),\n       act(LedIndicador, \"verde\"),\n       every 4s { keep(T) },\n       every 10s { act(LedIndicador, \"verde\") } }";
+main { keep(T),\n       act(StatusLed, \"green\"),\n       every 4s { keep(T) },\n       every 10s { act(StatusLed, \"green\") } }";
     let (p, d) = parse(source);
     assert!(!d.has_errors(), "{d}");
     let main = p.main.as_ref().unwrap();
@@ -548,24 +548,24 @@ fn lexical_invalid_lexeme_with_line_and_column() {
 #[test]
 fn canonical_examples_from_formal_validate() {
     no_errors(
-        "nonequilibrium PensarLivre {\n\
+        "nonequilibrium FreeThinking {\n\
          \x20   value: \"consciencia_anteneoliberal_ativa\",\n\
          \x20   horizon: 60s,\n\
          \x20   source_path: \"attention\",\n\
          \x20   maintenance_deadline: 3s,\n\
          \x20   exchange_mode: \"cooperation\"\n\
          }\n\
-         review PensarLivre { when attention < 30% -> reclassify_as_equilibrium }",
+         review FreeThinking { when attention < 30% -> reclassify_as_equilibrium }",
     );
     no_errors(
-        "nonequilibrium TradingEspeculativo {\n\
+        "nonequilibrium SpeculativeTrading {\n\
          \x20   value: \"lucro_arbitragem_alta_frequencia\",\n\
          \x20   horizon: 7s,\n\
          \x20   source_path: \"cpu_temp\",\n\
          \x20   maintenance_deadline: 2s,\n\
          \x20   exchange_mode: \"extraction\"\n\
          }\n\
-         review TradingEspeculativo {\n\
+         review SpeculativeTrading {\n\
          \x20   when cpu_temp > 85°C -> subvert,\n\
          \x20                           act(CpuPowerCap, 50)\n\
          }",
@@ -578,10 +578,10 @@ fn canonical_examples_from_formal_validate() {
         "equilibrium Registro {\n    value: \"documento_persistente\",\n    horizon: 86400s,\n    cost_bytes: 4096\n}",
     );
     no_errors(
-        "nonequilibrium TarefaImportante {\n\
+        "nonequilibrium ImportantTask {\n\
          \x20   value: \"dados_sensiveis\",\n    horizon: 30s,\n    source_path: \"cpu_power\",\n\
          \x20   maintenance_deadline: 5s,\n    exchange_mode: \"cooperation\"\n}\n\
-         main {\n    every 4s { keep(TarefaImportante) },\n    every 10s { act(LedIndicador, \"verde\") }\n}",
+         main {\n    every 4s { keep(ImportantTask) },\n    every 10s { act(StatusLed, \"green\") }\n}",
     );
 }
 

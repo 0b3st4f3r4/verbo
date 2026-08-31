@@ -158,10 +158,10 @@ def step_ceases_in_same_tick(context):
 @given('the actor "{actor}" is not responding')
 def step_actor_not_responding(context, actor):
     # política de fallback no REGISTRO do FXP (FORMAL §4.3) + extensão opcional
-    context.sim.register_actor("VentoinhaReserva",
+    context.sim.register_actor("ReserveFan",
                                "ventoinha alternativa (extensão opcional)",
                                min_value=0, max_value=255, safety_limit=200)
-    context.sim.define_fallback(actor, "VentoinhaReserva")
+    context.sim.define_fallback(actor, "ReserveFan")
     context.sim.fail_actor(actor)
     # a forma vigia a temperatura e aciona o ator primário ao exceder 70°C
     program = ir.program(
@@ -181,13 +181,13 @@ def step_temperature_exceeds(context, limit, actor, value):
     context.engine.tick()
 
 
-@then('the FXP detects the failure (heartbeat) and applies the registry fallback policy, trying the alternative actor "VentoinhaReserva" (optional extension)')
+@then('the FXP detects the failure (heartbeat) and applies the registry fallback policy, trying the alternative actor "ReserveFan" (optional extension)')
 def step_fallback_applied(context):
     primary = context.primary_actor
     assert context.ledger.has("actor_unavailable", ator=primary)
     assert context.ledger.has("fallback_executed", primario=primary,
-                              alternativo="VentoinhaReserva", valor=200)
-    assert context.sim.actors["VentoinhaReserva"].current == 200
+                              alternativo="ReserveFan", valor=200)
+    assert context.sim.actors["ReserveFan"].current == 200
     assert context.sim.actors[primary].current != 200
 
 
@@ -195,5 +195,5 @@ def step_fallback_applied(context):
 def step_ledger_trails_fallback(context):
     primary = context.primary_actor
     assert context.ledger.has("ACTUATION", ator=primary, sucesso=False)
-    assert context.ledger.has("ACTUATION", ator="VentoinhaReserva", sucesso=True)
+    assert context.ledger.has("ACTUATION", ator="ReserveFan", sucesso=True)
     assert context.ledger.has("fallback_executed")

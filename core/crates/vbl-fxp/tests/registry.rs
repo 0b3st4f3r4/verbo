@@ -16,7 +16,7 @@ fn minimum_registry_has_formal_6_mandatory_devices() {
     let DeviceKind::Sensor { quantity, unit, precision_pct, .. } = &t.kind else {
         panic!("cpu_temp deveria ser sensor");
     };
-    assert_eq!(quantity, "temperatura");
+    assert_eq!(quantity, "temperature");
     assert_eq!(unit, "°C");
     assert_eq!(*precision_pct, 2.0);
     let p = r.get("cpu_power").unwrap();
@@ -28,7 +28,7 @@ fn minimum_registry_has_formal_6_mandatory_devices() {
         limits,
         &ActorLimits { min: Some(10.0), max: Some(250.0), safety_limit: Some(200.0) }
     );
-    let DeviceKind::Actor { limits } = &r.get("Ventoinha").unwrap().kind else { panic!() };
+    let DeviceKind::Actor { limits } = &r.get("Fan").unwrap().kind else { panic!() };
     assert_eq!(limits.safety_limit, Some(200.0));
     // Tudo simulado por padrão (CI-safe).
     assert!(r.devices().all(|d| d.mode == DeviceMode::Simulated));
@@ -95,11 +95,11 @@ fn config_parses_and_applies_overrides_and_extensions() {
          cpu_temp.mode = real\n\
          cpu_temp.endpoint = thermal_zone:/sys/class/thermal/thermal_zone0\n\
          human_attention.alias_de = attention\n\
-         VentoinhaReserva.mode = real\n\
-         VentoinhaReserva.endpoint = unix:/tmp/fxpd.sock\n\
-         VentoinhaReserva.min = 0\n\
-         VentoinhaReserva.max = 255\n\
-         fallback.Ventoinha = VentoinhaReserva\n",
+         ReserveFan.mode = real\n\
+         ReserveFan.endpoint = unix:/tmp/fxpd.sock\n\
+         ReserveFan.min = 0\n\
+         ReserveFan.max = 255\n\
+         fallback.Fan = ReserveFan\n",
     )
     .unwrap();
 
@@ -123,7 +123,7 @@ fn config_parses_and_applies_overrides_and_extensions() {
     assert!(r.contains("human_attention"));
 
     // Extensão nova: ator remoto com limites.
-    let res = r.get("VentoinhaReserva").unwrap();
+    let res = r.get("ReserveFan").unwrap();
     assert_eq!(res.mode, DeviceMode::Real);
     assert!(res.endpoint.is_remote());
     let DeviceKind::Actor { limits } = &res.kind else { panic!("esperava ator") };
@@ -131,7 +131,7 @@ fn config_parses_and_applies_overrides_and_extensions() {
     assert_eq!(limits.max, Some(255.0));
 
     // Fallback no registro (FORMAL §4.3).
-    assert_eq!(r.get("Ventoinha").unwrap().fallback, vec!["VentoinhaReserva".to_string()]);
+    assert_eq!(r.get("Fan").unwrap().fallback, vec!["ReserveFan".to_string()]);
 }
 
 #[test]
@@ -165,12 +165,12 @@ fn config_rejects_malformations() {
     ));
     // Fallback para ator inexistente (FORMAL §4.3).
     assert!(matches!(
-        FxpConfig::parse("fallback.Ventoinha = Fantasma\n").and_then(|c| c.apply(&mut r)),
+        FxpConfig::parse("fallback.Fan = Fantasma\n").and_then(|c| c.apply(&mut r)),
         Err(RegistryError::UnknownFallback { .. })
     ));
     // Fallback de ator fora do registro.
     assert!(matches!(
-        FxpConfig::parse("fallback.Fantasma = Ventoinha\n").and_then(|c| c.apply(&mut r)),
+        FxpConfig::parse("fallback.Fantasma = Fan\n").and_then(|c| c.apply(&mut r)),
         Err(RegistryError::InvalidConfig(_))
     ));
     // Dispositivo novo sem se declarar.
@@ -186,7 +186,7 @@ fn config_rejects_malformations() {
     ));
     // Ator não aceita metadados de sensor.
     assert!(matches!(
-        FxpConfig::parse("Ventoinha.grandeza = fluxo\n").and_then(|c| c.apply(&mut r)),
+        FxpConfig::parse("Fan.grandeza = fluxo\n").and_then(|c| c.apply(&mut r)),
         Err(RegistryError::InvalidConfig(_))
     ));
     // …mas min/max de sensor é faixa legítima (FORMAL §6: cpu_temp 0–120).

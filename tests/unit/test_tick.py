@@ -30,13 +30,13 @@ def test_rules_evaluated_in_declared_order(engine, ledger, sim):
         ir.form("Dupla", "event", "v", "30s"),
         ir.review(
             "Dupla",
-            ir.rule("cpu_temp", ">", 10, "°C", ir.act_("Ventoinha", 100)),
-            ir.rule("cpu_temp", ">", 10, "°C", ir.act_("Ventoinha", 150)),
+            ir.rule("cpu_temp", ">", 10, "°C", ir.act_("Fan", 100)),
+            ir.rule("cpu_temp", ">", 10, "°C", ir.act_("Fan", 150)),
         ),
     )
     sim.set_sensor("cpu_temp", 40.0)
     engine.tick()
-    deliveries = [e["value"] for e in sim.delivered if e["actor"] == "Ventoinha"]
+    deliveries = [e["value"] for e in sim.delivered if e["actor"] == "Fan"]
     assert deliveries == [100, 150]  # ordem declarada preservada
 
 
@@ -48,17 +48,17 @@ def test_review_short_circuit_after_dissolution(engine, ledger, sim):
         ir.form("Curto", "event", "v", "30s"),
         ir.review(
             "Curto",
-            ir.rule("cpu_temp", ">", 10, "°C", ir.act_("Ventoinha", 100),
+            ir.rule("cpu_temp", ">", 10, "°C", ir.act_("Fan", 100),
                     ir.action("dissolve")),
-            ir.rule("cpu_temp", ">", 10, "°C", ir.act_("LedIndicador", "vermelho")),
+            ir.rule("cpu_temp", ">", 10, "°C", ir.act_("StatusLed", "red")),
         ),
     )
     sim.set_sensor("cpu_temp", 40.0)
     engine.tick()
     assert ledger.has("review_short_circuit", forma="Curto", regras_restantes=1)
     assert ledger.has("dissolve_rule", forma="Curto")
-    assert any(e["actor"] == "Ventoinha" for e in sim.delivered)
-    assert not any(e["actor"] == "LedIndicador" for e in sim.delivered)
+    assert any(e["actor"] == "Fan" for e in sim.delivered)
+    assert not any(e["actor"] == "StatusLed" for e in sim.delivered)
 
 
 def test_subvert_does_not_cancel_act_of_same_rule(engine, ledger, sim):
@@ -91,11 +91,11 @@ def test_dispatched_actuation_not_revoked_by_subvert(engine, ledger, sim):
         ir.form("T", "nonequilibrium", "v", "30s", source_path="cpu_temp",
                 maintenance_deadline="10s"),
         ir.review("T", ir.rule("cpu_temp", ">", 85, "°C",
-                               ir.action("subvert"), ir.act_("LedIndicador", "verde"))),
+                               ir.action("subvert"), ir.act_("StatusLed", "green"))),
     )
     sim.set_sensor("cpu_temp", 90.0)
     engine.tick()
-    assert sim.actors["LedIndicador"].current == "verde"
+    assert sim.actors["StatusLed"].current == "green"
 
 
 def test_notify_shutdown_neither_dissolves_nor_interrupts(engine, ledger, sim):
@@ -108,13 +108,13 @@ def test_notify_shutdown_neither_dissolves_nor_interrupts(engine, ledger, sim):
                 maintenance_deadline="10s"),
         ir.review("T", ir.rule("attention", "<", 20, "%",
                                ir.action("notify_shutdown"),
-                               ir.act_("LedIndicador", "apagado"))),
+                               ir.act_("StatusLed", "off"))),
     )
     sim.set_sensor("attention", 10.0)
     engine.tick()
     assert "T" in engine.forms            # forma permanece ativa
     assert not ledger.has("dissolve_rule")
-    assert sim.actors["LedIndicador"].current == "apagado"  # ação seguinte executada
+    assert sim.actors["StatusLed"].current == "off"  # ação seguinte executada
 
 
 def test_equal_share_of_global_power(engine, ledger):

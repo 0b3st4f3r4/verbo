@@ -222,8 +222,8 @@ fn rules_are_evaluated_in_declared_order() {
     let mut b = assemble(
         default_sim(),
         "event Dupla { value: \"v\", horizon: 30s }\n\
-         review Dupla { when cpu_temp > 10°C -> act(Ventoinha, 100),\n\
-                        when cpu_temp > 10°C -> act(Ventoinha, 150) }",
+         review Dupla { when cpu_temp > 10°C -> act(Fan, 100),\n\
+                        when cpu_temp > 10°C -> act(Fan, 150) }",
     );
     b.set_sensor("cpu_temp", 40.0);
     b.tick();
@@ -232,7 +232,7 @@ fn rules_are_evaluated_in_declared_order() {
         .fxp
         .delivered
         .iter()
-        .filter(|m| m.actor == "Ventoinha")
+        .filter(|m| m.actor == "Fan")
         .filter_map(|m| m.value.as_num())
         .collect();
     assert_eq!(deliveries, vec![100.0, 150.0]); // ordem declarada preservada
@@ -243,8 +243,8 @@ fn review_short_circuit_after_dissolution() {
     let mut b = assemble(
         default_sim(),
         "event Curto { value: \"v\", horizon: 30s }\n\
-         review Curto { when cpu_temp > 10°C -> act(Ventoinha, 100), dissolve,\n\
-                        when cpu_temp > 10°C -> act(LedIndicador, \"vermelho\") }",
+         review Curto { when cpu_temp > 10°C -> act(Fan, 100), dissolve,\n\
+                        when cpu_temp > 10°C -> act(StatusLed, \"red\") }",
     );
     b.set_sensor("cpu_temp", 40.0);
     b.tick();
@@ -253,8 +253,8 @@ fn review_short_circuit_after_dissolution() {
         &[("forma", Json::str("Curto")), ("regras_restantes", Json::num(1.0))]
     ));
     assert!(b.has(kinds::DISSOLVE_RULE));
-    assert!(b.engine.fxp.delivered.iter().any(|m| m.actor == "Ventoinha"));
-    assert!(!b.engine.fxp.delivered.iter().any(|m| m.actor == "LedIndicador"));
+    assert!(b.engine.fxp.delivered.iter().any(|m| m.actor == "Fan"));
+    assert!(!b.engine.fxp.delivered.iter().any(|m| m.actor == "StatusLed"));
 }
 
 #[test]
@@ -286,13 +286,13 @@ fn dispatched_actuation_not_revoked_by_subvert() {
     let mut b = assemble(
         default_sim(),
         "nonequilibrium T { value: \"v\", horizon: 30s, source_path: \"cpu_temp\", maintenance_deadline: 10s }\n\
-         review T { when cpu_temp > 85°C -> subvert, act(LedIndicador, \"verde\") }",
+         review T { when cpu_temp > 85°C -> subvert, act(StatusLed, \"green\") }",
     );
     b.set_sensor("cpu_temp", 90.0);
     b.tick();
     assert_eq!(
-        b.engine.fxp.current_actor("LedIndicador"),
-        Some(&vbl_runtime::Value::Str("verde".into()))
+        b.engine.fxp.current_actor("StatusLed"),
+        Some(&vbl_runtime::Value::Str("green".into()))
     );
 }
 
@@ -301,15 +301,15 @@ fn notify_shutdown_neither_dissolves_nor_interrupts() {
     let mut b = assemble(
         default_sim(),
         "nonequilibrium T { value: \"v\", horizon: 30s, source_path: \"attention\", maintenance_deadline: 10s }\n\
-         review T { when attention < 20% -> notify_shutdown, act(LedIndicador, \"apagado\") }",
+         review T { when attention < 20% -> notify_shutdown, act(StatusLed, \"off\") }",
     );
     b.set_sensor("attention", 10.0);
     b.tick();
     assert!(b.living_form("T")); // forma permanece ativa
     assert!(!b.has(kinds::DISSOLVE_RULE));
     assert_eq!(
-        b.engine.fxp.current_actor("LedIndicador"),
-        Some(&vbl_runtime::Value::Str("apagado".into()))
+        b.engine.fxp.current_actor("StatusLed"),
+        Some(&vbl_runtime::Value::Str("off".into()))
     );
 }
 
@@ -382,7 +382,7 @@ fn act_is_serialized_and_delivered_to_correct_actor() {
     let mut b = assemble(
         default_sim(),
         "nonequilibrium Servidor { value: \"critico\", horizon: 30s, source_path: \"cpu_temp\", maintenance_deadline: 10s }\n\
-         review Servidor { when cpu_temp > 70°C -> act(Ventoinha, 200) }",
+         review Servidor { when cpu_temp > 70°C -> act(Fan, 200) }",
     );
     b.set_sensor("cpu_temp", 75.0);
     b.tick();
@@ -392,7 +392,7 @@ fn act_is_serialized_and_delivered_to_correct_actor() {
         .fxp
         .outbox
         .iter()
-        .find(|m| m.op == "act" && m.actor == "Ventoinha" && m.value == vbl_runtime::Value::Num(200.0))
+        .find(|m| m.op == "act" && m.actor == "Fan" && m.value == vbl_runtime::Value::Num(200.0))
         .expect("mensagem FXP `act` não serializada");
     assert_eq!(msg.tick, b.engine.clock); // tick de despacho registrado
     assert!(b
@@ -400,11 +400,11 @@ fn act_is_serialized_and_delivered_to_correct_actor() {
         .fxp
         .delivered
         .iter()
-        .any(|m| m.actor == "Ventoinha" && m.value == vbl_runtime::Value::Num(200.0)));
-    assert_eq!(b.engine.fxp.current_actor("Ventoinha"), Some(&vbl_runtime::Value::Num(200.0)));
+        .any(|m| m.actor == "Fan" && m.value == vbl_runtime::Value::Num(200.0)));
+    assert_eq!(b.engine.fxp.current_actor("Fan"), Some(&vbl_runtime::Value::Num(200.0)));
     assert!(b.count_with(
         "ACTUATION",
-        &[("ator", Json::str("Ventoinha")), ("valor", Json::num(200.0)), ("sucesso", Json::boolean(true))]
+        &[("ator", Json::str("Fan")), ("valor", Json::num(200.0)), ("sucesso", Json::boolean(true))]
     ));
 }
 
@@ -451,13 +451,13 @@ fn value_above_safety_limit_rejected() {
     let mut b = assemble(
         default_sim(),
         "event T { value: \"x\", horizon: 10s }\n\
-         review T { when cpu_temp > 10°C -> act(Ventoinha, 250) }",
+         review T { when cpu_temp > 10°C -> act(Fan, 250) }",
     );
     b.set_sensor("cpu_temp", 30.0);
     b.tick();
     let events = b.engine.ledger.search(
         kinds::ACTOR_REJECTED_VALUE,
-        &[("ator", Json::str("Ventoinha"))],
+        &[("ator", Json::str("Fan"))],
     );
     assert_eq!(events.len(), 1);
     match &events[0].extra {
@@ -467,7 +467,7 @@ fn value_above_safety_limit_rejected() {
         }
         _ => panic!("extra ausente"),
     }
-    assert!(!b.engine.fxp.delivered.iter().any(|m| m.actor == "Ventoinha"));
+    assert!(!b.engine.fxp.delivered.iter().any(|m| m.actor == "Fan"));
 }
 
 #[test]
@@ -475,11 +475,11 @@ fn limits_are_inclusive() {
     let mut b = assemble(
         default_sim(),
         "event T { value: \"x\", horizon: 10s }\n\
-         review T { when cpu_temp > 10°C -> act(Ventoinha, 200), act(CpuPowerCap, 10) }",
+         review T { when cpu_temp > 10°C -> act(Fan, 200), act(CpuPowerCap, 10) }",
     );
     b.set_sensor("cpu_temp", 30.0);
     b.tick();
-    assert_eq!(b.engine.fxp.current_actor("Ventoinha"), Some(&vbl_runtime::Value::Num(200.0)));
+    assert_eq!(b.engine.fxp.current_actor("Fan"), Some(&vbl_runtime::Value::Num(200.0)));
     assert_eq!(b.engine.fxp.current_actor("CpuPowerCap"), Some(&vbl_runtime::Value::Num(10.0)));
     assert!(!b.has(kinds::ACTOR_REJECTED_VALUE));
 }
@@ -489,12 +489,12 @@ fn actor_beyond_maximum_rejected_without_send() {
     let mut b = assemble(
         default_sim(),
         "event T { value: \"x\", horizon: 10s }\n\
-         review T { when cpu_temp > 10°C -> act(Ventoinha, 256) }",
+         review T { when cpu_temp > 10°C -> act(Fan, 256) }",
     );
     b.set_sensor("cpu_temp", 30.0);
     b.tick();
     assert!(b.has(kinds::ACTOR_REJECTED_VALUE));
-    assert!(!b.engine.fxp.delivered.iter().any(|m| m.actor == "Ventoinha"));
+    assert!(!b.engine.fxp.delivered.iter().any(|m| m.actor == "Fan"));
 }
 
 #[test]
@@ -502,38 +502,38 @@ fn act_with_textual_value_without_numeric_limits() {
     let mut b = assemble(
         default_sim(),
         "event T { value: \"x\", horizon: 10s }\n\
-         review T { when cpu_temp > 10°C -> act(LedIndicador, \"verde\") }",
+         review T { when cpu_temp > 10°C -> act(StatusLed, \"green\") }",
     );
     b.set_sensor("cpu_temp", 30.0);
     b.tick();
     assert_eq!(
-        b.engine.fxp.current_actor("LedIndicador"),
-        Some(&vbl_runtime::Value::Str("verde".into()))
+        b.engine.fxp.current_actor("StatusLed"),
+        Some(&vbl_runtime::Value::Str("green".into()))
     );
 }
 
 #[test]
 fn registry_fallback_triggers_when_primary_fails() {
     let mut fxp = FxpSimulator::new();
-    fxp.register_actor("VentoinhaReserva", ActorLimits { min: Some(0.0), max: Some(255.0), safety_limit: Some(200.0) });
-    fxp.set_fallback("Ventoinha", &["VentoinhaReserva"]);
-    fxp.fail_actor("Ventoinha");
+    fxp.register_actor("ReserveFan", ActorLimits { min: Some(0.0), max: Some(255.0), safety_limit: Some(200.0) });
+    fxp.set_fallback("Fan", &["ReserveFan"]);
+    fxp.fail_actor("Fan");
     let mut b = assemble(
         fxp,
         "event T { value: \"x\", horizon: 10s }\n\
-         review T { when cpu_temp > 70°C -> act(Ventoinha, 200) }",
+         review T { when cpu_temp > 70°C -> act(Fan, 200) }",
     );
     b.set_sensor("cpu_temp", 75.0);
     b.tick();
     // tentativa primária registrada, falha registrada, fallback executado
-    assert!(b.count_with("ACTUATION", &[("ator", Json::str("Ventoinha")), ("sucesso", Json::boolean(false))]));
-    assert!(b.count_with(kinds::ACTOR_UNAVAILABLE, &[("ator", Json::str("Ventoinha"))]));
+    assert!(b.count_with("ACTUATION", &[("ator", Json::str("Fan")), ("sucesso", Json::boolean(false))]));
+    assert!(b.count_with(kinds::ACTOR_UNAVAILABLE, &[("ator", Json::str("Fan"))]));
     assert!(b.count_with(
         kinds::FALLBACK_EXECUTED,
-        &[("primario", Json::str("Ventoinha")), ("alternativo", Json::str("VentoinhaReserva"))]
+        &[("primario", Json::str("Fan")), ("alternativo", Json::str("ReserveFan"))]
     ));
     assert_eq!(
-        b.engine.fxp.current_actor("VentoinhaReserva"),
+        b.engine.fxp.current_actor("ReserveFan"),
         Some(&vbl_runtime::Value::Num(200.0))
     );
     assert!(b
@@ -541,7 +541,7 @@ fn registry_fallback_triggers_when_primary_fails() {
         .fxp
         .delivered
         .iter()
-        .any(|m| m.actor == "VentoinhaReserva" && m.fallback_of.as_deref() == Some("Ventoinha")));
+        .any(|m| m.actor == "ReserveFan" && m.fallback_of.as_deref() == Some("Fan")));
 }
 
 // ======================================================================
@@ -798,8 +798,8 @@ fn case1_attention_fatigue_end_to_end() {
     {
         let mut b = build_at(
             default_sim(),
-            "nonequilibrium PensarLivre { value: \"consciencia_anteneoliberal_ativa\", horizon: 60s, source_path: \"attention\", maintenance_deadline: 3s, exchange_mode: \"cooperation\" }\n\
-             review PensarLivre { when attention < 30% -> reclassify_as_equilibrium }",
+            "nonequilibrium FreeThinking { value: \"consciencia_anteneoliberal_ativa\", horizon: 60s, source_path: \"attention\", maintenance_deadline: 3s, exchange_mode: \"cooperation\" }\n\
+             review FreeThinking { when attention < 30% -> reclassify_as_equilibrium }",
             &dir,
         );
         b.set_sensor("attention", 15.0); // atenção esgotada
@@ -807,11 +807,11 @@ fn case1_attention_fatigue_end_to_end() {
         // transição gravada + persistência com SHA-256 + manutenção cessada
         assert!(b.count_with(
             kinds::TRANSITION,
-            &[("forma", Json::str("PensarLivre")), ("para", Json::str("equilibrium"))]
+            &[("forma", Json::str("FreeThinking")), ("para", Json::str("equilibrium"))]
         ));
         assert!(b.has(kinds::PERSISTENCE));
-        assert_eq!(b.engine.form("PensarLivre").unwrap().maintenance, None);
-        assert!(!b.engine.retention.labor.contains_key("PensarLivre")); // 0 bytes de trabalho
+        assert_eq!(b.engine.form("FreeThinking").unwrap().maintenance, None);
+        assert!(!b.engine.retention.labor.contains_key("FreeThinking")); // 0 bytes de trabalho
         assert!(b.engine.ledger.verify_chain());
     }
     let _ = std::fs::remove_dir_all(&dir);

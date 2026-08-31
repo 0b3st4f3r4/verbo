@@ -1,5 +1,5 @@
 // Exemplo 1 da FORMAL (§5) — fadiga de atenção (BDD Caso 1)
-nonequilibrium PensarLivre {
+nonequilibrium FreeThinking {
     value: "consciencia_anteneoliberal_ativa",
     horizon: 60s,
     source_path: "attention",
@@ -7,6 +7,6 @@ nonequilibrium PensarLivre {
     exchange_mode: "cooperation"
 }
 
-review PensarLivre {
+review FreeThinking {
     when attention < 30% -> reclassify_as_equilibrium
 }

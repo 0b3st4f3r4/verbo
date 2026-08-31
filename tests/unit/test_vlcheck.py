@@ -13,7 +13,7 @@ import vlcheck
 
 # Exemplos canônicos — docs/FORMAL.md §5
 EXAMPLE_1 = '''
-nonequilibrium PensarLivre {
+nonequilibrium FreeThinking {
     value: "consciencia_anteneoliberal_ativa",
     horizon: 60s,
     source_path: "attention",
@@ -21,13 +21,13 @@ nonequilibrium PensarLivre {
     exchange_mode: "cooperation"
 }
 
-review PensarLivre {
+review FreeThinking {
     when attention < 30% -> reclassify_as_equilibrium
 }
 '''
 
 EXAMPLE_2 = '''
-nonequilibrium TradingEspeculativo {
+nonequilibrium SpeculativeTrading {
     value: "lucro_arbitragem_alta_frequencia",
     horizon: 7s,
     source_path: "cpu_temp",
@@ -35,7 +35,7 @@ nonequilibrium TradingEspeculativo {
     exchange_mode: "extraction"
 }
 
-review TradingEspeculativo {
+review SpeculativeTrading {
     when cpu_temp > 85°C -> subvert,
                             act(CpuPowerCap, 50)
 }
@@ -51,12 +51,12 @@ nonequilibrium ServidorCritico {
 }
 
 review ServidorCritico {
-    when cpu_temp > 70°C -> act(Ventoinha, 200)
+    when cpu_temp > 70°C -> act(Fan, 200)
 }
 '''
 
 EXAMPLE_4 = '''
-nonequilibrium TarefaImportante {
+nonequilibrium ImportantTask {
     value: "dados_sensiveis",
     horizon: 30s,
     source_path: "cpu_power",
@@ -65,8 +65,8 @@ nonequilibrium TarefaImportante {
 }
 
 main {
-    every 4s { keep(TarefaImportante) },
-    every 10s { act(LedIndicador, "verde") }
+    every 4s { keep(ImportantTask) },
+    every 10s { act(StatusLed, "green") }
 }
 '''
 

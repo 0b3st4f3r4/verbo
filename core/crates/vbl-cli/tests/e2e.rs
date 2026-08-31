@@ -80,14 +80,14 @@ fn e2e_thermal_subversion_acts_on_actor_and_audits() {
     let program = write(
         &dir,
         "trading.vl",
-        "nonequilibrium TradingEspeculativo {\n\
+        "nonequilibrium SpeculativeTrading {\n\
          \x20 value: \"lucro_arbitragem_alta_frequencia\",\n\
          \x20 horizon: 7s,\n\
          \x20 source_path: \"cpu_temp\",\n\
          \x20 maintenance_deadline: 2s,\n\
          \x20 exchange_mode: \"extraction\"\n\
          }\n\
-         review TradingEspeculativo {\n\
+         review SpeculativeTrading {\n\
          \x20 when cpu_temp > 85°C -> subvert,\n\
          \x20                         act(CpuPowerCap, 50)\n\
          }",
@@ -136,18 +136,18 @@ fn e2e_thermal_subversion_acts_on_actor_and_audits() {
 
 #[test]
 fn e2e_attention_fatigue_reclassifies_and_persists() {
-    let dir = scenario("atencao");
+    let dir = scenario("attention");
     let program = write(
         &dir,
         "pensar.vl",
-        "nonequilibrium PensarLivre {\n\
+        "nonequilibrium FreeThinking {\n\
          \x20 value: \"consciencia_anteneoliberal_ativa\",\n\
          \x20 horizon: 60s,\n\
          \x20 source_path: \"attention\",\n\
          \x20 maintenance_deadline: 3s,\n\
          \x20 exchange_mode: \"cooperation\"\n\
          }\n\
-         review PensarLivre {\n\
+         review FreeThinking {\n\
          \x20 when attention < 30% -> reclassify_as_equilibrium\n\
          }",
     );
@@ -167,7 +167,7 @@ fn e2e_attention_fatigue_reclassifies_and_persists() {
         jsonl.lines().find(|l| l.contains("\"kind\":\"persistence\"")).expect("persistence");
     assert!(persistence.contains("\"sha256\":\""), "SHA-256 não registrado: {persistence}");
     // o arquivo canônico existe e é reparseável
-    let persisted = dir.join("persistence").join("PensarLivre.vl");
+    let persisted = dir.join("persistence").join("FreeThinking.vl");
     assert!(persisted.exists(), "`.vl` canônico não gravado");
     let check = vbl(&dir, &["check", persisted.to_str().unwrap(), "--no-registry"]);
     assert!(check.status.success(), "`.vl` persistido não reparseia");
@@ -185,7 +185,7 @@ fn e2e_attention_fatigue_reclassifies_and_persists() {
         "reclassificação em loop"
     );
     assert!(
-        text.contains("PensarLivre") && text.contains("equilibrium"),
+        text.contains("FreeThinking") && text.contains("equilibrium"),
         "forma deve seguir ativa como equilibrium:\n{text}"
     );
 
@@ -211,7 +211,7 @@ fn e2e_actor_failure_triggers_registry_fallback() {
          \x20 exchange_mode: \"cooperation\"\n\
          }\n\
          review ServidorCritico {\n\
-         \x20 when cpu_temp > 70°C -> act(Ventoinha, 200)\n\
+         \x20 when cpu_temp > 70°C -> act(Fan, 200)\n\
          }",
     );
     let (out, text) = run(
@@ -226,11 +226,11 @@ fn e2e_actor_failure_triggers_registry_fallback() {
                 "--at",
                 "2:cpu_temp=75",
                 "--register-actor",
-                "VentoinhaReserva",
+                "ReserveFan",
                 "--fallback",
-                "Ventoinha=VentoinhaReserva",
+                "Fan=ReserveFan",
                 "--fail-actor",
-                "Ventoinha",
+                "Fan",
             ],
         ),
     );
@@ -246,18 +246,18 @@ fn e2e_actor_failure_triggers_registry_fallback() {
         .lines()
         .find(|l| l.contains("\"kind\":\"fallback_executed\""))
         .expect("fallback_executado no log");
-    assert!(fallback.contains("\"alternativo\":\"VentoinhaReserva\""), "{fallback}");
+    assert!(fallback.contains("\"alternativo\":\"ReserveFan\""), "{fallback}");
     // a atuação efetiva foi no ALTERNATIVO, com valor aplicado — além do
     // registro da tentativa primária FALHA (a trilha completa fica no log)
     let actuation = jsonl
         .lines()
-        .find(|l| l.contains("\"kind\":\"ACTUATION\"") && l.contains("VentoinhaReserva"))
+        .find(|l| l.contains("\"kind\":\"ACTUATION\"") && l.contains("ReserveFan"))
         .expect("ATUACAO do fallback no log");
     assert!(actuation.contains("\"aplicado\":200"), "{actuation}");
     assert!(actuation.contains("\"sucesso\":true"), "{actuation}");
     let primary = jsonl
         .lines()
-        .find(|l| l.contains("\"kind\":\"ACTUATION\"") && l.contains("\"ator\":\"Ventoinha\""))
+        .find(|l| l.contains("\"kind\":\"ACTUATION\"") && l.contains("\"ator\":\"Fan\""))
         .expect("ATUACAO da tentativa primária no log");
     assert!(primary.contains("\"sucesso\":false"), "{primary}");
 
@@ -315,7 +315,7 @@ fn e2e_main_with_keep_and_periodic_actuation_audits_all_commands() {
     let program = write(
         &dir,
         "tarefa.vl",
-        "nonequilibrium TarefaImportante {\n\
+        "nonequilibrium ImportantTask {\n\
          \x20 value: \"dados_sensiveis\",\n\
          \x20 horizon: 30s,\n\
          \x20 source_path: \"cpu_power\",\n\
@@ -323,22 +323,22 @@ fn e2e_main_with_keep_and_periodic_actuation_audits_all_commands() {
          \x20 exchange_mode: \"cooperation\"\n\
          }\n\
          main {\n\
-         \x20 every 4s { keep(TarefaImportante) },\n\
-         \x20 every 10s { act(LedIndicador, \"verde\") }\n\
+         \x20 every 4s { keep(ImportantTask) },\n\
+         \x20 every 10s { act(StatusLed, \"green\") }\n\
          }",
     );
     let (out, text) = run(&dir, &args_run(&dir, &program, "caderno.vcad", &["--ticks", "12"]));
     assert!(out.status.success(), "vbl run falhou:\n{text}");
     assert!(text.contains("ÍNTEGRA"), "{text}");
-    assert!(text.contains("TarefaImportante"), "forma deve seguir ativa:\n{text}");
+    assert!(text.contains("ImportantTask"), "forma deve seguir ativa:\n{text}");
 
     let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
     // atuação textual aplicada no ator correto (tick 10 — every 10s)
     let actuation = jsonl
         .lines()
-        .find(|l| l.contains("\"kind\":\"ACTUATION\"") && l.contains("LedIndicador"))
-        .expect("ATUACAO do LedIndicador no log");
-    assert!(actuation.contains("\"aplicado\":\"verde\""), "{actuation}");
+        .find(|l| l.contains("\"kind\":\"ACTUATION\"") && l.contains("StatusLed"))
+        .expect("ATUACAO do StatusLed no log");
+    assert!(actuation.contains("\"aplicado\":\"green\""), "{actuation}");
     assert!(actuation.contains("\"tick\":10"), "atuação fora do every 10s: {actuation}");
     // a forma sobreviveu 12 ticks graças ao keep (sem colapso)
     assert!(

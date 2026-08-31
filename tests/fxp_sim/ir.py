@@ -7,10 +7,10 @@ estrutura e o `loader` carrega no runtime. Quando o parser real existir
 mudam de shape, apenas de origem.
 
 Formas:
-  {"type": "form", "conjugation": "nonequilibrium", "name": "PensarLivre",
+  {"type": "form", "conjugation": "nonequilibrium", "name": "FreeThinking",
    "attributes": {"value": ..., "horizon": "60s", ...}}   # ordem preservada
 Reviews:
-  {"type": "review", "form": "PensarLivre", "rules": [...]}
+  {"type": "review", "form": "FreeThinking", "rules": [...]}
   rule = {"sensor": str, "op": str, "threshold": float, "unit": str|None,
           "actions": [{"action": ...}, ...]}
 Main:

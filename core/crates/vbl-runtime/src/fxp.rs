@@ -12,7 +12,7 @@ use crate::json::Json;
 use std::collections::BTreeMap;
 
 /// Valor de comando/expressão do ator: numérico (limites) ou texto
-/// (ex.: `LedIndicador`).
+/// (ex.: `StatusLed`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Num(f64),
@@ -74,17 +74,17 @@ impl Registry {
     pub fn minimum() -> Self {
         let mut r = Self::default();
         for (name, quantity, unit) in [
-            ("cpu_temp", "temperatura", "°C"),
-            ("cpu_power", "potencia", "W"),
-            ("attention", "atencao", "%"),
+            ("cpu_temp", "temperature", "°C"),
+            ("cpu_power", "power", "W"),
+            ("attention", "attention", "%"),
         ] {
             r.sensores
                 .insert(name.into(), SensorInfo { quantity: quantity.into(), unit: unit.into() });
         }
         for (name, min, max, safety) in [
             ("CpuPowerCap", Some(10.0), Some(250.0), Some(200.0)),
-            ("Ventoinha", Some(0.0), Some(255.0), Some(200.0)),
-            ("LedIndicador", None, None, None),
+            ("Fan", Some(0.0), Some(255.0), Some(200.0)),
+            ("StatusLed", None, None, None),
         ] {
             r.actors.insert(name.into(), ActorLimits { min, max, safety_limit: safety });
         }
@@ -157,7 +157,7 @@ pub enum ActOutcome {
     FallbackExhausted,
     /// Valor fora do **domínio** do ator (extensão da Etapa 3): limites
     /// numéricos do registro cobrem min/max/safety; domínio cobre o resto
-    /// (ex.: cor fora do mapa do `LedIndicador`, texto em ator numérico).
+    /// (ex.: cor fora do mapa do `StatusLed`, texto em ator numérico).
     /// Sempre auditado (`ACT_ACK.InvalidValue` no schema v1), nunca entrega
     /// silenciosa.
     InvalidValue { reason: String },

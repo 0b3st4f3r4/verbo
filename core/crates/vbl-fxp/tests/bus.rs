@@ -45,7 +45,7 @@ fn bus_simulated() -> (FxpBus, ChainLedger) {
     )
 }
 
-/// Bus híbrido com cpu_temp (thermal), Ventoinha (pwm) e CpuPowerCap (cap)
+/// Bus híbrido com cpu_temp (thermal), Fan (pwm) e CpuPowerCap (cap)
 /// em rotas REAIS de fixture. Recebe os CAMINHOS DOS ARQUIVOS de pwm/cap.
 fn bus_hybrid_fixture(tz_dir: &Path, pwm_file: &Path, cap_file: &Path) -> (FxpBus, ChainLedger) {
     let cfg_text = format!(
@@ -53,8 +53,8 @@ fn bus_hybrid_fixture(tz_dir: &Path, pwm_file: &Path, cap_file: &Path) -> (FxpBu
          cache_ttl_ms = 0\n\
          cpu_temp.mode = real\n\
          cpu_temp.endpoint = thermal_zone:{}\n\
-         Ventoinha.mode = real\n\
-         Ventoinha.endpoint = hwmon_pwm:{}\n\
+         Fan.mode = real\n\
+         Fan.endpoint = hwmon_pwm:{}\n\
          CpuPowerCap.mode = real\n\
          CpuPowerCap.endpoint = rapl_constraint:{}\n",
         tz_dir.display(),
@@ -190,7 +190,7 @@ fn thermal_subversion_e2e_with_real_drivers() {
     let mut engine = Engine::new(bus, 1.0, tmpdir("persist-subvert"));
 
     let source = r#"
-nonequilibrium TradingEspeculativo {
+nonequilibrium SpeculativeTrading {
     value: "lucro_arbitragem_alta_frequencia",
     horizon: 7s,
     source_path: "cpu_temp",
@@ -198,7 +198,7 @@ nonequilibrium TradingEspeculativo {
     exchange_mode: "extraction"
 }
 
-review TradingEspeculativo {
+review SpeculativeTrading {
     when cpu_temp > 85°C -> subvert,
                             act(CpuPowerCap, 50)
 }
@@ -210,7 +210,7 @@ review TradingEspeculativo {
     engine.tick();
 
     // 1) subvert dissolve no mesmo tick (§4.5).
-    assert!(engine.form("TradingEspeculativo").is_none(), "forma subvertida deve dissolver no tick");
+    assert!(engine.form("SpeculativeTrading").is_none(), "forma subvertida deve dissolver no tick");
     // 2) a act pós-subvert chegou ao DRIVER REAL em µW (50 W).
     let written = fs::read_to_string(&cap).unwrap();
     assert_eq!(written, "50000000", "CpuPowerCap real deve receber 50 W em µW");
@@ -240,10 +240,10 @@ fn real_fallback_alternate_actor_full_trail() {
     let mut registry = DeviceRegistry::minimum();
     let cfg = FxpConfig::parse(&format!(
         "mode = hibrido\n\
-         Ventoinha.mode = real\nVentoinha.endpoint = hwmon_pwm:{}\n\
-         VentoinhaReserva.mode = real\nVentoinhaReserva.endpoint = hwmon_pwm:{}\n\
-         VentoinhaReserva.min = 0\nVentoinhaReserva.max = 255\n\
-         fallback.Ventoinha = VentoinhaReserva\n",
+         Fan.mode = real\nFan.endpoint = hwmon_pwm:{}\n\
+         ReserveFan.mode = real\nReserveFan.endpoint = hwmon_pwm:{}\n\
+         ReserveFan.min = 0\nReserveFan.max = 255\n\
+         fallback.Fan = ReserveFan\n",
         prim.display(),
         alt.display()
     ))
@@ -257,14 +257,14 @@ fn real_fallback_alternate_actor_full_trail() {
     let mut ledger = ChainLedger::new();
 
     // Primário OK: entrega direta no pwm1.
-    assert_eq!(bus.act("Ventoinha", Value::Num(200.0), &mut ledger), ActOutcome::Delivered);
+    assert_eq!(bus.act("Fan", Value::Num(200.0), &mut ledger), ActOutcome::Delivered);
     assert_eq!(fs::read_to_string(&prim).unwrap(), "200");
 
     // Primário morre (endpoint removido) → fallback do registro → pwm2.
     fs::remove_file(&prim).unwrap();
-    let outcome = bus.act("Ventoinha", Value::Num(180.0), &mut ledger);
+    let outcome = bus.act("Fan", Value::Num(180.0), &mut ledger);
     assert!(matches!(outcome,
-        ActOutcome::FallbackExecuted { ref alternativo } if alternativo == "VentoinhaReserva"));
+        ActOutcome::FallbackExecuted { ref alternativo } if alternativo == "ReserveFan"));
     assert_eq!(fs::read_to_string(&alt).unwrap(), "180");
 
     // Trilha completa: indisponível + fallback executado.
@@ -285,7 +285,7 @@ fn queue_redelivers_and_expires_with_audit() {
     let mut registry = DeviceRegistry::minimum();
     let cfg = FxpConfig::parse(&format!(
         "mode = hibrido\n\
-         Ventoinha.mode = real\nVentoinha.endpoint = hwmon_pwm:{}\n",
+         Fan.mode = real\nFan.endpoint = hwmon_pwm:{}\n",
         prim.display()
     ))
     .unwrap();
@@ -304,7 +304,7 @@ fn queue_redelivers_and_expires_with_audit() {
 
     // Ator morto: esgota → comando entra na fila com prioridade de subvert.
     fs::remove_file(&prim).unwrap();
-    let outcome = bus.act_with_priority("Ventoinha", Value::Num(120.0), PRIORITY_SUBVERT, &mut ledger);
+    let outcome = bus.act_with_priority("Fan", Value::Num(120.0), PRIORITY_SUBVERT, &mut ledger);
     assert_eq!(outcome, ActOutcome::FallbackExhausted);
     assert_eq!(bus.pending_queue(), 1);
 
@@ -322,7 +322,7 @@ fn queue_redelivers_and_expires_with_audit() {
     // Expiração: com o ator morto de novo, o comando pendente é descartado
     // no tick que atinge queue_timeout_ticks (2), com evento + alerta.
     fs::remove_file(&prim).unwrap();
-    let outcome = bus.act("Ventoinha", Value::Num(60.0), &mut ledger);
+    let outcome = bus.act("Fan", Value::Num(60.0), &mut ledger);
     assert_eq!(outcome, ActOutcome::FallbackExhausted);
     bus.on_tick(&mut ledger); // ticks_waiting 0→1
     bus.on_tick(&mut ledger); // 1→2
@@ -463,8 +463,8 @@ fn mute_remote_actor_becomes_unavailable_and_queued() {
 fn registry_extension_visible_in_simulator_and_runtime() {
     let mut registry = DeviceRegistry::minimum();
     let cfg = FxpConfig::parse(
-        "VentoinhaReserva.min = 0\nVentoinhaReserva.max = 255\n\
-         fallback.Ventoinha = VentoinhaReserva\n",
+        "ReserveFan.min = 0\nReserveFan.max = 255\n\
+         fallback.Fan = ReserveFan\n",
     )
     .unwrap();
     cfg.apply(&mut registry).unwrap();
@@ -474,14 +474,14 @@ fn registry_extension_visible_in_simulator_and_runtime() {
     );
 
     // Runtime registry (validação do loader) inclui a extensão…
-    assert!(bus.registry().actors.contains_key("VentoinhaReserva"));
+    assert!(bus.registry().actors.contains_key("ReserveFan"));
     // …e o backend simulado roteia a extensão com os limites do registro.
     assert!(matches!(
-        bus.act("VentoinhaReserva", Value::Num(300.0), &mut ledger),
+        bus.act("ReserveFan", Value::Num(300.0), &mut ledger),
         ActOutcome::Rejected { limit: Limit::Max, limit_value: 255.0 }
     ));
     assert_eq!(
-        bus.act("VentoinhaReserva", Value::Num(255.0), &mut ledger),
+        bus.act("ReserveFan", Value::Num(255.0), &mut ledger),
         ActOutcome::Delivered
     );
 }

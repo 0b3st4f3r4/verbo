@@ -101,7 +101,7 @@ class FXP:
                 "apply": self._actor_cpu_power_cap,
                 "description": "Limite de potência da CPU (Watts)",
             },
-            "Ventoinha": {
+            "Fan": {
                 "min": 0,
                 "max": 255,
                 "safety_limit": 200,
@@ -109,7 +109,7 @@ class FXP:
                 "apply": self._actor_fan_speed,
                 "description": "Velocidade da ventoinha (PWM)",
             },
-            "LedIndicador": {
+            "StatusLed": {
                 "min": None,
                 "max": None,
                 "safety_limit": None,
@@ -991,28 +991,28 @@ async def main():
     engine = VerboLangEngine()
 
     # Bloco `main` da linguagem (estrutura cf. docs/FORMAL.md §3; adaptação do
-    # Exemplo 4 — canônico: every 4s { keep(TarefaImportante) } — para as
+    # Exemplo 4 — canônico: every 4s { keep(ImportantTask) } — para as
     # três formas conjuradas abaixo):
-    #   every 1s  { keep(PensarLivre), keep(TradingEspeculativo), keep(ServidorCritico) }
-    #   every 10s { act(LedIndicador, "verde") }
+    #   every 1s  { keep(FreeThinking), keep(SpeculativeTrading), keep(ServidorCritico) }
+    #   every 10s { act(StatusLed, "green") }
     main_block = MainInterpreter(engine)
     main_block.add_every(
         1.0,
         [
-            {"statement": "keep", "form": "PensarLivre"},
-            {"statement": "keep", "form": "TradingEspeculativo"},
+            {"statement": "keep", "form": "FreeThinking"},
+            {"statement": "keep", "form": "SpeculativeTrading"},
             {"statement": "keep", "form": "ServidorCritico"},
         ],
     )
     main_block.add_every(
-        10.0, [{"statement": "act", "actor": "LedIndicador", "value": "verde"}]
+        10.0, [{"statement": "act", "actor": "StatusLed", "value": "green"}]
     )
 
-    # --- CONJURAÇÃO 1: PensarLivre (nonequilibrium) ---
+    # --- CONJURAÇÃO 1: FreeThinking (nonequilibrium) ---
     # Sensor principal: attention
     # Condição adicional: usa o mesmo sensor, mas poderia usar outro.
     pensar_livre = NonequilibriumForm(
-        name="PensarLivre",
+        name="FreeThinking",
         value="consciencia_anteneoliberal_ativa",
         horizon=60.0,
         source_path="attention",
@@ -1025,11 +1025,11 @@ async def main():
     )
     engine.register_form(pensar_livre)
 
-    # --- CONJURAÇÃO 2: TradingEspeculativo (nonequilibrium) ---
+    # --- CONJURAÇÃO 2: SpeculativeTrading (nonequilibrium) ---
     # Sensor principal: cpu_temp
     # Condição adicional: usa cpu_temp e também ação com ator.
     trading_predatorio = NonequilibriumForm(
-        name="TradingEspeculativo",
+        name="SpeculativeTrading",
         value="lucro_arbitragem_alta_frequencia",
         horizon=7.0,
         source_path="cpu_temp",
@@ -1058,7 +1058,7 @@ async def main():
         current_time=engine.sim_time,
     )
     servidor_critico.add_review_condition(
-        "cpu_temp", ">", 70.0, [{"action": "act", "actor": "Ventoinha", "value": 200}]
+        "cpu_temp", ">", 70.0, [{"action": "act", "actor": "Fan", "value": 200}]
     )
     servidor_critico.add_review_condition(
         "attention", "<", 20.0, [{"action": "notify_shutdown"}]
@@ -1070,7 +1070,7 @@ async def main():
         f"Leitura inicial do sensor 'cpu_temp': {engine.fxp.read_sensor('cpu_temp')}°C"
     )
     Caderno.info(
-        f"Atuação inicial no ator 'Ventoinha': {engine.fxp.act('Ventoinha', 150)}"
+        f"Atuação inicial no ator 'Fan': {engine.fxp.act('Fan', 150)}"
     )
 
     # --- LOOP DE SIMULAÇÃO (12 segundos virtuais) ---
@@ -1084,7 +1084,7 @@ async def main():
             engine.fxp.cpu_power = 420.0  # alta potência -> aquece
         elif seg == 5:
             engine.fxp.solar_generation = 0.0  # painel solar para de gerar
-            # Pico térmico DENTRO do horizon de TradingEspeculativo (7s),
+            # Pico térmico DENTRO do horizon de SpeculativeTrading (7s),
             # tornando o cenário BDD Caso 2 (subversão térmica) alcançável.
             engine.fxp.cpu_temperature = 90.0
         elif seg == 6:
@@ -1093,9 +1093,9 @@ async def main():
             # efeito físico roteirizado pelo cenário — o runtime não faz
             # física por conta própria (FORMAL §4.5).
             engine.fxp.cpu_power = 15.0
-            if isinstance(engine.forms.get("PensarLivre"), EquilibriumForm):
+            if isinstance(engine.forms.get("FreeThinking"), EquilibriumForm):
                 # Adiciona condição para voltar a nonequilibrium
-                engine.forms["PensarLivre"].add_review_condition(
+                engine.forms["FreeThinking"].add_review_condition(
                     "attention",
                     ">",
                     80.0,

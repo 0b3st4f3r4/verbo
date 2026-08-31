@@ -138,7 +138,7 @@ mod tests {
     fn cmd(seq: u32, priority: u8) -> Command {
         Command {
             seq,
-            actor: "Ventoinha".into(),
+            actor: "Fan".into(),
             value: Value::Num(100.0),
             priority,
             ticks_waiting: 0,

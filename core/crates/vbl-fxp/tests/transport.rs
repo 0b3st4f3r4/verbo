@@ -50,7 +50,7 @@ fn unix_roundtrip_with_correlated_ack_and_seq() {
     assert_eq!(r.flags & vbl_fxp::schema::flag::SYNTHETIC, 0, "leitura real no fio");
 
     let r = c
-        .request(&Message::act("Ventoinha", WV::Num(200.0), 8, true), DEADLINE)
+        .request(&Message::act("Fan", WV::Num(200.0), 8, true), DEADLINE)
         .unwrap();
     assert_eq!(r.body, Body::ActAck { status: AckAct::Delivered });
 
@@ -76,7 +76,7 @@ fn honest_timeout_when_actor_is_mute() {
     let mut c = vbl_fxp::transport::Connection::unix(&path, DEADLINE).unwrap();
     let start = std::time::Instant::now();
     let err = c
-        .request(&Message::heartbeat("Ventoinha", 3), SHORT_DEADLINE)
+        .request(&Message::heartbeat("Fan", 3), SHORT_DEADLINE)
         .unwrap_err();
     assert_eq!(err, TransportError::Timeout);
     assert!(start.elapsed() >= SHORT_DEADLINE, "timeout não pode retornar antes do prazo");
@@ -103,7 +103,7 @@ fn hello_publishes_peer_registry() {
             name: "cpu_temp".into(),
             min: Some(0.0),
             max: Some(120.0),
-            quantity: "temperatura".into(),
+            quantity: "temperature".into(),
             unit: "°C".into(),
             precision_pct: 2.0,
         },

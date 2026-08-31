@@ -51,7 +51,7 @@ use vbl_fxp::{BusConfig, FxpBus};
 const MINIMUM_REGISTRY: &str = "\
 registro mínimo do FXP (FORMAL §6):
   sensores : cpu_temp (temperatura, °C), cpu_power (potencia, W), attention (atencao, %)
-  atores   : CpuPowerCap [10..250, safety 200], Ventoinha [0..255, safety 200], LedIndicador
+  atores   : CpuPowerCap [10..250, safety 200], Fan [0..255, safety 200], StatusLed
 ";
 
 fn main() {
@@ -517,7 +517,7 @@ fn fxp_probe(fxp_config: &Option<PathBuf>, fxp_mode: &Option<String>) {
     // faltar algo no denominador canônico.
     let mandatory = [
         ("cpu_temp", "sensor"), ("cpu_power", "sensor"), ("attention", "sensor"),
-        ("CpuPowerCap", "ator"), ("Ventoinha", "ator"), ("LedIndicador", "ator"),
+        ("CpuPowerCap", "ator"), ("Fan", "ator"), ("StatusLed", "ator"),
     ];
     let missing: Vec<String> = mandatory
         .iter()

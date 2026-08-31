@@ -98,9 +98,9 @@ impl PhysicalUnit {
     /// Grandeza canônica associada (FORMAL §6 — registro mínimo).
     pub fn quantity(&self) -> &'static str {
         match self {
-            PhysicalUnit::W => "potencia",
-            PhysicalUnit::DegC => "temperatura",
-            PhysicalUnit::Percent => "atencao",
+            PhysicalUnit::W => "power",
+            PhysicalUnit::DegC => "temperature",
+            PhysicalUnit::Percent => "attention",
         }
     }
 }

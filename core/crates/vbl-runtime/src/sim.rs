@@ -88,11 +88,11 @@ impl SimulatorBuilder {
                 .insert(name.clone(), SensorState { value, accessible: true });
         }
         // Atores com efeitos físicos determinísticos (PLAN §6.5)
-        for name in ["CpuPowerCap", "Ventoinha", "LedIndicador"] {
+        for name in ["CpuPowerCap", "Fan", "StatusLed"] {
             if let Some(limits) = sim.registry.actors.get(name).cloned() {
                 let effect = match name {
                     "CpuPowerCap" => ActorEffect::PowerCap,
-                    "Ventoinha" => ActorEffect::Fan,
+                    "Fan" => ActorEffect::Fan,
                     _ => ActorEffect::NoEffect,
                 };
                 sim.actors.insert(
@@ -181,7 +181,7 @@ impl FxpSimulator {
         }
     }
 
-    /// Registra ator extra (extensão opcional, ex.: `VentoinhaReserva`).
+    /// Registra ator extra (extensão opcional, ex.: `ReserveFan`).
     pub fn register_actor(&mut self, name: &str, limits: ActorLimits) {
         self.registry.actors.insert(name.into(), limits.clone());
         self.actors.insert(

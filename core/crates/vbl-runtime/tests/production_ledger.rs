@@ -183,7 +183,7 @@ fn actuation_records_applied_latency_and_cost() {
         success: true,
     });
     ledger.actuator_action_detailed(Actuation {
-        actor: "Ventoinha".into(),
+        actor: "Fan".into(),
         requested: Value::Num(255.0),
         applied: None,
         latency_us: None,
@@ -299,7 +299,7 @@ fn deterministic_json_parser_roundtrip() {
     let original = Json::obj([
         ("seq", Json::num(7.0)),
         ("kind", Json::str("ACTUATION")),
-        ("msg", Json::str("Ator 'Ventoinha' <- 200 (sucesso)")),
+        ("msg", Json::str("Ator 'Fan' <- 200 (sucesso)")),
         ("valor", Json::num(200.0)),
         ("decimal", Json::num(0.5)),
         ("negativo", Json::num(-3.25)),

@@ -272,7 +272,7 @@ impl ActorDriver for HwmonPwmActor {
     fn apply(&mut self, value: &Value) -> Result<(), ActorError> {
         let Some(v) = value.as_num() else {
             return Err(ActorError::InvalidValue(format!(
-                "Ventoinha espera PWM numérico 0–255, recebeu {value}"
+                "Fan espera PWM numérico 0–255, recebeu {value}"
             )));
         };
         if !(0.0..=255.0).contains(&v) || v.fract() != 0.0 {
@@ -292,7 +292,7 @@ impl ActorDriver for HwmonPwmActor {
     }
 }
 
-/// `LedIndicador` — LED class (`/sys/class/leds/*/brightness`).
+/// `StatusLed` — LED class (`/sys/class/leds/*/brightness`).
 /// Estado textual do registro (§6): cores nomeadas → brilho via mapa de
 /// configuração (`verde`/`vermelho`/`amarelo`/`azul`/`apagado` por padrão);
 /// número direto é aceito como brilho (extensão honesta e auditável).
@@ -311,9 +311,9 @@ impl LedClassActor {
             .and_then(|m| u8::try_from(m).ok())
             .unwrap_or(255);
         let mut mapa = std::collections::BTreeMap::new();
-        mapa.insert("apagado".to_string(), 0);
-        mapa.insert("vermelho".to_string(), max);
-        mapa.insert("verde".to_string(), (max / 4).max(1));
+        mapa.insert("off".to_string(), 0);
+        mapa.insert("red".to_string(), max);
+        mapa.insert("green".to_string(), (max / 4).max(1));
         mapa.insert("amarelo".to_string(), (max / 2).max(1));
         mapa.insert("azul".to_string(), (max / 3).max(1));
         Self { dir, mapa, max }
@@ -336,7 +336,7 @@ impl ActorDriver for LedClassActor {
             Value::Str(s) | Value::Ident(s) => {
                 self.mapa.get(s.as_str()).copied().ok_or_else(|| {
                     ActorError::InvalidValue(format!(
-                        "cor '{s}' fora do mapa do LedIndicador ({:?})",
+                        "cor '{s}' fora do mapa do StatusLed ({:?})",
                         self.mapa.keys().collect::<Vec<_>>()
                     ))
                 })?
@@ -383,8 +383,8 @@ pub fn discover(name: &str) -> Option<crate::registry::Endpoint> {
             let f = Path::new("/sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw");
             f.exists().then(|| Endpoint::RaplConstraint { file: f.into() })
         }
-        "Ventoinha" => discover_pwm().map(|file| Endpoint::HwmonPwm { file }),
-        "LedIndicador" => discover_led().map(|dir| Endpoint::LedClass { dir }),
+        "Fan" => discover_pwm().map(|file| Endpoint::HwmonPwm { file }),
+        "StatusLed" => discover_led().map(|dir| Endpoint::LedClass { dir }),
         _ => None,
     }
 }

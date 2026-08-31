@@ -93,7 +93,7 @@ linha = seq ␟ kind ␟ msg [ ␟ extra_json ]
 Exemplo (do E2E de subversão térmica):
 
 ```
-14␟ACTUATION␟Ator 'CpuPowerCap' <- 50 (aplicado: 50, sucesso)␟{"aplicado":50,"ator":"CpuPowerCap","forma":"TradingEspeculativo","sucesso":true,"t":3,"tick":3,"valor":50}
+14␟ACTUATION␟Ator 'CpuPowerCap' <- 50 (aplicado: 50, sucesso)␟{"aplicado":50,"ator":"CpuPowerCap","forma":"SpeculativeTrading","sucesso":true,"t":3,"tick":3,"valor":50}
 ```
 
 ## 4. Export JSONL (auditoria textual)

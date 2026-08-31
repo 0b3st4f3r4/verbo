@@ -26,20 +26,20 @@ def test_act_is_serialized_and_delivered_to_correct_actor(engine, ledger, sim):
         ir.form("Servidor", "nonequilibrium", "critico", "30s",
                 source_path="cpu_temp", maintenance_deadline="10s"),
         ir.review("Servidor", ir.rule("cpu_temp", ">", 70, "°C",
-                                      ir.act_("Ventoinha", 200))),
+                                      ir.act_("Fan", 200))),
     )
     sim.set_sensor("cpu_temp", 75.0)
     engine.tick()
     # mensagem serializada no outbox do FXP
     msg = [m for m in sim.outbox if m["op"] == "act"
-           and m["actor"] == "Ventoinha" and m["value"] == 200]
+           and m["actor"] == "Fan" and m["value"] == 200]
     assert msg, "mensagem FXP `act` não serializada"
     assert msg[0]["tick"] == engine.clock  # tick de despacho registrado
     # entrega ao ator correto
-    assert any(e["actor"] == "Ventoinha" and e["value"] == 200
+    assert any(e["actor"] == "Fan" and e["value"] == 200
                for e in sim.delivered)
-    assert sim.actors["Ventoinha"].current == 200
-    assert ledger.has("ACTUATION", ator="Ventoinha", valor=200, sucesso=True)
+    assert sim.actors["Fan"].current == 200
+    assert ledger.has("ACTUATION", ator="Fan", valor=200, sucesso=True)
 
 
 def test_unregistered_actor_rejected_and_recorded(engine, ledger, sim):
@@ -79,26 +79,26 @@ def test_value_above_safety_limit_rejected(engine, ledger, sim):
         engine,
         ir.form("T", "event", "x", "10s"),
         ir.review("T", ir.rule("cpu_temp", ">", 10, "°C",
-                               ir.act_("Ventoinha", 250))),
+                               ir.act_("Fan", 250))),
     )
     sim.set_sensor("cpu_temp", 30.0)
     engine.tick()
-    event = ledger.find("actor_rejected_value", ator="Ventoinha")
+    event = ledger.find("actor_rejected_value", ator="Fan")
     assert event and event[0]["limite"] == "safety_limit" \
         and event[0]["limite_valor"] == 200
-    assert not any(e["actor"] == "Ventoinha" for e in sim.delivered)
+    assert not any(e["actor"] == "Fan" for e in sim.delivered)
 
 
 def test_limits_are_inclusive(engine, ledger, sim):
     """FORMAL §4.3: valor IGUAL ao limite é aceito (ex.: safety_limit)."""
-    assert sim.act("Ventoinha", 200) is True      # == safety_limit
-    assert sim.act("Ventoinha", 0) is True        # == min
+    assert sim.act("Fan", 200) is True      # == safety_limit
+    assert sim.act("Fan", 0) is True        # == min
     assert sim.act("CpuPowerCap", 200) is True    # == safety_limit
     assert sim.act("CpuPowerCap", 10) is True     # == min
     assert not ledger.has("actor_rejected_value")
 
 
-@pytest.mark.parametrize("actor,value", [("Ventoinha", 256), ("CpuPowerCap", 251),
+@pytest.mark.parametrize("actor,value", [("Fan", 256), ("CpuPowerCap", 251),
                                          ("CpuPowerCap", 9)])
 def test_values_out_of_limit_rejected(engine, ledger, sim, actor, value):
     assert sim.act(actor, value) is False
@@ -125,9 +125,9 @@ def test_rejection_does_not_dissolve_the_form(engine, ledger, sim):
 # Fallback: política do REGISTRO do FXP (FORMAL §4.3; BDD Caso 3)
 # ----------------------------------------------------------------------
 def _prepare_fallback(sim):
-    sim.register_actor("VentoinhaReserva", "ventoinha alternativa (extensão)",
+    sim.register_actor("ReserveFan", "ventoinha alternativa (extensão)",
                        min_value=0, max_value=255, safety_limit=200)
-    sim.define_fallback("Ventoinha", "VentoinhaReserva")
+    sim.define_fallback("Fan", "ReserveFan")
 
 
 def test_fallback_executed_when_primary_does_not_respond(engine, ledger, sim):
@@ -137,28 +137,28 @@ def test_fallback_executed_when_primary_does_not_respond(engine, ledger, sim):
         ir.form("Servidor", "nonequilibrium", "critico", "3600s",
                 source_path="cpu_temp", maintenance_deadline="10s"),
         ir.review("Servidor", ir.rule("cpu_temp", ">", 70, "°C",
-                                      ir.act_("Ventoinha", 200))),
+                                      ir.act_("Fan", 200))),
     )
-    sim.fail_actor("Ventoinha")
+    sim.fail_actor("Fan")
     sim.set_sensor("cpu_temp", 75.0)
     engine.tick()
     # tentativa primária registrada como falha + heartbeat indisponível
-    assert ledger.has("ACTUATION", ator="Ventoinha", sucesso=False)
-    assert ledger.has("actor_unavailable", ator="Ventoinha")
+    assert ledger.has("ACTUATION", ator="Fan", sucesso=False)
+    assert ledger.has("actor_unavailable", ator="Fan")
     # fallback executado e entregue
-    assert ledger.has("fallback_executed", primario="Ventoinha",
-                      alternativo="VentoinhaReserva")
-    assert sim.actors["VentoinhaReserva"].current == 200
-    assert sim.actors["Ventoinha"].current != 200
+    assert ledger.has("fallback_executed", primario="Fan",
+                      alternativo="ReserveFan")
+    assert sim.actors["ReserveFan"].current == 200
+    assert sim.actors["Fan"].current != 200
 
 
 def test_exhausted_fallback_records_alert(engine, ledger, sim):
     _prepare_fallback(sim)
-    sim.fail_actor("Ventoinha")
-    sim.fail_actor("VentoinhaReserva")
-    ok = sim.act("Ventoinha", 200)
+    sim.fail_actor("Fan")
+    sim.fail_actor("ReserveFan")
+    ok = sim.act("Fan", 200)
     assert ok is False
-    assert ledger.has("ALERT", motivo="fallback_esgotado", ator="Ventoinha")
+    assert ledger.has("ALERT", motivo="fallback_esgotado", ator="Fan")
     assert not sim.delivered
 
 
@@ -170,11 +170,11 @@ def test_mockfxp_serializes_and_validates_without_physical_model(vbl, ledger):
 
     mock = MockFXP(ledger=vbl.Caderno)
     mock.register_sensor("cpu_temp", 55.0)
-    mock.register_actor("Ventoinha", min_value=0, max_value=255, safety=200)
+    mock.register_actor("Fan", min_value=0, max_value=255, safety=200)
     assert mock.read_sensor("cpu_temp") == 55.0
     assert mock.read_sensor("solar_panel") is None  # ausente -> None, nunca 0.0
-    assert mock.act("Ventoinha", 200) is True
-    assert mock.act("Ventoinha", 300) is False  # acima do max
+    assert mock.act("Fan", 200) is True
+    assert mock.act("Fan", 300) is False  # acima do max
     assert mock.act("LedFantasma", 1) is False  # ator inexistente
-    assert [m["actor"] for m in mock.outbox] == ["Ventoinha", "Ventoinha", "LedFantasma"]
+    assert [m["actor"] for m in mock.outbox] == ["Fan", "Fan", "LedFantasma"]
     assert [m["value"] for m in mock.delivered] == [200]

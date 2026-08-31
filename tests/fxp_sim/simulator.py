@@ -107,11 +107,11 @@ class FXPSimulator:
             apply=lambda v: self._power_cap_effect(v),
         )
         self.register_actor(
-            "Ventoinha", "velocidade da ventoinha (PWM)",
+            "Fan", "velocidade da ventoinha (PWM)",
             min_value=0, max_value=255, safety_limit=200,
             apply=lambda v: self._fan_effect(v),
         )
-        self.register_actor("LedIndicador", "estado textual do LED")
+        self.register_actor("StatusLed", "estado textual do LED")
 
     def register_actor(self, name, function, min_value=None, max_value=None,
                        safety_limit=None, apply=None):

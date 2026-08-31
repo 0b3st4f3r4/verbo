@@ -111,7 +111,7 @@ fn bench_fxp_act(c: &mut Criterion) {
                 for _ in 0..100 {
                     engine
                         .fxp
-                        .act("Ventoinha", vbl_runtime::Value::Num(100.0), &mut engine.ledger);
+                        .act("Fan", vbl_runtime::Value::Num(100.0), &mut engine.ledger);
                 }
                 let _ = std::fs::remove_dir_all(dir);
             },

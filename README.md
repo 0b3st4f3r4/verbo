@@ -42,7 +42,7 @@ flowchart TB
 Subversão poética por sobrecarga térmica, com atuação física via FXP:
 
 ```verbolang
-nonequilibrium TradingEspeculativo {
+nonequilibrium SpeculativeTrading {
     value: "lucro_arbitragem_alta_frequencia",
     horizon: 7s,
     source_path: "cpu_temp",
@@ -50,7 +50,7 @@ nonequilibrium TradingEspeculativo {
     exchange_mode: "extraction"
 }
 
-review TradingEspeculativo {
+review SpeculativeTrading {
     when cpu_temp > 85°C -> subvert,
                              act(CpuPowerCap, 50)   // FXP limita a potência da CPU
 }

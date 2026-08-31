@@ -20,12 +20,12 @@ fn corpus() -> Vec<Message> {
             body: Body::Act { value: WireValue::Num(0.0) }, // 0.0 é leitura/comando válido
         },
         Message::act(
-            "LedIndicador",
-            WireValue::Str("verde".into()),
+            "StatusLed",
+            WireValue::Str("green".into()),
             42,
             true,
         ),
-        Message::act("Ventoinha", WireValue::Ident("verde".into()), 43, true),
+        Message::act("Fan", WireValue::Ident("green".into()), 43, true),
         Message::read_ok(-273.15, "cpu_temp", false, 7),
         Message::read_ok(f64::MIN_POSITIVE, "attention", true, 8),
         Message::read_err(0, 9),
@@ -34,10 +34,10 @@ fn corpus() -> Vec<Message> {
         Message::act_ack(AckAct::Rejected { limit: 2, limit_value: 200.0 }, false, 12),
         Message::act_ack(AckAct::MissingActor, false, 13),
         Message::act_ack(AckAct::Unavailable, false, 14),
-        Message::act_ack(AckAct::FallbackExecuted { alternativo: "VentoinhaReserva".into() }, true, 15),
+        Message::act_ack(AckAct::FallbackExecuted { alternativo: "ReserveFan".into() }, true, 15),
         Message::act_ack(AckAct::FallbackExhausted, false, 16),
         Message::act_ack(AckAct::InvalidValue { reason: "cor desconhecida: 'roxo'".into() }, false, 17),
-        Message::heartbeat("Ventoinha", 18),
+        Message::heartbeat("Fan", 18),
         Message::heartbeat_ack(true, 19),
         Message::heartbeat_ack(false, 20),
         Message::hello(vec![], 21),
@@ -47,7 +47,7 @@ fn corpus() -> Vec<Message> {
                     name: "cpu_temp".into(),
                     min: Some(0.0), // mínimo legítimo 0 (não é "não declarado")
                     max: Some(120.0),
-                    quantity: "temperatura".into(),
+                    quantity: "temperature".into(),
                     unit: "°C".into(),
                     precision_pct: 2.0,
                 },
@@ -115,7 +115,7 @@ fn utf8_multibyte_exact_remainder() {
     let names = ["temperatura_çãã", "cpu_temp_🔥", "grandeza_αβγ_°C_W_%"];
     for (i, s) in names.iter().enumerate() {
         let msg = Message::act(
-            "LedIndicador",
+            "StatusLed",
             WireValue::Str((*s).into()),
             i as u32,
             true,

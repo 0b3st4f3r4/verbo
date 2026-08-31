@@ -113,8 +113,8 @@ Códigos de carga/runtime validados contra o registro do FXP
 
 ## 5. Exemplos canônicos
 
-`exemplos_canonicos_da_formal_validam` — os exemplos §5 da FORMAL (PensarLivre,
-TradingEspeculativo e demais) validam sem diagnóstico. Os mesmos programas
+`exemplos_canonicos_da_formal_validam` — os exemplos §5 da FORMAL (FreeThinking,
+SpeculativeTrading e demais) validam sem diagnóstico. Os mesmos programas
 estão em `examples/*.vl` e são executados ponta a ponta pelo CLI `vbl`
 (`vbl check`, `vbl run`).
 

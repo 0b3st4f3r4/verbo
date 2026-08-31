@@ -183,7 +183,7 @@ fn powercap_writes_microwatts_and_rejects_text() {
     ));
 }
 
-/// Ventoinha: PWM inteiro 0–255.
+/// Fan: PWM inteiro 0–255.
 #[test]
 fn pwm_writes_integer_and_rejects_out_of_domain() {
     let dir = tmpdir("pwm");
@@ -209,7 +209,7 @@ fn pwm_writes_integer_and_rejects_out_of_domain() {
     ));
 }
 
-/// LedIndicador: cores nomeadas do registro §6 + max_brightness.
+/// StatusLed: cores nomeadas do registro §6 + max_brightness.
 #[test]
 fn led_resolves_colors_from_map_and_respects_max_brightness() {
     let dir = tmpdir("led");
@@ -217,10 +217,10 @@ fn led_resolves_colors_from_map_and_respects_max_brightness() {
     fs::write(dir.join("brightness"), "0").unwrap();
 
     let mut a = LedClassActor::new(&dir);
-    a.apply(&Value::Str("verde".into())).unwrap();
+    a.apply(&Value::Str("green".into())).unwrap();
     assert_eq!(fs::read_to_string(dir.join("brightness")).unwrap(), "63");
 
-    a.apply(&Value::Ident("apagado".into())).unwrap();
+    a.apply(&Value::Ident("off".into())).unwrap();
     assert_eq!(fs::read_to_string(dir.join("brightness")).unwrap(), "0");
 
     // Cor fora do mapa: InvalidValue — sem fabricação.
@@ -268,7 +268,7 @@ fn fabrication_and_discovery_are_consistent() {
     assert!(a.heartbeat());
 
     // Auto-descoberta: consistente em qualquer host (achar ou não é válido).
-    for name in ["cpu_temp", "cpu_power", "CpuPowerCap", "Ventoinha", "LedIndicador", "x"] {
+    for name in ["cpu_temp", "cpu_power", "CpuPowerCap", "Fan", "StatusLed", "x"] {
         let _ = vbl_fxp::drivers::discover(name);
     }
     // attention não é descobrível: simulado é o padrão obrigatório.

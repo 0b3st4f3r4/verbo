@@ -111,7 +111,7 @@ conjugação errada — `cost_bytes` só em `equilibrium`;
   leitura `0.0` (zero é leitura física válida; tratá-lo como zero dispararia
   condições falsas).
 - **Nomes simbólicos**: `source_path` e atores são símbolos do FXP
-  (ex.: `"cpu_temp"`, `CpuPowerCap`, `Ventoinha`) — **nunca** caminhos de
+  (ex.: `"cpu_temp"`, `CpuPowerCap`, `Fan`) — **nunca** caminhos de
   sistema (`/sys/...`, `/dev/...`); o mapeamento físico é do registro do FXP.
   Sensores canônicos do registro mínimo (FORMAL §6): `"attention"` (%),
   `"cpu_temp"` (°C), `"cpu_power"` (W).
@@ -121,7 +121,7 @@ conjugação errada — `cost_bytes` só em `equilibrium`;
 ## Exemplo canônico
 
 ```verbolang
-nonequilibrium TradingEspeculativo {
+nonequilibrium SpeculativeTrading {
     value: "lucro_arbitragem_alta_frequencia",
     horizon: 7s,
     source_path: "cpu_temp",
@@ -129,7 +129,7 @@ nonequilibrium TradingEspeculativo {
     exchange_mode: "extraction"
 }
 
-review TradingEspeculativo {
+review SpeculativeTrading {
     when cpu_temp > 85°C -> subvert,
                              act(CpuPowerCap, 50)
 }
@@ -139,15 +139,15 @@ Programa completo com `main` (renovação e atuação periódicas):
 
 ```verbolang
 // Renova a tarefa a cada 4s e acende o LED a cada 10s (main roda a cada tick).
-nonequilibrium TarefaImportante {
+nonequilibrium ImportantTask {
     value: "tarefa_critica",
     horizon: 30s,
     maintenance_deadline: 5s
 }
 
 main {
-    every 4s { keep(TarefaImportante) }
-    every 10s { act(LedIndicador, "verde") }
+    every 4s { keep(ImportantTask) }
+    every 10s { act(StatusLed, "green") }
 }
 ```
 

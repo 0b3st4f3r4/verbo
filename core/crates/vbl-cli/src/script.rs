@@ -15,7 +15,7 @@ pub struct Script {
     failed_actors: Vec<String>,
     /// Política de fallback do registro (FORMAL §4.3): primário → alternativo.
     fallbacks: BTreeMap<String, String>,
-    /// Atores extras registrados (extensões opcionais, ex.: VentoinhaReserva).
+    /// Atores extras registrados (extensões opcionais, ex.: ReserveFan).
     extra_actors: Vec<String>,
 }
 

@@ -181,7 +181,7 @@ opções de run:
   --at TICK:SENSOR=VALOR           roteiriza valor absoluto de sensor no tick
   --fail-actor NOME                ator para de responder (heartbeat — BDD Caso 3)
   --fallback PRIM=ALT              política de fallback do registro (FORMAL §4.3)
-  --register-actor NOME            ator extra 0..255 safety 200 (ex.: VentoinhaReserva)
+  --register-actor NOME            ator extra 0..255 safety 200 (ex.: ReserveFan)
   --allow-unregistered             executa mesmo com referências fora do registro (§4.7)
   --fxp-mode MODO                  simulado|real|hibrido (padrão: simulado; sobrepõe a config)
   --fxp-config ARQUIVO             registro/config FXP (dispositivos, endpoints, fallback)
