@@ -241,3 +241,19 @@ impede carregá-la inteira. Regras para a equipe de agentes:
   de chat (`scripts/verbo-chat/chat.html`), que tem a alternância
   "Modelo puro ↔ + VerboLang" (injeta o cheat sheet e conta seu custo no
   medidor de contexto).
+
+## 6. Economia de contexto para agentes (rtk)
+
+O binário `rtk` (Rust Token Killer, proxy CLI) está instalado; filtros do
+projeto em `.rtk/filters.toml`. Mapa de uso medido (31/08/2026):
+
+| Comando | Usar | Observação |
+|---|---|---|
+| Testes com falha / saída longa | `rtk test cargo test …` | mostra só falhas |
+| Clippy/build ruidoso | `rtk err cargo clippy …` | só erros/avisos |
+| Logs repetitivos (soak, relatórios) | `rtk log cat ARQUIVO` | dedup ~95% |
+| Varredura de diretórios | `rtk tree` / `rtk find` | árvore compacta |
+| `git log --oneline`, `grep -rn` denso | **nativos** | rtk expande/poupa <10% |
+
+`rtk gain` (analytics) exige escrita fora do workspace — indisponível sob
+sandbox `workspace-write`.

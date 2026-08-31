@@ -1,0 +1,7 @@
+# Filtros do projeto VerboLang (sobrepondo ~/.config/rtk/filters.toml)
+# Docs: https://github.com/rtk-ai/rtk#custom-filters
+schema_version = 1
+
+# Diretórios que o agente nunca precisa enxergar em varreduras
+[filters.verbo-scan]
+ignore_dirs = [".git", "target", ".cargo-home", "node_modules", "vendor", "__pycache__"]
