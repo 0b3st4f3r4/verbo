@@ -486,3 +486,461 @@ fn registry_extension_visible_in_simulator_and_runtime() {
     );
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════
+// Cobertura complementar: descrição de rotas, roteamento do build (auto,
+// sem driver, simulado proibido), atuação real (limites, domínio, falha de
+// escrita com retry), potência via RAPL e os braços de resposta do peer
+// remoto (READ_OK/READ_ERR/corpo inesperado; ACK de cada AckAct).
+// ══════════════════════════════════════════════════════════════════════════
+use vbl_fxp::bus::Route;
+use vbl_fxp::registry::RemoteAddr;
+use vbl_fxp::schema::{reason, Message};
+use vbl_runtime::fxp::ActorLimits;
+
+#[test]
+fn descricoes_de_rota_debug_e_acessores() {
+    // descrição de cada variante de rota (probe/relatório)
+    assert_eq!(Route::Simulator.description(), "simulado (em processo)");
+    assert_eq!(Route::Real.description(), "real (driver de arquivo)");
+    assert_eq!(
+        Route::Remote(RemoteAddr::Unix("/tmp/fxpd.sock".into())).description(),
+        "remota (unix:/tmp/fxpd.sock)"
+    );
+    assert_eq!(
+        Route::Remote(RemoteAddr::Tcp { host: "127.0.0.1".into(), port: 9000 }).description(),
+        "remota (tcp:127.0.0.1:9000)"
+    );
+    assert_eq!(
+        Route::Inaccessible { reason: "sem hardware".into() }.description(),
+        "inacessível (sem hardware)"
+    );
+
+    let (bus, _ledger) = bus_simulated();
+    // Debug estrutural (log de diagnóstico)
+    let dbg = format!("{bus:?}");
+    assert!(dbg.starts_with("FxpBus"), "{dbg}");
+    assert!(dbg.contains("rotas"), "{dbg}");
+    // acessórios de observação
+    assert_eq!(bus.registry_rico().len(), 6); // mínimo §6
+    assert!(bus.sim().registry().sensores.contains_key("cpu_temp"));
+    assert_eq!(bus.pending_queue(), 0);
+    assert_eq!(bus.route_of("cpu_temp").map(|r| r.description()),
+               Some("simulado (em processo)".into()));
+    assert_eq!(bus.route_of("nem_existe"), None);
+    assert_eq!(bus.disk_bytes_used(), 0);
+}
+
+#[test]
+fn build_roteia_auto_sem_driver_e_simulado_proibido() {
+    let dir = tmpdir("roteamento");
+    let mut registry = DeviceRegistry::minimum();
+    let cfg = FxpConfig::parse(&format!(
+        "mode = hibrido\n\
+         SensorX.grandeza = luz\nSensorX.mode = real\nSensorX.endpoint = auto\n\
+         MotorX.min = 0\nMotorX.max = 100\nMotorX.mode = real\nMotorX.endpoint = auto\n\
+         cpu_temp.mode = real\ncpu_temp.endpoint = hwmon_pwm:{}/x\n\
+         Fan.mode = real\nFan.endpoint = thermal_zone:{}/y\n\
+         attention.mode = real\nattention.endpoint = simulado\n",
+        dir.display(),
+        dir.display()
+    ))
+    .unwrap();
+    cfg.apply(&mut registry).unwrap();
+    let mut bus = FxpBus::build(
+        registry,
+        BusConfig { mode: OperationMode::Hybrid, ..Default::default() },
+        vbl_runtime::FxpSimulator::new(),
+    );
+
+    // auto-descoberta de nome fora do catálogo do host → inacessível honesto
+    assert_eq!(
+        bus.route_of("SensorX").map(|r| r.description()),
+        Some("inacessível (auto-descoberta não encontrou hardware)".into())
+    );
+    assert_eq!(
+        bus.route_of("MotorX").map(|r| r.description()),
+        Some("inacessível (auto-descoberta não encontrou hardware)".into())
+    );
+    // endpoint de ESCRITA num sensor → sem driver de leitura
+    assert!(bus
+        .route_of("cpu_temp")
+        .map(|r| r.description())
+        .unwrap()
+        .contains("sem driver de leitura"));
+    // endpoint de LEITURA num ator → sem driver de atuação
+    assert!(bus
+        .route_of("Fan")
+        .map(|r| r.description())
+        .unwrap()
+        .contains("sem driver de atuação"));
+    // modo real do dispositivo com endpoint simulado: dado sintético proibido
+    assert!(bus
+        .route_of("attention")
+        .map(|r| r.description())
+        .unwrap()
+        .contains("não roteia para simulador"));
+
+    // leitura em rota inacessível → falha honesta (§4.7)…
+    let mut ledger = ChainLedger::new();
+    assert_eq!(
+        bus.read_sensor("SensorX", &mut ledger),
+        Err(SensorFailure::Inaccessible)
+    );
+    assert!(!ledger.search("ALERT", &[]).is_empty());
+    // …e sensor fora do registro → NotRegistered
+    assert_eq!(
+        bus.read_sensor("nem_existe", &mut ledger),
+        Err(SensorFailure::NotRegistered)
+    );
+}
+
+#[test]
+fn ator_em_rota_inacessivel_fallback_ausente_vai_para_a_fila() {
+    let mut registry = DeviceRegistry::minimum();
+    let cfg = FxpConfig::parse(
+        "mode = real\nBomba.min = 0\nBomba.max = 100\n",
+    )
+    .unwrap();
+    cfg.apply(&mut registry).unwrap();
+    let mut bus = FxpBus::build(
+        registry,
+        BusConfig { mode: OperationMode::Real, ..Default::default() },
+        vbl_runtime::FxpSimulator::new(),
+    );
+    let mut ledger = ChainLedger::new();
+
+    // modo real, ator sem rota real → indisponível; sem fallback → fila
+    assert_eq!(
+        bus.act("Bomba", Value::Num(10.0), &mut ledger),
+        ActOutcome::FallbackExhausted
+    );
+    assert!(!ledger.search("actor_unavailable", &[]).is_empty());
+    assert_eq!(bus.pending_queue(), 1);
+    // cpu_power sem rota → simulador embutido (honesto: modo real não lê sim
+    // para SENSORES; cpu_power() é só a última potência conhecida)
+    let _ = bus.cpu_power();
+}
+
+#[test]
+fn atuacao_real_limites_inclusivos_dominio_e_falha_de_escrita() {
+    let dir = tmpdir("real-ator");
+    let pwm = dir.join("pwm1");
+    fs::write(&pwm, "0").unwrap();
+    fs::create_dir_all(dir.join("tz")).unwrap();
+    fs::write(dir.join("cap"), "0").unwrap();
+    let mut registry = DeviceRegistry::minimum();
+    let cfg = FxpConfig::parse(&format!(
+        "mode = hibrido\n\
+         Fan.mode = real\nFan.endpoint = hwmon_pwm:{}\n\
+         Fan.min = 0\nFan.max = 250\nFan.safety_limit = 200\n",
+        pwm.display()
+    ))
+    .unwrap();
+    cfg.apply(&mut registry).unwrap();
+    let (mut bus, mut ledger) = (
+        FxpBus::build(
+            registry,
+            BusConfig { mode: OperationMode::Hybrid, ..Default::default() },
+            vbl_runtime::FxpSimulator::new(),
+        ),
+        ChainLedger::new(),
+    );
+
+    // limites INCLUSIVOS do registro validados antes do envio (§4.3)
+    assert_eq!(
+        bus.act("Fan", Value::Num(200.0), &mut ledger),
+        ActOutcome::Delivered // igual ao safety passa (inclusivo), < max
+    );
+    assert!(matches!(
+        bus.act("Fan", Value::Num(251.0), &mut ledger),
+        ActOutcome::Rejected { limit: Limit::Max, .. }
+    ));
+    assert!(matches!(
+        bus.act("Fan", Value::Num(-1.0), &mut ledger),
+        ActOutcome::Rejected { limit: Limit::Min, .. }
+    ));
+    // 245 passa no max, estoura o safety → SafetyLimit
+    assert!(matches!(
+        bus.act("Fan", Value::Num(245.0), &mut ledger),
+        ActOutcome::Rejected { limit: Limit::SafetyLimit, .. }
+    ));
+    assert!(!ledger.search("actor_rejected_value", &[]).is_empty());
+
+    // valor textual fora do domínio numérico do driver → InvalidValue
+    assert!(matches!(
+        bus.act("Fan", Value::Str("forte".into()), &mut ledger),
+        ActOutcome::InvalidValue { .. }
+    ));
+
+    // driver some (arquivo removido): retry esgota → indisponível → fila
+    fs::remove_file(&pwm).unwrap();
+    assert_eq!(
+        bus.act("Fan", Value::Num(80.0), &mut ledger),
+        ActOutcome::FallbackExhausted
+    );
+    assert_eq!(bus.pending_queue(), 1);
+}
+
+#[test]
+fn potencia_real_via_rapl_e_on_tick_silencioso() {
+    let dir = tmpdir("rapl-bus");
+    fs::write(dir.join("energy_uj"), "1000000").unwrap();
+    let mut registry = DeviceRegistry::minimum();
+    let cfg = FxpConfig::parse(&format!(
+        "mode = hibrido\ncache_ttl_ms = 0\ncpu_power.mode = real\ncpu_power.endpoint = rapl_energy:{}",
+        dir.display()
+    ))
+    .unwrap();
+    cfg.apply(&mut registry).unwrap();
+    let mut bus = FxpBus::build(
+        registry,
+        BusConfig { mode: OperationMode::Hybrid, cache_ttl: Duration::ZERO, ..Default::default() },
+        vbl_runtime::FxpSimulator::new(),
+    );
+    let mut ledger = ChainLedger::new();
+
+    // primeira amostra só inicializa a referência de energia (Δt=0 → err)
+    let _ = bus.read_sensor("cpu_power", &mut ledger);
+    fs::write(dir.join("energy_uj"), "1003000").unwrap(); // +3000 µJ
+    std::thread::sleep(Duration::from_millis(5));
+    let p = bus.read_sensor("cpu_power", &mut ledger).unwrap();
+    assert!(p > 0.0, "potência real: {p}");
+    // cpu_power() devolve a última potência conhecida da rota real
+    assert_eq!(bus.cpu_power(), p);
+    // on_tick varre a potência silenciosamente (sem Caderno)
+    bus.on_tick(&mut ledger);
+    let known = bus.cpu_power();
+    assert!(known >= 0.0, "potência real conhecida: {known}");
+    // fonte some: potência fica inacessível, última conhecida permanece
+    fs::remove_file(dir.join("energy_uj")).unwrap();
+    bus.on_tick(&mut ledger);
+    assert_eq!(bus.cpu_power(), known);
+    assert_eq!(
+        bus.read_sensor("cpu_power", &mut ledger),
+        Err(SensorFailure::Inaccessible)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Peer remoto: cada braço de resposta do schema v1
+// ---------------------------------------------------------------------------
+
+fn bus_remote(sock: &Path, extra_cfg: &str) -> (FxpBus, ChainLedger) {
+    let mut registry = DeviceRegistry::minimum();
+    let cfg = FxpConfig::parse(&format!(
+        "mode = hibrido\ncache_ttl_ms = 0\ncache_ttl_ms = 0\n\
+         solar_panel.grandeza = luz\nsolar_panel.unidade = W/m2\n\
+         solar_panel.mode = real\nsolar_panel.endpoint = unix:{}\n\
+         Bomba.mode = real\nBomba.endpoint = unix:{}\nBomba.min = 0\nBomba.max = 100\n{extra_cfg}",
+        sock.display(),
+        sock.display()
+    ))
+    .unwrap();
+    cfg.apply(&mut registry).unwrap();
+    (
+        FxpBus::build(
+            registry,
+            BusConfig {
+                mode: OperationMode::Hybrid,
+                read_timeout: Duration::from_millis(300),
+                act_timeout_local: Duration::from_millis(300),
+                ..Default::default()
+            },
+            vbl_runtime::FxpSimulator::new(),
+        ),
+        ChainLedger::new(),
+    )
+}
+
+#[test]
+fn peer_read_err_not_registered_e_inacessivel() {
+    let sock = tmpdir("readerr").join("fxpd.sock");
+    let reads = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let r = reads.clone();
+    let _srv = serve_unix(&sock, move |msg| match msg.opcode {
+        vbl_fxp::schema::op::READ => Some(match r.fetch_add(1, Ordering::SeqCst) {
+            0 => Message::read_err(reason::NOT_REGISTERED, msg.seq),
+            _ => Message::read_err(reason::INACCESSIBLE, msg.seq),
+        }),
+        _ => None, // HELLO não pede resposta no teste
+    })
+    .expect("servidor");
+    assert!(wait_ready_unix(&sock, DEADLINE));
+    let (mut bus, mut ledger) = bus_remote(&sock, "");
+
+    // NOT_REGISTERED → falha tipada sem alerta de I/O
+    assert_eq!(
+        bus.read_sensor("solar_panel", &mut ledger),
+        Err(SensorFailure::NotRegistered)
+    );
+    assert!(!ledger.search("ALERT", &[]).is_empty());
+    // INACCESSIBLE (outro motivo) → Inaccessible + alerta
+    assert_eq!(
+        bus.read_sensor("solar_panel", &mut ledger),
+        Err(SensorFailure::Inaccessible)
+    );
+    assert!(!ledger.search("ALERT", &[]).is_empty());
+}
+
+#[test]
+fn peer_resposta_inesperada_e_sintetica_marcada() {
+    let sock = tmpdir("inesperado").join("fxpd.sock");
+    let reads = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let r = reads.clone();
+    let _srv = serve_unix(&sock, move |msg| match msg.opcode {
+        vbl_fxp::schema::op::READ => Some(match r.fetch_add(1, Ordering::SeqCst) {
+            // corpo errado para um READ (ack de atuação) → resposta inesperada
+            0 => Message::act_ack(AckAct::Delivered, false, msg.seq),
+            // dado sintético: leitura ok, mas MARCADA no Caderno (§4.7)
+            _ => Message::read_ok(42.0, "solar_panel", true, msg.seq),
+        }),
+        _ => None,
+    })
+    .expect("servidor");
+    assert!(wait_ready_unix(&sock, DEADLINE));
+    let (mut bus, mut ledger) = bus_remote(&sock, "");
+
+    assert_eq!(
+        bus.read_sensor("solar_panel", &mut ledger),
+        Err(SensorFailure::Inaccessible)
+    );
+    assert_eq!(bus.read_sensor("solar_panel", &mut ledger).unwrap(), 42.0);
+    assert!(!ledger.search("ASSESSMENT", &[]).is_empty());
+}
+
+#[test]
+fn peer_read_timeout_cai_fora_e_descarta_conexao() {
+    let sock = tmpdir("timeout-read").join("fxpd.sock");
+    let _srv = serve_unix(&sock, |_| None).expect("servidor");
+    assert!(wait_ready_unix(&sock, DEADLINE));
+    let (mut bus, mut ledger) = bus_remote(&sock, "");
+
+    assert_eq!(
+        bus.read_sensor("solar_panel", &mut ledger),
+        Err(SensorFailure::Inaccessible)
+    );
+    assert!(!ledger.search("ALERT", &[]).is_empty());
+}
+
+#[test]
+fn peer_act_todos_os_acks() {
+    // um servidor por cenário, respostas determinísticas por requisição
+    struct Cenario {
+        sock: PathBuf,
+        _srv: vbl_fxp::transport::Server,
+    }
+    fn servidor(
+        sock: &Path,
+        resposta: impl Fn(u32) -> Message + Send + Sync + Clone + 'static,
+    ) -> Cenario {
+        let s = sock.to_path_buf();
+        let srv = serve_unix(sock, move |msg| Some(resposta(msg.seq))).expect("servidor");
+        Cenario { sock: s, _srv: srv }
+    }
+
+    let dir = tmpdir("peer-act");
+    // 1) Rejected do peer (limite violado LÁ) → Rejected terminativo local
+    let c = servidor(&dir.join("a.sock"), |seq| {
+        Message::act_ack(AckAct::Rejected { limit: 1, limit_value: 50.0 }, false, seq)
+    });
+    assert!(wait_ready_unix(&c.sock, DEADLINE));
+    let (mut bus, mut ledger) = bus_remote(&c.sock, "");
+    assert!(matches!(
+        bus.act("Bomba", Value::Num(30.0), &mut ledger),
+        ActOutcome::Rejected { limit: Limit::Max, limit_value: 50.0 }
+    ));
+    drop(c);
+
+    // 2) MissingActor do peer → terminativo, sem fila
+    let c = servidor(&dir.join("b.sock"), |seq| {
+        Message::act_ack(AckAct::MissingActor, false, seq)
+    });
+    assert!(wait_ready_unix(&c.sock, DEADLINE));
+    let (mut bus, mut ledger) = bus_remote(&c.sock, "");
+    assert_eq!(
+        bus.act("Bomba", Value::Num(30.0), &mut ledger),
+        ActOutcome::MissingActor
+    );
+    assert_eq!(bus.pending_queue(), 0);
+    drop(c);
+
+    // 3) InvalidValue do peer
+    let c = servidor(&dir.join("c.sock"), |seq| {
+        Message::act_ack(AckAct::InvalidValue { reason: "fora do domínio".into() }, false, seq)
+    });
+    assert!(wait_ready_unix(&c.sock, DEADLINE));
+    let (mut bus, mut ledger) = bus_remote(&c.sock, "");
+    assert!(matches!(
+        bus.act("Bomba", Value::Num(30.0), &mut ledger),
+        ActOutcome::InvalidValue { .. }
+    ));
+    drop(c);
+
+    // 4) Unavailable do peer → indisponível → fallback esgotado → fila
+    let c = servidor(&dir.join("d.sock"), |seq| {
+        Message::act_ack(AckAct::Unavailable, false, seq)
+    });
+    assert!(wait_ready_unix(&c.sock, DEADLINE));
+    let (mut bus, mut ledger) = bus_remote(&c.sock, "");
+    assert_eq!(
+        bus.act("Bomba", Value::Num(30.0), &mut ledger),
+        ActOutcome::FallbackExhausted
+    );
+    assert_eq!(bus.pending_queue(), 1);
+    drop(c);
+
+    // 5) FallbackExecuted do peer: o PEER acionou o fallback DELE
+    let c = servidor(&dir.join("e.sock"), |seq| {
+        Message::act_ack(AckAct::FallbackExecuted { alternativo: "BombaBackup".into() }, false, seq)
+    });
+    assert!(wait_ready_unix(&c.sock, DEADLINE));
+    let (mut bus, mut ledger) = bus_remote(&c.sock, "");
+    assert_eq!(
+        bus.act("Bomba", Value::Num(30.0), &mut ledger),
+        ActOutcome::FallbackExecuted { alternativo: "BombaBackup".into() }
+    );
+    drop(c);
+
+    // 6) corpo inesperado para ACT (read_ok) → indisponível → fila
+    let c = servidor(&dir.join("f.sock"), |seq| {
+        Message::read_ok(1.0, "qualquer", false, seq)
+    });
+    assert!(wait_ready_unix(&c.sock, DEADLINE));
+    let (mut bus, mut ledger) = bus_remote(&c.sock, "");
+    assert_eq!(
+        bus.act("Bomba", Value::Num(30.0), &mut ledger),
+        ActOutcome::FallbackExhausted
+    );
+    drop(c);
+
+    // 7) valor textual via remota: serializa como string no fio
+    let c = servidor(&dir.join("g.sock"), |seq| {
+        Message::act_ack(AckAct::Delivered, false, seq)
+    });
+    assert!(wait_ready_unix(&c.sock, DEADLINE));
+    let (mut bus, mut ledger) = bus_remote(&c.sock, "");
+    assert_eq!(
+        bus.act("Bomba", Value::Str("ligar".into()), &mut ledger),
+        ActOutcome::Delivered
+    );
+}
+
+#[test]
+fn ator_remoto_com_limites_do_registro_rejeita_localmente() {
+    // limites vêm do registro rico — inclusive em rota remota
+    let sock = tmpdir("remoto-limites").join("fxpd.sock");
+    let _srv = serve_unix(&sock, |msg| {
+        Some(Message::act_ack(AckAct::Delivered, false, msg.seq))
+    })
+    .expect("servidor");
+    assert!(wait_ready_unix(&sock, DEADLINE));
+    let (mut bus, mut ledger) = bus_remote(&sock, "Bomba.max = 10\n");
+
+    assert!(matches!(
+        bus.act("Bomba", Value::Num(11.0), &mut ledger),
+        ActOutcome::Rejected { limit: Limit::Max, limit_value: 10.0 }
+    ));
+    // ator além do limite do PEER (bomba do peer rejeita) coberto em peer_act
+    let _ = ActorLimits::default();
+}
