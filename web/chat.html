@@ -46,28 +46,33 @@
     color-scheme: dark;
     --bg: #0e1319; --bg-glow: #16202b; --panel: #171d24; --panel-2: #1b232c;
     --border: #29323e; --border-soft: #212a34; --text: #dde6f0; --dim: #8fa1b5;
-    --accent: #46aeb7; --ok: #3fb96f; --warn: #e0a83a; --bad: #e05c5c;
-    --user-bubble: #14424b; --user-bubble-text: #e3f6f8;
+    --accent: #a55cff; --ok: #3fb96f; --warn: #e0c94f; --bad: #ff5a52;
+    --user-bubble: #2b1e52; --user-bubble-text: #ece5ff;
     --code-bg: #0d1116; --code-border: #212a34; --placeholder: #5d7086;
     --shadow: 0 4px 14px rgba(0,0,0,.35);
+    /* espectro termodinâmico da marca: frio (#4da3ff) → calor (#ff5a52);
+       violeta #a55cff = o meta (o nó do verbo) — a página do verbo o carrega */
+    --aur1: rgba(77,163,255,.14); --aur2: rgba(255,90,82,.12); --aur3: rgba(63,185,111,.10);
   }
   html[data-theme="metal"] {
     color-scheme: dark;
     --bg: #24292f; --bg-glow: #2e353d; --panel: #333941; --panel-2: #3d4450;
     --border: #4a525d; --border-soft: #3f4750; --text: #e6eaee; --dim: #9aa6b2;
-    --accent: #52b1bb; --ok: #4cba7f; --warn: #d8a944; --bad: #e06565;
-    --user-bubble: #33565e; --user-bubble-text: #e8f6f8;
+    --accent: #b06dff; --ok: #3fb96f; --warn: #e0c94f; --bad: #ff5a52;
+    --user-bubble: #3c2f63; --user-bubble-text: #ece5ff;
     --code-bg: #272d34; --code-border: #3f4750; --placeholder: #7d8b99;
     --shadow: 0 4px 14px rgba(0,0,0,.3);
+    --aur1: rgba(77,163,255,.10); --aur2: rgba(255,90,82,.09); --aur3: rgba(63,185,111,.08);
   }
   html[data-theme="light"] {
     color-scheme: light;
     --bg: #f2f5f8; --bg-glow: #e7edf4; --panel: #ffffff; --panel-2: #eaeef3;
     --border: #cfd7e0; --border-soft: #dde3ea; --text: #1b2530; --dim: #5a6a7b;
-    --accent: #106c80; --ok: #23804d; --warn: #a06f12; --bad: #c04343;
-    --user-bubble: #d5edf0; --user-bubble-text: #0c2f36;
+    --accent: #6d3fc4; --ok: #23804d; --warn: #a06f12; --bad: #c04343;
+    --user-bubble: #e8e0fb; --user-bubble-text: #2a1c55;
     --code-bg: #eef2f6; --code-border: #dfe5ec; --placeholder: #8a97a5;
     --shadow: 0 4px 12px rgba(27,37,48,.12);
+    --aur1: rgba(77,163,255,.10); --aur2: rgba(255,90,82,.08); --aur3: rgba(63,185,111,.08);
   }
 
   :root {
@@ -80,7 +85,10 @@
   body {
     margin: 0; color: var(--text);
     font: 15px/1.55 var(--font-text);
-    background: radial-gradient(1200px 500px at 50% -10%, var(--bg-glow) 0%, var(--bg) 55%) fixed, var(--bg);
+    background: radial-gradient(900px 480px at 12% -6%, var(--aur1), transparent 60%) fixed,
+                radial-gradient(900px 480px at 88% -6%, var(--aur2), transparent 60%) fixed,
+                radial-gradient(700px 420px at 50% 108%, var(--aur3), transparent 58%) fixed,
+                radial-gradient(1200px 500px at 50% -10%, var(--bg-glow) 0%, var(--bg) 55%) fixed, var(--bg);
     display: flex; flex-direction: column;
     height: 100vh; height: 100dvh;
   }
@@ -89,9 +97,10 @@
   header {
     display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
     padding: 10px clamp(12px, 3vw, 20px);
-    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    background: color-mix(in srgb, var(--panel) 74%, transparent);
     border-bottom: 1px solid var(--border-soft);
-    backdrop-filter: blur(6px);
+    backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
   }
   .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .logo { width: 34px; height: 34px; display: block; border-radius: 9px; flex: none; }
@@ -103,10 +112,14 @@
   .dot.err { background: var(--bad); }
 
   .meter { flex: 1 1 200px; max-width: 340px; margin-left: auto; }
-  .meter .bar { height: 6px; background: var(--border-soft); border-radius: 3px; overflow: hidden; }
+  .meter .bar { position: relative; height: 6px; background: var(--border-soft); border-radius: 3px; overflow: hidden; }
   .meter .fill { height: 100%; width: 0%; border-radius: 3px;
-                 background: linear-gradient(90deg, var(--accent), var(--ok));
+                 /* espectro termodinâmico da marca: o contexto esquenta do azul ao vermelho */
+                 background: linear-gradient(90deg, #4da3ff, #35c9c1, #3fb96f, #e0c94f, #ff5a52);
                  transition: width .35s ease; }
+  /* fatia violeta do meta: o custo de contexto do próprio VerboLang (cheat sheet) */
+  .meter .metafill { position: absolute; inset: 0 auto 0 0; width: 0%; border-radius: 3px 0 0 3px;
+                     background: linear-gradient(90deg, #7a3ff2, #a55cff); }
   .meter .lbl { font-size: 11px; color: var(--dim); margin-top: 3px; text-align: right;
                 font-variant-numeric: tabular-nums; }
 
@@ -385,12 +398,10 @@
     </div>
   </div>
   <div class="meter" id="meter" aria-label="contexto">
-    <div class="bar"><div class="fill" id="fill"></div></div>
+    <div class="bar"><div class="fill" id="fill"></div><div class="metafill" id="metafill" hidden></div></div>
     <div class="lbl" id="meter-lbl">—</div>
   </div>
   <div class="actions">
-    <button id="theme-btn" class="icon-btn" title=""></button>
-    <select id="lang" aria-label="" title=""></select>
     <button id="rollback" class="icon-btn" title=""></button>
     <button id="prune" class="icon-btn" title=""></button>
     <button id="clear" class="icon-btn" title=""></button>
@@ -854,31 +865,9 @@ function applyTheme(name) {
   theme = name;
   localStorage.setItem("vllm.theme", name);
   document.documentElement.dataset.theme = name;
-  updateThemeButton();
   applyMermaidTheme();   // re-renderiza diagramas existentes no novo tema
 }
 const THEME_ORDER = ["light", "metal", "dark"];
-function updateThemeButton() {           // sol / contraste / lua
-  const b = $("theme-btn");
-  if (!b) return;
-  b.innerHTML = theme === "light" ? ICON_SUN
-              : theme === "metal" ? ICON_CONTRAST : ICON_MOON;
-  b.title = t("theme" + theme[0].toUpperCase() + theme.slice(1));
-  b.setAttribute("aria-label", b.title);
-}
-const LANG_FLAGS = { pt: "🇧🇷", en: "🇺🇸", zh: "🇨🇳", ru: "🇷🇺", hi: "🇮🇳", af: "🇿🇦", ar: "🇸🇦" };
-function buildLangSelect() {             // bandeira + nome no próprio idioma
-  const sel = $("lang");
-  sel.replaceChildren(...Object.entries(I18N).map(([code, def]) => {
-    const o = document.createElement("option");
-    o.value = code;
-    o.textContent = (LANG_FLAGS[code] || "") + " " + def.name;
-    return o;
-  }));
-  sel.value = lang;
-  sel.title = t("langAria");
-  sel.setAttribute("aria-label", t("langAria"));
-}
 function applyLang() {
   localStorage.setItem("vllm.lang", lang);
   document.documentElement.lang = lang === "pt" ? "pt-BR" : lang;
@@ -911,8 +900,6 @@ function applyLang() {
   $("log").setAttribute("aria-label", t("logAria"));
   $("jump").title = t("jumpAria");
   $("jump").setAttribute("aria-label", t("jumpAria"));
-  updateThemeButton();
-  buildLangSelect();
 
   $("empty-title").textContent = t("emptyTitle");
   $("empty-desc").textContent = t("emptyDesc");
@@ -928,7 +915,7 @@ function applyLang() {
 let inFlight = null;         // AbortController da geração corrente (global)
 let genSession = null;       // sessão dona da geração corrente
 let vblMode = localStorage.getItem("vllm.vbl") === "1"; // + VerboLang?
-let sheetText = "";          // cheat sheet da linguagem (docs/VBL-CHEATSHEET.md)
+let sheetText = "";          // cheat sheet da linguagem (docs/VBL-CHEATSHEET-AGENTES.md, denso)
 let lastQuery = "";          // última pergunta enviada (para retry)
 const sessions = [];         // sessões abertas (abas)
 let S = null;                // sessão ativa
@@ -1110,11 +1097,16 @@ function renderMeter() {
   if (!S) return;
   const est = Math.max(contextEstimate(S), S.lastTokens ?? 0);
   const pct = Math.min(100, (est / CTX) * 100);
-  const fill = $("fill");
+  // fatia do meta: o custo do VerboLang no contexto (cheat sheet + instrução) em violeta
+  const metaPct = Math.min(pct, (sheetTokens() + (vblMode ? estimateTokens(t("followupVbl")) : 0)) / CTX * 100);
+  const fill = $("fill"), metafill = $("metafill");
   fill.style.width = pct.toFixed(1) + "%";
   fill.style.background = pct > 85 ? "var(--bad)"
                         : pct > 65 ? "var(--warn)"
-                        : "linear-gradient(90deg, var(--accent), var(--ok))";
+                        : "linear-gradient(90deg, #4da3ff, #35c9c1, #3fb96f, #e0c94f, #ff5a52)";
+  metafill.hidden = metaPct <= 0;
+  metafill.style.width = metaPct.toFixed(1) + "%";
+  if (vblMode && sheetText) metafill.title = t("sheetTokens", { n: fmt(estimateTokens(sheetText)) });
   $("meter-lbl").textContent = t(S.lastTokens ? "meterReal" : "meterEst",
                                  { est: fmt(est), ctx: fmt(CTX) });
 }
@@ -1545,18 +1537,6 @@ const ICON_PRUNE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" 
 const ICON_PLUS = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
-const ICON_SUN = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
-  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-  '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>' +
-  '<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>' +
-  '<line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>' +
-  '<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
-const ICON_CONTRAST = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
-  'stroke="currentColor" stroke-width="2" aria-hidden="true">' +
-  '<circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>';
-const ICON_MOON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
-  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-  '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
 const ICON_CPU = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>' +
@@ -1663,12 +1643,18 @@ function updateSheetStatus() {   // sem caixa: o tooltip do modo carrega o estad
 }
 async function loadSheet() {
   // a 1ª que responder ok vence — cobre página na raiz, em web/ e em
-  // web/ aninhada um nível, com o servidor estático na raiz do repositório
+  // web/ aninhada um nível, com o servidor estático na raiz do repositório.
+  // Preferência: versão densa para agentes (cabe na janela de 4096 ao lado
+  // da conversa); o cheat sheet completo é o fallback (referência humana).
   const candidates = [
-    "/docs/VBL-CHEATSHEET.md",        // absoluto: raiz do servidor = raiz do repo
-    "../docs/VBL-CHEATSHEET.md",      // página em web/
-    "../../docs/VBL-CHEATSHEET.md",   // página aninhada um nível abaixo da raiz
-    "docs/VBL-CHEATSHEET.md",         // página na raiz do repositório
+    "/docs/VBL-CHEATSHEET-AGENTES.md",        // absoluto: raiz do servidor = raiz do repo
+    "../docs/VBL-CHEATSHEET-AGENTES.md",      // página em web/
+    "../../docs/VBL-CHEATSHEET-AGENTES.md",   // página aninhada um nível abaixo da raiz
+    "docs/VBL-CHEATSHEET-AGENTES.md",         // página na raiz do repositório
+    "/docs/VBL-CHEATSHEET.md",                // fallback: versão completa
+    "../docs/VBL-CHEATSHEET.md",
+    "../../docs/VBL-CHEATSHEET.md",
+    "docs/VBL-CHEATSHEET.md",
   ];
   for (const path of candidates) {
     try {
@@ -1695,9 +1681,6 @@ $("prompt").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 });
 $("prompt").addEventListener("input", autosize);
-$("theme-btn").addEventListener("click", () =>
-  applyTheme(THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length]));
-$("lang").addEventListener("change", () => { lang = $("lang").value; applyLang(); });
 $("clear").addEventListener("click", () => {
   if (!S) return;
   if (inFlight) inFlight.abort();
@@ -1722,6 +1705,13 @@ $("prune").addEventListener("click", () => {
   } else note("nothingToPrune", {}, S);
   refreshEmpty();
   renderMeter();
+});
+
+// Tema/idioma são controlados na home (index.html); aqui só obedecemos —
+// e uma mudança numa aba da home propaga vivo para o chat aberto.
+window.addEventListener("storage", (e) => {
+  if (e.key === "vllm.theme" && e.newValue && THEME_ORDER.includes(e.newValue)) applyTheme(e.newValue);
+  if (e.key === "vllm.lang" && e.newValue && I18N[e.newValue]) { lang = e.newValue; applyLang(); }
 });
 
 // ── partida ────────────────────────────────────────────────────────────────
