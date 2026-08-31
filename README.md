@@ -144,6 +144,14 @@ embeddings com o chat desligado ou em outra máquina.
 | [`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md) | Pipeline de LLMs: GLM-5.3/Flash (cloud) + Qwen3-4B-2507 (local) |
 | [`prototype/verbolang-complete-blueprint.py`](prototype/verbolang-complete-blueprint.py) | Protótipo de referência (FXP, runtime, Caderno, bloco `main`) |
 | [`prototype/verbolang-llm-poc.py`](prototype/verbolang-llm-poc.py) | PoC: comunicação inter-LLM (agentes LLM como atores/sensores no FXP) |
+| [`tests/`](tests/) | Suíte da Etapa 1: BDD (behave), unitários (pytest), simulador FXP determinístico e fronteira mock |
+| [`tests/vlcheck.py`](tests/vlcheck.py) | Validador de superfície `.vl` (mini-validador do PLAN §7) |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | CI (GitHub Actions): checagens estáticas + pytest + behave a cada push/PR |
+| [`docs/ETAPA-1-RELATORIO.md`](docs/ETAPA-1-RELATORIO.md) | Relatório da Etapa 1: matriz de rastreabilidade, interpretações e divergências |
+| [`docs/ADR-001-linguagem-nucleo.md`](docs/ADR-001-linguagem-nucleo.md) | Decisão Rust × C com orçamentos de memória/latência reancorados |
+| [`docs/CHEATSHEET-PROMPTS.yaml`](docs/CHEATSHEET-PROMPTS.yaml) | Banco fixo de 20 prompts para validação do cheat sheet (PLAN §7) |
+| [`docs/CHEATSHEET-VALIDACAO.md`](docs/CHEATSHEET-VALIDACAO.md) | Resultados versionados da validação do cheat sheet |
+| [`scripts/validate_cheatsheet.py`](scripts/validate_cheatsheet.py) | Executa o banco de prompts contra o LLM local e avalia com o vlcheck |
 | [`scripts/serve-local-llm.sh`](scripts/serve-local-llm.sh) | Sobe o modelo local Qwen3-4B-Instruct-2507-FP8 via vLLM (e abre a UI de consulta) |
 | [`scripts/verbo-chat/chat.html`](scripts/verbo-chat/chat.html) | UI de consulta: chat single-file, streaming SSE, medidor de contexto, alternância puro ↔ +VerboLang |
 | [`scripts/verbo-chat/verbolog.svg`](scripts/verbo-chat/verbolog.svg) | Marca do projeto (logo e favicon da UI de consulta) |
@@ -156,14 +164,17 @@ embeddings com o chat desligado ou em outra máquina.
 
 ## Roadmap
 
-Estado atual: **especificação + protótipo de referência concluídos** (pré-Etapa 1).
+Estado atual: **Etapa 1 concluída** — suíte BDD/TDD com mocks e simulador FXP,
+CI, banco de 20 prompts e decisão Rust × C registradas
+([relatório](docs/ETAPA-1-RELATORIO.md)).
 
-1. **Etapa 1** — Suíte BDD/TDD/E2E com mocks e simulador FXP
-2. **Etapa 2** — Núcleo da linguagem: lexer, parser, AST e motor de tick assíncrono
+1. **Etapa 1** ✅ — Suíte BDD/TDD/E2E com mocks e simulador FXP
+2. **Etapa 2** — Núcleo da linguagem em **Rust**: lexer, parser, AST e motor de tick assíncrono ([ADR-001](docs/ADR-001-linguagem-nucleo.md))
 3. **Etapa 3** — FXP real: registro de dispositivos, sensores e atores
 4. **Etapa 4** — Caderno de produção e validação end-to-end
 5. **Etapa 5** — Qualidade, profiling termodinâmico e otimização
 
+Para rodar a suíte: `make setup && make test`.
 Detalhes e critérios de aceite por etapa em [`docs/PLAN.md`](docs/PLAN.md) e [`AGENTS.md`](AGENTS.md).
 
 ## Desenvolvimento assistido por LLMs
