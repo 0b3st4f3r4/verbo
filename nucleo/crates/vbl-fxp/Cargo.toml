@@ -1,0 +1,18 @@
+[package]
+name = "vbl-fxp"
+description = "VerboLang — Flux Protocol: schema v1, registro, drivers reais/simulados e transporte (Etapa 3, PLAN §3)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bench]]
+name = "fxp"
+harness = false
+
+[dependencies]
+vbl-runtime = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+vbl-lang = { workspace = true }

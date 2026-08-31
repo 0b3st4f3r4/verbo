@@ -55,7 +55,7 @@ pub struct SensorInfo {
 }
 
 /// Limites de um ator no registro (FORMAL §6) — validação **inclusiva**.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ActorLimits {
     pub min: Option<f64>,
     pub max: Option<f64>,
@@ -155,13 +155,28 @@ pub enum ActOutcome {
     FallbackExecutado { alternativo: String },
     /// Todos os fallbacks falharam.
     FallbackEsgotado,
+    /// Valor fora do **domínio** do ator (extensão da Etapa 3): limites
+    /// numéricos do registro cobrem min/max/safety; domínio cobre o resto
+    /// (ex.: cor fora do mapa do `LedIndicador`, texto em ator numérico).
+    /// Sempre auditado (`ACT_ACK.ValorInvalido` no schema v1), nunca entrega
+    /// silenciosa.
+    ValorInvalido { motivo: String },
 }
 
 impl ActOutcome {
     pub fn ok(&self) -> bool {
-        matches!(self, ActOutcome::Entregue | ActOutcome::FallbackExecutado { .. })
+        matches!(
+            self,
+            ActOutcome::Entregue | ActOutcome::FallbackExecutado { .. }
+        )
     }
 }
+
+/// Prioridade canônica de comandos na fila do FXP (PLAN §3.4).
+/// Máxima para atuações associadas a `subvert` (FORMAL §4.5).
+pub const PRIORIDADE_SUBVERT: u8 = 0;
+/// Prioridade padrão de comandos de atuação.
+pub const PRIORIDADE_NORMAL: u8 = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Limite {
@@ -191,11 +206,28 @@ pub trait Fxp {
     /// o Caderno registra tentativa, falha e fallback (§4.3).
     fn act(&mut self, ator: &str, valor: Value, caderno: &mut dyn Caderno) -> ActOutcome;
 
+    /// Comando com prioridade de fila (Etapa 3): default ignora a prioridade
+    /// e delega a [`Fxp::act`] — barramentos com fila prioritária (vbl-fxp)
+    /// sobrescrevem. O engine usa [`PRIORIDADE_SUBVERT`] para a `act` que
+    /// segue um `subvert` na mesma regra (FORMAL §4.5: sem atraso
+    /// perceptível).
+    fn act_with_priority(
+        &mut self,
+        ator: &str,
+        valor: Value,
+        prioridade: u8,
+        caderno: &mut dyn Caderno,
+    ) -> ActOutcome {
+        let _ = prioridade;
+        self.act(ator, valor, caderno)
+    }
+
     /// Potência global do tick (partilha P/N — FORMAL §4.2).
     fn cpu_power(&self) -> f64;
 
-    /// Avanço do tick no mundo (roteirização do simulador).
-    fn on_tick(&mut self);
+    /// Avanço do tick no mundo (roteirização do simulador; Etapa 3: também
+    /// re-entrega a fila de comandos, auditada no Caderno).
+    fn on_tick(&mut self, caderno: &mut dyn Caderno);
 
     /// Bytes em suporte estável (persistência — FORMAL §4.1).
     fn disk_bytes_used(&self) -> u64;

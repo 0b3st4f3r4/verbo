@@ -37,8 +37,4 @@ impl Roteiro {
     pub fn terminou(&self, clock: u64) -> bool {
         self.cronograma.keys().all(|t| *t <= clock)
     }
-
-    pub fn aplicar_antes_do_tick(&self, _tick: u64, _fxp: &mut FxpSimulator) {
-        // (a roteirização absoluta é aplicada dentro do `on_tick` do simulador)
-    }
 }

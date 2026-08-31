@@ -13,4 +13,5 @@ path = "src/main.rs"
 [dependencies]
 vbl-lang = { workspace = true }
 vbl-runtime = { workspace = true }
+vbl-fxp = { workspace = true }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "signal"] }

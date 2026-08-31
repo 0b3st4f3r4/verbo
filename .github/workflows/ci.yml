@@ -32,7 +32,7 @@ jobs:
         run: python -m behave tests/features
 
   nucleo:
-    name: Núcleo Rust (Etapa 2 — clippy + testes + ASan)
+    name: Núcleo Rust (Etapas 2–3 — clippy + testes + ASan + FXP)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -55,7 +55,7 @@ jobs:
       - name: Clippy (zero warnings — AGENTS §1.3)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Testes (matriz 41 · canon 5 · transição 36)
+      - name: Testes (matriz 41 · canon 5 · transição 36 · FXP schema/registro/drivers/transporte/bus)
         run: cargo test
 
       # Vazamentos: ASan/LSan (AGENTS §1.3 — ASan/Valgrind)
@@ -65,9 +65,14 @@ jobs:
             cargo +nightly test --workspace --target x86_64-unknown-linux-gnu
 
       # Orçamentos de latência (AGENTS §1.3): transição ≤100µs p95,
-      # FXP ≤10µs por mensagem — medidos com criterion; roda rápido (quick)
+      # FXP: mensagem ≤10µs, leitura local ≤1ms, remota ≤10ms — criterion (quick)
       - name: Benchmarks (critério de latência)
-        run: cargo bench --bench transicao --bench escalonador -- --quick
+        run: cargo bench --bench transicao --bench escalonador --bench fxp -- --quick
+
+      # Auditoria do registro FXP do host (FORMAL §6 — cobertura obrigatória;
+      # no runner sem sysfs/registro rico, roda contra o mínimo simulado)
+      - name: fxp-probe (cobertura §6)
+        run: cargo run -p vbl-cli -- fxp-probe
 
       # A validação do cheat sheet (PLAN §7) exige o LLM local e roda como
       # job manual na máquina do desenvolvedor:

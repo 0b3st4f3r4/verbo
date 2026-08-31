@@ -33,13 +33,13 @@ help:
 > @echo "  make test    suíte completa: unitários (pytest) + BDD (behave)"
 > @echo "  make test-unit  apenas testes unitários (pytest)"
 > @echo "  make test-bdd   apenas cenários BDD (behave)"
-> @echo "  --- núcleo Rust (Etapa 2) ---"
-> @echo "  make rust-check    parser/runtime: clippy + todos os testes"
-> @echo "  make rust-build    compila o workspace nucleo/ (vbl, vbl-lang, vbl-runtime)"
-> @echo "  make rust-test     testes: matriz (41), canon (5), transição (36)"
+> @echo "  --- núcleo Rust (Etapas 2–3) ---"
+> @echo "  make rust-check    parser/runtime/FXP: clippy + todos os testes"
+> @echo "  make rust-build    compila o workspace nucleo/ (vbl, vbl-lang, vbl-runtime, vbl-fxp)"
+> @echo "  make rust-test     testes: matriz (41), canon (5), transição (36), FXP (42)"
 > @echo "  make rust-lint     clippy --workspace --all-targets (zero warnings)"
 > @echo "  make rust-asan     testes sob AddressSanitizer (vazamentos, AGENTS §1.3)"
-> @echo "  make rust-bench    criterion: transição ≤100µs p95, escalonador, FXP"
+> @echo "  make rust-bench    criterion: transição ≤100µs p95, escalonador, FXP (leitura ≤1ms, remota ≤10ms)"
 > @echo "  make rust-coverage cobertura via cargo-llvm-cov (relatório em nucleo/target)"
 > @echo "  make rust-clean    limpa nucleo/target"
 > @echo "  make validate-cheatsheet  banco de 20 prompts contra o LLM local (PLAN §7)"
@@ -101,7 +101,7 @@ rust-asan:
 rust-check: rust-lint rust-test
 
 rust-bench:
-> @cd nucleo && $(CARGO) bench --bench transicao --bench escalonador
+> @cd nucleo && $(CARGO) bench --bench transicao --bench escalonador --bench fxp
 
 rust-coverage:
 > @cd nucleo && $(CARGO) +$(NIGHTLY) llvm-cov --workspace --html --output-dir target/coverage

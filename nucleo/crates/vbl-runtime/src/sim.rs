@@ -190,6 +190,17 @@ impl FxpSimulator {
         );
     }
 
+    /// Registra (ou substitui) um sensor no registro/simulador — usado pelo
+    /// bus da Etapa 3 para sincronizar o `DeviceRegistry` (fonte única) com
+    /// o backend simulado; valor inicial plausível é 0.0 até roteirização.
+    pub fn registrar_sensor(&mut self, nome: &str, info: SensorInfo) {
+        self.registry.sensores.insert(nome.into(), info);
+        self.sensores.insert(
+            nome.into(),
+            SensorState { valor: 0.0, acessivel: true },
+        );
+    }
+
     // ------------------------------------------------------------------
     // Observação (testes/CLI)
     // ------------------------------------------------------------------
@@ -358,7 +369,7 @@ impl Fxp for FxpSimulator {
         self.sensores.get("cpu_power").map(|s| s.valor).unwrap_or(0.0)
     }
 
-    fn on_tick(&mut self) {
+    fn on_tick(&mut self, _caderno: &mut dyn Caderno) {
         self.ticks += 1;
         if let Some(valores) = self.cronograma.remove(&self.ticks) {
             for (nome, valor) in valores {

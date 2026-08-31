@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/vbl-lang", "crates/vbl-runtime", "crates/vbl-cli"]
+members = ["crates/vbl-lang", "crates/vbl-runtime", "crates/vbl-fxp", "crates/vbl-cli"]
 
 [workspace.package]
 version = "0.2.0"
@@ -13,6 +13,7 @@ sha2 = "0.10"
 criterion = "0.5"
 vbl-lang = { path = "crates/vbl-lang" }
 vbl-runtime = { path = "crates/vbl-runtime" }
+vbl-fxp = { path = "crates/vbl-fxp" }
 
 [profile.bench]
 debug = true

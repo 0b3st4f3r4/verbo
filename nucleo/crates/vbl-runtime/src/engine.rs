@@ -17,7 +17,7 @@
 
 use crate::caderno::{kinds, Caderno, ChainCaderno};
 use crate::forma::{ActionRt, Form, Manutencao, Retencao, VALOR_POETICO_CANONICO};
-use crate::fxp::{Fxp, FalhaSensor, Value};
+use crate::fxp::{Fxp, FalhaSensor, PRIORIDADE_NORMAL, PRIORIDADE_SUBVERT, Value};
 use crate::scheduler::{Prazo, Scheduler};
 use std::collections::BTreeMap;
 use vbl_lang::Conjugation;
@@ -203,7 +203,7 @@ impl<F: Fxp> Engine<F> {
         let agora = self.sim_time;
 
         // 0. o mundo avança (roteirização do simulador)
-        self.fxp.on_tick();
+        self.fxp.on_tick(&mut self.caderno);
 
         // 1. drena os prazos vencidos do escalonador (O(vencidos))
         self.vencidos.clear();
@@ -433,7 +433,12 @@ impl<F: Fxp> Engine<F> {
                     );
                 }
                 ActionRt::Act { ator, valor } => {
-                    let outcome = self.fxp.act(ator, valor.clone(), &mut self.caderno);
+                    // Etapa 3 (FORMAL §4.5): act na mesma regra após subvert
+                    // entra na fila do FXP com prioridade máxima.
+                    let prioridade = if doomed { PRIORIDADE_SUBVERT } else { PRIORIDADE_NORMAL };
+                    let outcome = self
+                        .fxp
+                        .act_with_priority(ator, valor.clone(), prioridade, &mut self.caderno);
                     if !outcome.ok() {
                         self.caderno.alert(
                             &format!("Falha na atuação do ator '{ator}' para a forma '{nome}'."),

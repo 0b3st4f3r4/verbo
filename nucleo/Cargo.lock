@@ -612,6 +612,16 @@ name = "vbl-cli"
 version = "0.2.0"
 dependencies = [
  "tokio",
+ "vbl-fxp",
+ "vbl-lang",
+ "vbl-runtime",
+]
+
+[[package]]
+name = "vbl-fxp"
+version = "0.2.0"
+dependencies = [
+ "criterion",
  "vbl-lang",
  "vbl-runtime",
 ]

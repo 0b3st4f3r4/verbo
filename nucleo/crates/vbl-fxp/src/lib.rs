@@ -1,0 +1,36 @@
+//! vbl-fxp — Flux Protocol da VerboLang (Etapa 3, PLAN §3).
+//!
+//! Camada única de I/O que unifica sensores (entrada) e atores (saída)
+//! (FORMAL §4.4/§6), consumida pelo runtime via trait `vbl_runtime::Fxp`.
+//!
+//! Módulos:
+//! - [`schema`]: codec do schema de mensagem v1 (docs/FXP-SCHEMA-v1.md —
+//!   definido antes dos drivers; serialização sem perda, LE, ack/seq);
+//! - [`registry`]: registro de dispositivos com aliases (§6), modos
+//!   real/simulado/híbrido e política de fallback (§4.3);
+//! - [`drivers`]: backends reais (sysfs/thermal_zone, RAPL, hwmon PWM, LED)
+//!   e o `AttentionSource` (simulado obrigatório em CI);
+//! - [`queue`]: fila de comandos com prioridade (subvert = máxima), timeout
+//!   e retry (PLAN §3.4);
+//! - [`transport`]: frames v1 sobre in-process/Unix/TCP com ack/timeout;
+//! - [`bus`]: o barramento `FxpBus` (trait `Fxp` do runtime) que roteia
+//!   leituras/atos por modo de operação com honestidade de dados (§4.7).
+//!
+//! O simulador determinístico continua em `vbl-runtime::sim` (contrato da
+//! Etapa 1/2); o bus o usa como backend simulado — modo `simulado` é bit a bit
+//! compatível com a Etapa 2.
+
+
+pub mod bus;
+pub mod drivers;
+pub mod queue;
+pub mod registry;
+pub mod schema;
+pub mod transport;
+
+pub use bus::{BusConfig, FxpBus, Rota};
+pub use drivers::{ActorDriver, AttentionSource, SensorDriver, SimulatedAttention};
+pub use queue::{Comando, ErroFila, FilaComandos, PRIORIDADE_NORMAL, PRIORIDADE_SUBVERT};
+pub use registry::{DeviceEntry, DeviceKind, DeviceMode, DeviceRegistry, Endpoint, ErroRegistro, FxpConfig, ModoOperacao, RemoteAddr};
+pub use schema::{AckAct, Corpo, DeviceDesc, ErroSchema, Mensagem, WireValue};
+pub use transport::{ErroTransporte, Servidor};

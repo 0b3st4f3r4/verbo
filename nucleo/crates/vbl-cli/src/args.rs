@@ -16,6 +16,16 @@ pub enum Comando {
         caderno: Option<PathBuf>,
         roteiro: Roteiro,
         permitir_sem_registro: bool,
+        /// Modo do barramento FXP (sobrepõe o `mode` do arquivo de config).
+        fxp_mode: Option<String>,
+        /// Arquivo de registro/config FXP (`key = value`, docs/FXP-SCHEMA-v1.md §7).
+        fxp_config: Option<PathBuf>,
+    },
+    /// `vbl fxp-probe` — tabela de dispositivos/modos/rotas/disponibilidade
+    /// (auditoria do registro FXP no host; PLAN Etapa 3).
+    FxpProbe {
+        fxp_mode: Option<String>,
+        fxp_config: Option<PathBuf>,
     },
 }
 
@@ -45,6 +55,8 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Comando, Str
             let mut caderno = None;
             let mut roteiro = Roteiro::default();
             let mut permitir_sem_registro = false;
+            let mut fxp_mode = None;
+            let mut fxp_config = None;
             while let Some(a) = args.next() {
                 match a.as_str() {
                     "--ticks" => {
@@ -75,6 +87,12 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Comando, Str
                         );
                     }
                     "--permitir-sem-registro" => permitir_sem_registro = true,
+                    "--fxp-mode" => {
+                        fxp_mode = Some(args.next().ok_or("--fxp-mode exige simulado|real|hibrido")?)
+                    }
+                    "--fxp-config" => {
+                        fxp_config = Some(PathBuf::from(args.next().ok_or("--fxp-config exige ARQUIVO")?))
+                    }
                     _ if arquivo.is_none() => arquivo = Some(a),
                     _ => return Err(format!("argumento inesperado: {a}\n{USO}")),
                 }
@@ -87,7 +105,25 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Comando, Str
                 caderno,
                 roteiro,
                 permitir_sem_registro,
+                fxp_mode,
+                fxp_config,
             })
+        }
+        "fxp-probe" => {
+            let mut fxp_mode = None;
+            let mut fxp_config = None;
+            while let Some(a) = args.next() {
+                match a.as_str() {
+                    "--fxp-mode" => {
+                        fxp_mode = Some(args.next().ok_or("--fxp-mode exige simulado|real|hibrido")?)
+                    }
+                    "--fxp-config" => {
+                        fxp_config = Some(PathBuf::from(args.next().ok_or("--fxp-config exige ARQUIVO")?))
+                    }
+                    _ => return Err(format!("argumento inesperado: {a}\n{USO}")),
+                }
+            }
+            Ok(Comando::FxpProbe { fxp_mode, fxp_config })
         }
         "--ajuda" | "-h" | "help" => Err(USO.to_string()),
         outra => Err(format!("subcomando desconhecido '{outra}'\n{USO}")),
@@ -98,6 +134,7 @@ const USO: &str = "\
 uso:
   vbl check <arquivo.vl> [--sem-registro]
   vbl run <arquivo.vl> [opções]
+  vbl fxp-probe [--fxp-config ARQUIVO] [--fxp-mode MODO]
 
 opções de run:
   --ticks N                        número de ticks virtuais (padrão: até esvaziar o mundo)
@@ -106,5 +143,11 @@ opções de run:
   --caderno ARQUIVO                exporta o Caderno em JSONL ao final
   --set SENSOR=VALOR               valor inicial de sensor no FXP simulado
   --at TICK:SENSOR=VALOR           roteiriza valor absoluto de sensor no tick
-  --permitir-sem-registration      executa mesmo com referências fora do registro (§4.7)
+  --permitir-sem-registro          executa mesmo com referências fora do registro (§4.7)
+  --fxp-mode MODO                  simulado|real|hibrido (padrão: simulado; sobrepõe a config)
+  --fxp-config ARQUIVO             registro/config FXP (dispositivos, endpoints, fallback)
+
+opções de fxp-probe:
+  --fxp-config ARQUIVO             registro/config FXP a auditar
+  --fxp-mode MODO                  simulado|real|hibrido (padrão: o da config, senão simulado)
 ";
