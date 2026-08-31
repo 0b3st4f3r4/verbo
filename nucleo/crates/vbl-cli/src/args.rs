@@ -3,6 +3,9 @@
 use std::path::PathBuf;
 use crate::roteiro::Roteiro;
 
+// Variante `Run` carrega as opções de execução; o enum vive poucos ciclos no
+// início do processo — a clareza dos campos nomeados vale mais que o boxing.
+#[allow(clippy::large_enum_variant)]
 pub enum Comando {
     Check {
         arquivo: String,
@@ -26,6 +29,12 @@ pub enum Comando {
     FxpProbe {
         fxp_mode: Option<String>,
         fxp_config: Option<PathBuf>,
+    },
+    /// `vbl caderno-verify ARQUIVO` — verificação externa do log do Caderno
+    /// (binário `.vcad` ou JSONL): recomputa a cadeia SHA-256 e emite o
+    /// relatório (Etapa 4 — AGENTS §1.4: agente externo).
+    CadernoVerify {
+        arquivo: String,
     },
 }
 
@@ -87,6 +96,18 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Comando, Str
                         );
                     }
                     "--permitir-sem-registro" => permitir_sem_registro = true,
+                    "--falhar-ator" => {
+                        roteiro.falhar_ator(&args.next().ok_or("--falhar-ator exige NOME")?)
+                    }
+                    "--fallback" => {
+                        let kv = args.next().ok_or("--fallback exige PRIMARIO=ALTERNATIVO")?;
+                        let (prim, alt) =
+                            kv.split_once('=').ok_or("--fallback espera PRIMARIO=ALTERNATIVO")?;
+                        roteiro.fallback(prim, alt);
+                    }
+                    "--registrar-ator" => {
+                        roteiro.registrar_ator(&args.next().ok_or("--registrar-ator exige NOME")?)
+                    }
                     "--fxp-mode" => {
                         fxp_mode = Some(args.next().ok_or("--fxp-mode exige simulado|real|hibrido")?)
                     }
@@ -125,6 +146,19 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Comando, Str
             }
             Ok(Comando::FxpProbe { fxp_mode, fxp_config })
         }
+        "caderno-verify" => {
+            let mut arquivo = None;
+            for a in args.by_ref() {
+                if arquivo.is_none() {
+                    arquivo = Some(a);
+                } else {
+                    return Err(format!("argumento inesperado: {a}\n{USO}"));
+                }
+            }
+            Ok(Comando::CadernoVerify {
+                arquivo: arquivo.ok_or(format!("caderno-verify exige <ARQUIVO>\n{USO}"))?,
+            })
+        }
         "--ajuda" | "-h" | "help" => Err(USO.to_string()),
         outra => Err(format!("subcomando desconhecido '{outra}'\n{USO}")),
     }
@@ -135,14 +169,19 @@ uso:
   vbl check <arquivo.vl> [--sem-registro]
   vbl run <arquivo.vl> [opções]
   vbl fxp-probe [--fxp-config ARQUIVO] [--fxp-mode MODO]
+  vbl caderno-verify <ARQUIVO>
 
 opções de run:
   --ticks N                        número de ticks virtuais (padrão: até esvaziar o mundo)
   --real-ms MS                     modo tempo real: 1 tick a cada MS milissegundos
   --persist-dir DIR                diretório de persistência `.vl` (padrão: persistencia/)
-  --caderno ARQUIVO                exporta o Caderno em JSONL ao final
+  --caderno ARQUIVO                Caderno de PRODUÇÃO (Etapa 4): gravação assíncrona;
+                                   binário .vcad em ARQUIVO + JSONL em ARQUIVO.jsonl
   --set SENSOR=VALOR               valor inicial de sensor no FXP simulado
   --at TICK:SENSOR=VALOR           roteiriza valor absoluto de sensor no tick
+  --falhar-ator NOME               ator para de responder (heartbeat — BDD Caso 3)
+  --fallback PRIM=ALT              política de fallback do registro (FORMAL §4.3)
+  --registrar-ator NOME            ator extra 0..255 safety 200 (ex.: VentoinhaReserva)
   --permitir-sem-registro          executa mesmo com referências fora do registro (§4.7)
   --fxp-mode MODO                  simulado|real|hibrido (padrão: simulado; sobrepõe a config)
   --fxp-config ARQUIVO             registro/config FXP (dispositivos, endpoints, fallback)

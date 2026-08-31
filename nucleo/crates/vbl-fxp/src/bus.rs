@@ -23,7 +23,7 @@ use crate::schema::{flag, razao, AckAct, Corpo, Mensagem, WireValue};
 use crate::transport::{Conexao, ErroTransporte};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
-use vbl_runtime::caderno::{kinds as rt_kinds, Caderno};
+use vbl_runtime::caderno::{kinds as rt_kinds, Atuacao, Caderno};
 use vbl_runtime::fxp::{
     ActOutcome, ActorLimits, FalhaSensor, Fxp, Limite, Registry as RuntimeRegistry, Value,
     PRIORIDADE_NORMAL,
@@ -39,6 +39,25 @@ pub mod kinds {
     pub const COMANDO_REENTREGUE: &str = "comando_reentregue";
     /// Comando excedeu `queue_timeout_ticks` e foi descartado com alerta.
     pub const COMANDO_EXPIRADO: &str = "comando_expirado";
+}
+
+/// Trilha de atuação com a latência medida (Etapa 4 — PLAN §4.1): o Caderno
+/// estima o custo energético como potência do tick × latência do ack.
+fn atuacao_com_latencia(
+    caderno: &mut dyn Caderno,
+    ator: &str,
+    valor: &Value,
+    latencia_us: u64,
+    sucesso: bool,
+) {
+    caderno.actuator_action_detalhada(Atuacao {
+        ator: ator.to_owned(),
+        solicitado: valor.clone(),
+        aplicado: if sucesso { Some(valor.clone()) } else { None },
+        latencia_us: Some(latencia_us),
+        custo_joules: None,
+        sucesso,
+    });
 }
 
 /// Parâmetros do barramento (defaults = docs/FXP-SCHEMA-v1.md §6).
@@ -500,14 +519,20 @@ impl FxpBus {
             return Ok(false);
         };
         // tentativas = 1 + retries (PLAN §3: fila com retry e fallback)
+        let mut latencia_ultima_us = 0u64;
         for _ in 0..=self.config.retries {
-            match dr.apply(valor) {
+            let t0 = Instant::now();
+            let resultado = dr.apply(valor);
+            latencia_ultima_us = t0.elapsed().as_micros() as u64;
+            match resultado {
                 Ok(()) => {
-                    caderno.actuator_action(canonical, valor, true);
+                    // Etapa 4 (PLAN §4.1): valor aplicado + latência do ack;
+                    // o custo energético é estimado pelo Caderno (W × latência).
+                    atuacao_com_latencia(caderno, canonical, valor, latencia_ultima_us, true);
                     return Ok(true);
                 }
                 Err(crate::drivers::ErroAtor::ValorInvalido(motivo)) => {
-                    caderno.actuator_action(canonical, valor, false);
+                    atuacao_com_latencia(caderno, canonical, valor, latencia_ultima_us, false);
                     caderno.record(
                         rt_kinds::ACTOR_REJECTED_VALUE,
                         &format!("Comando a '{canonical}' fora do domínio do ator: {motivo}."),
@@ -524,7 +549,7 @@ impl FxpBus {
                 }
             }
         }
-        caderno.actuator_action(canonical, valor, false);
+        atuacao_com_latencia(caderno, canonical, valor, latencia_ultima_us, false);
         caderno.record(
             rt_kinds::ATOR_INDISPONIVEL,
             &format!(
@@ -554,68 +579,72 @@ impl FxpBus {
         } else {
             self.config.act_timeout_local
         };
+        let t0 = Instant::now();
         match self.pedir_remoto(canonical, &addr, &pedido, timeout) {
-            Ok(resp) => match resp.corpo {
-                Corpo::ActAck { status } => match status {
-                    AckAct::Entregue => {
-                        caderno.actuator_action(canonical, valor, true);
-                        Some(ActOutcome::Entregue)
-                    }
-                    AckAct::Rejeitado { limite, valor_limite } => {
-                        let limite = match limite {
-                            0 => Limite::Min,
-                            1 => Limite::Max,
-                            _ => Limite::SafetyLimit,
-                        };
-                        Some(self.rejeitar_por_limite(canonical, valor, limite, valor_limite, caderno))
-                    }
-                    AckAct::AtorInexistente => {
-                        caderno.record(
-                            rt_kinds::ATOR_INEXISTENTE,
-                            &format!("Ator '{canonical}' não registrado no peer remoto."),
-                            Json::obj([("ator", Json::str(canonical))]),
-                        );
-                        caderno.actuator_action(canonical, valor, false);
-                        Some(ActOutcome::AtorInexistente)
-                    }
-                    AckAct::ValorInvalido { motivo } => {
-                        caderno.actuator_action(canonical, valor, false);
-                        Some(ActOutcome::ValorInvalido { motivo })
-                    }
-                    AckAct::Indisponivel | AckAct::FallbackEsgotado => {
-                        caderno.actuator_action(canonical, valor, false);
-                        caderno.record(
-                            rt_kinds::ATOR_INDISPONIVEL,
-                            &format!("Heartbeat do ator '{canonical}' não respondeu (peer)."),
-                            Json::obj([("ator", Json::str(canonical))]),
-                        );
+            Ok(resp) => {
+                let latencia_us = t0.elapsed().as_micros() as u64;
+                match resp.corpo {
+                    Corpo::ActAck { status } => match status {
+                        AckAct::Entregue => {
+                            atuacao_com_latencia(caderno, canonical, valor, latencia_us, true);
+                            Some(ActOutcome::Entregue)
+                        }
+                        AckAct::Rejeitado { limite, valor_limite } => {
+                            let limite = match limite {
+                                0 => Limite::Min,
+                                1 => Limite::Max,
+                                _ => Limite::SafetyLimit,
+                            };
+                            Some(self.rejeitar_por_limite(canonical, valor, limite, valor_limite, caderno))
+                        }
+                        AckAct::AtorInexistente => {
+                            caderno.record(
+                                rt_kinds::ATOR_INEXISTENTE,
+                                &format!("Ator '{canonical}' não registrado no peer remoto."),
+                                Json::obj([("ator", Json::str(canonical))]),
+                            );
+                            atuacao_com_latencia(caderno, canonical, valor, latencia_us, false);
+                            Some(ActOutcome::AtorInexistente)
+                        }
+                        AckAct::ValorInvalido { motivo } => {
+                            atuacao_com_latencia(caderno, canonical, valor, latencia_us, false);
+                            Some(ActOutcome::ValorInvalido { motivo })
+                        }
+                        AckAct::Indisponivel | AckAct::FallbackEsgotado => {
+                            atuacao_com_latencia(caderno, canonical, valor, latencia_us, false);
+                            caderno.record(
+                                rt_kinds::ATOR_INDISPONIVEL,
+                                &format!("Heartbeat do ator '{canonical}' não respondeu (peer)."),
+                                Json::obj([("ator", Json::str(canonical))]),
+                            );
+                            None
+                        }
+                        AckAct::FallbackExecutado { alternativo } => {
+                            // O peer executou o fallback do registro DELE (§4.3).
+                            atuacao_com_latencia(caderno, &alternativo, valor, latencia_us, true);
+                            caderno.record(
+                                rt_kinds::FALLBACK_EXECUTADO,
+                                &format!(
+                                    "Fallback '{alternativo}' acionado após falha de '{canonical}'."
+                                ),
+                                Json::obj([
+                                    ("primario", Json::str(canonical)),
+                                    ("alternativo", Json::str(alternativo.clone())),
+                                    ("valor", valor.to_json()),
+                                ]),
+                            );
+                            Some(ActOutcome::FallbackExecutado { alternativo })
+                        }
+                    },
+                    _ => {
+                        atuacao_com_latencia(caderno, canonical, valor, latencia_us, false);
                         None
                     }
-                    AckAct::FallbackExecutado { alternativo } => {
-                        // O peer executou o fallback do registro DELE (§4.3).
-                        caderno.actuator_action(&alternativo, valor, true);
-                        caderno.record(
-                            rt_kinds::FALLBACK_EXECUTADO,
-                            &format!(
-                                "Fallback '{alternativo}' acionado após falha de '{canonical}'."
-                            ),
-                            Json::obj([
-                                ("primario", Json::str(canonical)),
-                                ("alternativo", Json::str(alternativo.clone())),
-                                ("valor", valor.to_json()),
-                            ]),
-                        );
-                        Some(ActOutcome::FallbackExecutado { alternativo })
-                    }
-                },
-                _ => {
-                    caderno.actuator_action(canonical, valor, false);
-                    None
                 }
-            },
+            }
             Err(e) => {
                 self.conexoes.remove(canonical);
-                caderno.actuator_action(canonical, valor, false);
+                atuacao_com_latencia(caderno, canonical, valor, t0.elapsed().as_micros() as u64, false);
                 caderno.record(
                     rt_kinds::ATOR_INDISPONIVEL,
                     &format!("Heartbeat do ator '{canonical}' não respondeu (transporte: {e})."),

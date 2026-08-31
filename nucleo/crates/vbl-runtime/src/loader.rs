@@ -9,6 +9,7 @@
 //! por §4.7 — sensor ausente nunca dispara regra); `validar` devolve os
 //! diagnósticos de registro para o `check` do CLI.
 
+use crate::caderno::Caderno;
 use crate::engine::Engine;
 use crate::forma::{ActionRt, Form, Manutencao, RuleRt};
 use crate::fxp::{Fxp, Value};
@@ -31,8 +32,8 @@ impl std::fmt::Display for LoadDiag {
 /// Carrega o programa no engine (formas na ordem de declaração, regras na
 /// ordem declarada, bloco `main` interpretado). Devolve o interpretador do
 /// `main` (vazio se o programa não tiver `main`).
-pub fn carregar<F: Fxp>(
-    engine: &mut Engine<F>,
+pub fn carregar<F: Fxp, C: Caderno>(
+    engine: &mut Engine<F, C>,
     programa: &Program,
 ) -> MainInterpreter {
     for decl in &programa.decls {

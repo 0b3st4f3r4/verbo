@@ -12,6 +12,7 @@
 //! - [`json`]: serialização JSON determinística (auditoria do Caderno).
 
 pub mod caderno;
+pub mod caderno_producao;
 pub mod engine;
 pub mod forma;
 pub mod fxp;
@@ -23,6 +24,10 @@ pub mod scheduler;
 pub mod sim;
 
 pub use caderno::{Caderno, ChainCaderno, Evento};
+pub use caderno_producao::{
+    jsonl_de_binario, verificar, verificar_binario, verificar_jsonl, CadernoProducao, RelatorioVerificacao,
+    Resumo,
+};
 pub use engine::Engine;
 pub use forma::{ActionRt, Form, Manutencao, RuleRt, VALOR_POETICO_CANONICO};
 pub use fxp::{ActOutcome, ActorLimits, FalhaSensor, Fxp, Limite, Registry, SensorInfo, Value};

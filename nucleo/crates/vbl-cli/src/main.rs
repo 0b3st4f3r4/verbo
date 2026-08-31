@@ -1,5 +1,5 @@
-//! `vbl` — interpretador de console `.vl` (entregáveis das Etapas 2 e 3,
-//! PLAN §2.3/§3).
+//! `vbl` — interpretador de console `.vl` (entregáveis das Etapas 2–4,
+//! PLAN §2.3/§3/§4).
 //!
 //! Subcomandos:
 //! - `vbl check <arquivo.vl>`: valida o programa (parser + registro FXP
@@ -9,7 +9,10 @@
 //!   `--real-ms`), com persistência `equilibrium` e Caderno auditável;
 //! - `vbl fxp-probe`: audita o registro FXP do host (dispositivo × modo ×
 //!   rota × disponibilidade × latência) e a cobertura dos dispositivos
-//!   obrigatórios (FORMAL §6).
+//!   obrigatórios (FORMAL §6);
+//! - `vbl caderno-verify ARQUIVO`: verificação EXTERNA do log do Caderno
+//!   (binário `.vcad` ou JSONL) — recomputa a cadeia SHA-256 e emite o
+//!   relatório de integridade, Joules e atuações (Etapa 4, PLAN §4.1).
 //!
 //! Backend FXP do `run` (PLAN Etapa 3):
 //! - padrão: simulador determinístico em processo (paridade com a Etapa 2);
@@ -18,14 +21,24 @@
 //!   e/ou peers remotos — dado sintético só circula em modo simulado/
 //!   híbrido explícito, marcado no Caderno (FORMAL §4.7).
 //!
+//! Caderno do `run` (PLAN Etapa 4):
+//! - sem `--caderno`: cadeia SHA-256 em memória ([`ChainCaderno`], soma no
+//!   final da execução);
+//! - com `--caderno ARQUIVO`: Caderno de PRODUÇÃO — gravação assíncrona em
+//!   buffer (thread dedicada), binário compacto `.vcad` em ARQUIVO e export
+//!   JSONL em `ARQUIVO.jsonl`; a integridade é reavermelhada do arquivo ao
+//!   final (agente externo: `vbl caderno-verify`).
+//!
 //! O loop assíncrono usa tokio (PLAN §2.2); o núcleo do engine é
 //! determinístico (relógio virtual injetável) — a simulação roteirizada é
 //! reproduzível tick a tick.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use vbl_runtime::caderno::Caderno;
+use vbl_runtime::caderno_producao::{jsonl_de_binario, verificar, CadernoProducao};
 use vbl_runtime::json::Json;
-use vbl_runtime::{carregar, validar, ChainCaderno, Engine, FxpSimulator};
+use vbl_runtime::{carregar, validar, ChainCaderno, Engine, FxpSimulator, MainInterpreter};
 
 mod args;
 mod roteiro;
@@ -74,6 +87,7 @@ async fn async_main() {
             }
         },
         Comando::FxpProbe { fxp_mode, fxp_config } => fxp_probe(&fxp_config, &fxp_mode),
+        Comando::CadernoVerify { arquivo } => caderno_verify(&arquivo),
     }
 }
 
@@ -172,7 +186,7 @@ fn check(arquivo: &str, com_registro: bool) {
 }
 
 // ----------------------------------------------------------------------
-// vbl run (genérico no backend FXP: simulador da Etapa 2 ou FxpBus)
+// vbl run (genérico no backend FXP e no Caderno: memória ou produção)
 // ----------------------------------------------------------------------
 #[allow(clippy::too_many_arguments)]
 async fn run<F: vbl_runtime::fxp::Fxp>(
@@ -180,7 +194,7 @@ async fn run<F: vbl_runtime::fxp::Fxp>(
     ticks: Option<u64>,
     real_ms: Option<u64>,
     persist_dir: PathBuf,
-    caderno_path: Option<PathBuf>,
+    caderno: Option<PathBuf>,
     roteiro: Roteiro,
     permitir_sem_registro: bool,
     fxp: F,
@@ -219,65 +233,219 @@ async fn run<F: vbl_runtime::fxp::Fxp>(
     }
 
     std::fs::create_dir_all(&persist_dir).expect("criar diretório de persistência");
-    let mut engine = Engine::novo(fxp, 1.0, &persist_dir);
+    println!("▶ {arquivo} — relógio virtual 1 tick = 1s");
 
-    // inicialização: recarrega `equilibrium` persistidas (FORMAL §4.1)
-    let recarregadas = vbl_runtime::persist::recarregar_equilibrium(&mut engine);
-    if recarregadas > 0 {
-        println!("↺ {recarregadas} equilibrium recarregada(s) do suporte estável");
+    match caderno {
+        // Etapa 4 (PLAN §4.1): Caderno de produção — gravação assíncrona
+        Some(binario) => {
+            let producao = CadernoProducao::abrir(&binario).unwrap_or_else(|e| {
+                eprintln!("vbl: caderno '{}': {e}", binario.display());
+                std::process::exit(2);
+            });
+            println!("  Caderno de produção: {} (assíncrono; JSONL em {})",
+                binario.display(),
+                caminho_jsonl(&binario).display());
+            let mut engine = Engine::com_caderno(fxp, 1.0, &persist_dir, producao);
+            recarregar(&mut engine);
+            let mut interp = carregar(&mut engine, &programa);
+            println!("  {} forma(s) carregada(s)", engine.nomes_ativos().len());
+            let intervalo = real_ms.map(|ms| tokio::time::interval(Duration::from_millis(ms)));
+            let inicio = Instant::now();
+            let executados = laco(&mut engine, &mut interp, ticks.unwrap_or(u64::MAX), intervalo, &roteiro).await;
+            let duracao = inicio.elapsed();
+            let ativos: Vec<(String, String, String)> = engine
+                .nomes_ativos()
+                .iter()
+                .filter_map(|n| {
+                    engine.forma(n).map(|f| {
+                        (n.clone(), format!("{}", f.value), f.conjugation.nome().to_string())
+                    })
+                })
+                .collect();
+            // consumo do Caderno encerra a thread de gravação (fechar)
+            let resumo = engine.caderno.fechar().unwrap_or_else(|e| {
+                eprintln!("vbl: {e}");
+                std::process::exit(1);
+            });
+            sumario_run(&ativos, executados, duracao, Some(resumo), Some(&binario));
+        }
+        // Sem --caderno: cadeia em memória (paridade com a Etapa 2)
+        None => {
+            let mut engine = Engine::novo(fxp, 1.0, &persist_dir);
+            recarregar(&mut engine);
+            let mut interp = carregar(&mut engine, &programa);
+            println!("  {} forma(s) carregada(s)", engine.nomes_ativos().len());
+            let intervalo = real_ms.map(|ms| tokio::time::interval(Duration::from_millis(ms)));
+            let inicio = Instant::now();
+            let executados = laco(&mut engine, &mut interp, ticks.unwrap_or(u64::MAX), intervalo, &roteiro).await;
+            let duracao = inicio.elapsed();
+            let ativos: Vec<(String, String, String)> = engine
+                .nomes_ativos()
+                .iter()
+                .filter_map(|n| {
+                    engine.forma(n).map(|f| {
+                        (n.clone(), format!("{}", f.value), f.conjugation.nome().to_string())
+                    })
+                })
+                .collect();
+            sumario_run(&ativos, executados, duracao, None, None);
+            // sumário da cadeia em memória (implementação de referência)
+            let eventos = engine.caderno.eventos.len();
+            let vazamentos: f64 = engine
+                .caderno
+                .buscar("VAZAMENTO", &[])
+                .iter()
+                .filter_map(|e| match &e.extra {
+                    Json::Obj(c) => c.get("joules").and_then(|j| match j {
+                        Json::Num(n) => Some(*n),
+                        _ => None,
+                    }),
+                    _ => None,
+                })
+                .sum();
+            println!(
+                "  Caderno (memória): {eventos} evento(s), {vazamentos:.2} J acumulados; cadeia SHA-256 {}",
+                if engine.caderno.verify_chain() { "ÍNTEGRA" } else { "CORROMPIDA" }
+            );
+            println!("  cabeça da cadeia: {}…", &engine.caderno.chain_head()[..16]);
+        }
     }
+}
 
-    let mut interp = carregar(&mut engine, &programa);
-    let total = ticks.unwrap_or(u64::MAX);
-    println!("▶ {arquivo} — {} forma(s) carregada(s); relógio virtual 1 tick = 1s", engine.nomes_ativos().len());
+/// Recarga das `equilibrium` persistidas (FORMAL §4.1).
+fn recarregar<C: Caderno, F: vbl_runtime::fxp::Fxp>(engine: &mut Engine<F, C>) -> usize {
+    let n = vbl_runtime::persist::recarregar_equilibrium(engine);
+    if n > 0 {
+        println!("↺ {n} equilibrium recarregada(s) do suporte estável");
+    }
+    n
+}
 
-    let inicio = Instant::now();
-    let mut intervalo = real_ms.map(|ms| tokio::time::interval(Duration::from_millis(ms)));
+/// O loop de ticks (relógio virtual; tempo real opcional).
+async fn laco<C: Caderno, F: vbl_runtime::fxp::Fxp>(
+    engine: &mut Engine<F, C>,
+    interp: &mut MainInterpreter,
+    total: u64,
+    mut intervalo: Option<tokio::time::Interval>,
+    roteiro: &Roteiro,
+) -> u64 {
     let mut executados: u64 = 0;
     for _ in 0..total {
         if let Some(iv) = &mut intervalo {
             iv.tick().await; // modo tempo real (1 tick = período do intervalo)
         }
-        interp.run_due(&mut engine);
+        interp.run_due(engine);
         engine.tick();
         executados += 1;
         if engine.nomes_ativos().is_empty() && roteiro.terminou(engine.clock) {
             break;
         }
     }
-    let duracao = inicio.elapsed();
+    executados
+}
 
-    // sumário (sumário do runtime; Caderno integral exportado abaixo)
-    println!("■ {} tick(s) em {:.1?} — formas ativas restantes: {}",
-        executados, duracao,
-        engine.nomes_ativos().iter().map(|n| n.as_str()).collect::<Vec<_>>().join(", "));
-    for nome in engine.nomes_ativos() {
-        if let Some(f) = engine.forma(nome) {
-            println!("  - {nome}: {} (conjugação {})", f.value, f.conjugation.nome());
+/// Sumário comum dos dois caminhos de Caderno.
+fn sumario_run(
+    ativos: &[(String, String, String)],
+    executados: u64,
+    duracao: Duration,
+    resumo: Option<vbl_runtime::caderno_producao::Resumo>,
+    binario: Option<&Path>,
+) {
+    println!(
+        "■ {executados} tick(s) em {duracao:.1?} — formas ativas restantes: {}",
+        if ativos.is_empty() {
+            "—".to_string()
+        } else {
+            const LIMITE: usize = 20;
+            let resumo: Vec<String> = ativos
+                .iter()
+                .take(LIMITE)
+                .map(|(n, v, c)| format!("{n}: {v} ({c})"))
+                .collect();
+            if ativos.len() > LIMITE {
+                format!("{} … (+{} formas)", resumo.join(", "), ativos.len() - LIMITE)
+            } else {
+                resumo.join(", ")
+            }
         }
+    );
+    let (Some(resumo), Some(binario)) = (resumo, binario) else {
+        return;
+    };
+    println!(
+        "  Caderno de produção: {} evento(s), {} bytes, {:.2} J acumulados (gravação assíncrona)",
+        resumo.eventos, resumo.bytes, resumo.joules_totais
+    );
+    // verificação EXTERNA: relê o arquivo e recompõe a cadeia
+    let rel = verificar(binario).unwrap_or_else(|e| {
+        eprintln!("vbl: verificação do Caderno falhou: {e}");
+        std::process::exit(1);
+    });
+    println!(
+        "  cadeia SHA-256 {}: {} evento(s) no arquivo; atuações {}/{} ok; divergências (alertas): {}",
+        if rel.cadeia_ok { "ÍNTEGRA" } else { "CORROMPIDA" },
+        rel.eventos,
+        rel.atuacoes_ok,
+        rel.atuacoes,
+        rel.alertas
+    );
+    println!("  cabeça da cadeia: {}…", &rel.chain_head[..16.min(rel.chain_head.len())]);
+    let jsonl = caminho_jsonl(binario);
+    match jsonl_de_binario(binario, &jsonl) {
+        Ok(n) => println!("  log JSONL exportado para {} ({n} eventos)", jsonl.display()),
+        Err(e) => eprintln!("vbl: conversão JSONL falhou: {e}"),
     }
-    let eventos = engine.caderno.eventos.len();
-    let vazamentos: f64 = engine
-        .caderno
-        .buscar("VAZAMENTO", &[])
-        .iter()
-        .filter_map(|e| match &e.extra {
-            Json::Obj(c) => c.get("joules").and_then(|j| match j {
-                Json::Num(n) => Some(*n),
-                _ => None,
-            }),
-            _ => None,
-        })
-        .sum();
-    println!("  Caderno: {eventos} evento(s), {vazamentos:.2} J acumulados; cadeia SHA-256 {}",
-        if engine.caderno.verify_chain() { "ÍNTEGRA" } else { "CORROMPIDA" });
-    println!("  cabeça da cadeia: {}…", &engine.caderno.chain_head()[..16]);
+    if !rel.cadeia_ok {
+        eprintln!("vbl: log do Caderno CORROMPIDO — execução não passou na auditoria");
+        std::process::exit(1);
+    }
+}
 
-    if let Some(caminho) = caderno_path {
-        let n = engine.caderno.export_jsonl(&caminho).expect("exportar caderno");
-        println!("  log do Caderno exportado para {} ({n} eventos)", caminho.display());
+/// Caminho do export JSONL associado ao binário do Caderno.
+fn caminho_jsonl(binario: &Path) -> PathBuf {
+    let mut caminho = binario.as_os_str().to_owned();
+    caminho.push(".jsonl");
+    PathBuf::from(caminho)
+}
+
+// ----------------------------------------------------------------------
+// vbl caderno-verify — verificação externa (AGENTS §1.4)
+// ----------------------------------------------------------------------
+fn caderno_verify(arquivo: &str) {
+    let caminho = Path::new(arquivo);
+    let rel = match verificar(caminho) {
+        Ok(rel) => rel,
+        Err(e) => {
+            eprintln!("vbl: {e}");
+            std::process::exit(2);
+        }
+    };
+    let formato = if rel.rodape_ok || caminho.extension().and_then(|e| e.to_str()) == Some("vcad") {
+        "binário .vcad"
+    } else {
+        "JSONL"
+    };
+    println!("Caderno: {arquivo} ({formato})");
+    println!(
+        "  cadeia SHA-256: {}",
+        if rel.cadeia_ok {
+            "ÍNTEGRA".to_string()
+        } else {
+            format!("CORROMPIDA (primeiro evento inválido: {:?})", rel.primeiro_quebrado)
+        }
+    );
+    println!("  eventos: {}; cabeça: {}…", rel.eventos, &rel.chain_head[..16.min(rel.chain_head.len())]);
+    println!("  energia: {:.2} J acumulados", rel.joules_totais);
+    println!("  atuações: {}/{} com sucesso; divergências (alertas): {}", rel.atuacoes_ok, rel.atuacoes, rel.alertas);
+    let mut contagens: Vec<_> = rel.contagens.iter().collect();
+    contagens.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+    for (kind, n) in &contagens {
+        println!("    {kind}: {n}");
     }
-    let _ = ChainCaderno::HEAD_INICIAL; // (documentação da âncora da cadeia)
+    if !rel.cadeia_ok {
+        std::process::exit(1);
+    }
 }
 
 // ----------------------------------------------------------------------

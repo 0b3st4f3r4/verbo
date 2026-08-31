@@ -8,3 +8,7 @@ nucleo/target/
 nucleo/.cargo-home/
 persistencia*/
 caderno*.jsonl
+tmp-logs/
+nucleo/tmp-e2e/
+# logs de referência da Etapa 4: o JSONL irmão dos .vcad é versionado
+!logs/**/*.jsonl

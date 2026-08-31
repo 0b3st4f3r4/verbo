@@ -96,3 +96,162 @@ fn escrever_string(s: &str, out: &mut String) {
     }
     out.push('"');
 }
+
+// ----------------------------------------------------------------------
+// Parser mínimo (Etapa 4 — verificação externa do JSONL/binário)
+// ----------------------------------------------------------------------
+
+impl Json {
+    /// Analisa um documento JSON (apenas o necessário para a auditoria do
+    /// Caderno: objetos, arrays, strings com escapes, números, bool, null).
+    /// Zero dependências; determinístico.
+    pub fn analisar(texto: &str) -> Option<Json> {
+        let bytes = texto.as_bytes();
+        let mut pos = 0usize;
+        let valor = analisar_valor(bytes, &mut pos)?;
+        pular_espaco(bytes, &mut pos);
+        if pos != bytes.len() {
+            return None; // sobra de conteúdo — documento inválido
+        }
+        Some(valor)
+    }
+}
+
+fn pular_espaco(b: &[u8], pos: &mut usize) {
+    while *pos < b.len() && matches!(b[*pos], b' ' | b'\t' | b'\n' | b'\r') {
+        *pos += 1;
+    }
+}
+
+fn analisar_valor(b: &[u8], pos: &mut usize) -> Option<Json> {
+    pular_espaco(b, pos);
+    match *b.get(*pos)? {
+        b'{' => analisar_objeto(b, pos),
+        b'[' => analisar_array(b, pos),
+        b'"' => analisar_string(b, pos).map(Json::Str),
+        b't' => analisar_literal(b, pos, "true", Json::Bool(true)),
+        b'f' => analisar_literal(b, pos, "false", Json::Bool(false)),
+        b'n' => analisar_literal(b, pos, "null", Json::Nulo),
+        _ => analisar_numero(b, pos),
+    }
+}
+
+fn analisar_literal(b: &[u8], pos: &mut usize, literal: &str, valor: Json) -> Option<Json> {
+    if b.get(*pos..*pos + literal.len())? == literal.as_bytes() {
+        *pos += literal.len();
+        Some(valor)
+    } else {
+        None
+    }
+}
+
+fn analisar_numero(b: &[u8], pos: &mut usize) -> Option<Json> {
+    let inicio = *pos;
+    if b.get(*pos) == Some(&b'-') {
+        *pos += 1;
+    }
+    while matches!(b.get(*pos), Some(c) if c.is_ascii_digit() || matches!(c, b'.' | b'e' | b'E' | b'+' | b'-')) {
+        *pos += 1;
+    }
+    let texto = std::str::from_utf8(b.get(inicio..*pos)?).ok()?;
+    texto.parse::<f64>().ok().map(Json::Num)
+}
+
+fn analisar_string(b: &[u8], pos: &mut usize) -> Option<String> {
+    if b.get(*pos) != Some(&b'"') {
+        return None;
+    }
+    *pos += 1;
+    let mut out = String::new();
+    loop {
+        match *b.get(*pos)? {
+            b'"' => {
+                *pos += 1;
+                return Some(out);
+            }
+            b'\\' => {
+                *pos += 1;
+                match *b.get(*pos)? {
+                    b'"' => out.push('"'),
+                    b'\\' => out.push('\\'),
+                    b'/' => out.push('/'),
+                    b'n' => out.push('\n'),
+                    b'r' => out.push('\r'),
+                    b't' => out.push('\t'),
+                    b'b' => out.push('\u{8}'),
+                    b'f' => out.push('\u{c}'),
+                    b'u' => {
+                        let hex = std::str::from_utf8(b.get(*pos + 1..*pos + 5)?).ok()?;
+                        let cp = u32::from_str_radix(hex, 16).ok()?;
+                        out.push(char::from_u32(cp).unwrap_or('\u{fffd}'));
+                        *pos += 4;
+                    }
+                    _ => return None,
+                }
+                *pos += 1;
+            }
+            c => {
+                // continua o fluxo UTF-8 byte a byte (seguro: fonte era &str)
+                let inicio = *pos;
+                while *pos < b.len() && b[*pos] != b'"' && b[*pos] != b'\\' {
+                    *pos += 1;
+                }
+                out.push_str(std::str::from_utf8(b.get(inicio..*pos)?).ok()?);
+                let _ = c;
+            }
+        }
+    }
+}
+
+fn analisar_objeto(b: &[u8], pos: &mut usize) -> Option<Json> {
+    *pos += 1; // '{'
+    let mut campos = std::collections::BTreeMap::new();
+    pular_espaco(b, pos);
+    if b.get(*pos) == Some(&b'}') {
+        *pos += 1;
+        return Some(Json::Obj(campos));
+    }
+    loop {
+        pular_espaco(b, pos);
+        let chave = analisar_string(b, pos)?;
+        pular_espaco(b, pos);
+        if b.get(*pos) != Some(&b':') {
+            return None;
+        }
+        *pos += 1;
+        let valor = analisar_valor(b, pos)?;
+        campos.insert(chave, valor);
+        pular_espaco(b, pos);
+        match b.get(*pos)? {
+            b',' => *pos += 1,
+            b'}' => {
+                *pos += 1;
+                return Some(Json::Obj(campos));
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn analisar_array(b: &[u8], pos: &mut usize) -> Option<Json> {
+    *pos += 1; // '['
+    let mut itens = Vec::new();
+    pular_espaco(b, pos);
+    if b.get(*pos) == Some(&b']') {
+        *pos += 1;
+        return Some(Json::Arr(itens));
+    }
+    loop {
+        let valor = analisar_valor(b, pos)?;
+        itens.push(valor);
+        pular_espaco(b, pos);
+        match b.get(*pos)? {
+            b',' => *pos += 1,
+            b']' => {
+                *pos += 1;
+                return Some(Json::Arr(itens));
+            }
+            _ => return None,
+        }
+    }
+}

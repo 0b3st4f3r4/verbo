@@ -15,7 +15,7 @@ use vbl_lang::Conjugation;
 
 /// Recarrega do diretório de persistência as `equilibrium` cujo horizon não
 /// venceu. Usado na inicialização do runtime (antes de carregar o programa).
-pub fn recarregar_equilibrium<F: Fxp>(engine: &mut Engine<F>) -> usize {
+pub fn recarregar_equilibrium<F: Fxp, C: Caderno>(engine: &mut Engine<F, C>) -> usize {
     let dir = engine.persistence_dir().to_path_buf();
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return 0; // sem diretório: nada persistido ainda

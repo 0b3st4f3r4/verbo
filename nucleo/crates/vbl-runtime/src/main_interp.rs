@@ -40,7 +40,7 @@ impl MainInterpreter {
 
     /// Executa os blocos `every` vencidos; chamado uma vez por tick,
     /// ANTES do `engine.tick()` (coreografia da demo da Etapa 1).
-    pub fn run_due<F: Fxp>(&mut self, engine: &mut Engine<F>) {
+    pub fn run_due<F: Fxp, C: Caderno>(&mut self, engine: &mut Engine<F, C>) {
         let now = engine.sim_time;
         let vencidos: Vec<usize> = (0..self.every_blocks.len())
             .filter(|&i| now + 1e-9 >= self.every_blocks[i].next_due)
@@ -54,7 +54,7 @@ impl MainInterpreter {
         }
     }
 
-    fn run_statement<F: Fxp>(&mut self, engine: &mut Engine<F>, st: &StmtRt) {
+    fn run_statement<F: Fxp, C: Caderno>(&mut self, engine: &mut Engine<F, C>, st: &StmtRt) {
         match st {
             StmtRt::Keep(forma) => {
                 let Some(form) = engine.forma(forma) else {

@@ -142,6 +142,7 @@ embeddings com o chat desligado ou em outra máquina.
 | [`docs/FORMAL.md`](docs/FORMAL.md) | Especificação formal: tokens, EBNF, semântica operacional, registro FXP |
 | [`docs/PLAN.md`](docs/PLAN.md) | Roadmap de execução em 5 etapas + análise de riscos |
 | [`docs/FXP-SCHEMA-v1.md`](docs/FXP-SCHEMA-v1.md) | Schema v1 do Flux Protocol: frames, opcodes, flags, timeouts, config e rastreabilidade |
+| [`docs/CADERNO-FORMATO-v1.md`](docs/CADERNO-FORMATO-v1.md) | Formato binário `.vcad` do Caderno de produção: frames, cadeia SHA-256, rodapé e verificação externa |
 | [`nucleo/`](nucleo/) | Núcleo em Rust (Etapa 2+): `vbl-lang`, `vbl-runtime`, `vbl-fxp` (protocolo, drivers, barramento) e `vbl-cli` |
 | [`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md) | Pipeline de LLMs: GLM-5.3/Flash (cloud) + Qwen3-4B-2507 (local) |
 | [`prototype/verbolang-complete-blueprint.py`](prototype/verbolang-complete-blueprint.py) | Protótipo de referência (FXP, runtime, Caderno, bloco `main`) |
@@ -152,6 +153,8 @@ embeddings com o chat desligado ou em outra máquina.
 | [`docs/ETAPA-1-RELATORIO.md`](docs/ETAPA-1-RELATORIO.md) | Relatório da Etapa 1: matriz de rastreabilidade, interpretações e divergências |
 | [`docs/ETAPA-2-RELATORIO.md`](docs/ETAPA-2-RELATORIO.md) | Relatório da Etapa 2: parser, engine de tick, Caderno e CLI `vbl` |
 | [`docs/ETAPA-3-RELATORIO.md`](docs/ETAPA-3-RELATORIO.md) | Relatório da Etapa 3: FXP real — schema v1, drivers, barramento, fila e transporte |
+| [`docs/ETAPA-4-RELATORIO.md`](docs/ETAPA-4-RELATORIO.md) | Relatório da Etapa 4: Caderno de produção (assíncrono, `.vcad`), E2E e overhead medido |
+| [`logs/etapa4/`](logs/etapa4/) | Logs reais do Caderno exportados das cargas E2E + relatórios de verificação externa |
 | [`docs/ADR-001-linguagem-nucleo.md`](docs/ADR-001-linguagem-nucleo.md) | Decisão Rust × C com orçamentos de memória/latência reancorados |
 | [`docs/CHEATSHEET-PROMPTS.yaml`](docs/CHEATSHEET-PROMPTS.yaml) | Banco fixo de 20 prompts para validação do cheat sheet (PLAN §7) |
 | [`docs/CHEATSHEET-VALIDACAO.md`](docs/CHEATSHEET-VALIDACAO.md) | Resultados versionados da validação do cheat sheet |
@@ -168,18 +171,21 @@ embeddings com o chat desligado ou em outra máquina.
 
 ## Roadmap
 
-Estado atual: **Etapas 1–3 concluídas** — suíte BDD/TDD, núcleo Rust (parser +
-engine + Caderno + CLI `vbl`) e FXP real (schema v1, drivers sysfs/RAPL/PWM/LED,
-barramento real/simulado/híbrido, fila prioritária e transporte Unix/TCP)
-([relatórios](docs/ETAPA-3-RELATORIO.md)).
+Estado atual: **Etapas 1–4 concluídas** — suíte BDD/TDD, núcleo Rust (parser +
+engine + Caderno + CLI `vbl`), FXP real (schema v1, drivers sysfs/RAPL/PWM/LED,
+barramento real/simulado/híbrido, fila prioritária e transporte Unix/TCP) e o
+**Caderno de produção** (gravação assíncrona, formato binário `.vcad` com
+cadeia SHA-256, verificação externa `vbl caderno-verify` e suíte E2E)
+([relatório da Etapa 4](docs/ETAPA-4-RELATORIO.md)).
 
 1. **Etapa 1** ✅ — Suíte BDD/TDD/E2E com mocks e simulador FXP
 2. **Etapa 2** ✅ — Núcleo da linguagem em **Rust**: lexer, parser, AST e motor de tick assíncrono ([ADR-001](docs/ADR-001-linguagem-nucleo.md))
 3. **Etapa 3** ✅ — FXP real: schema v1, registro de dispositivos, drivers, barramento multi-modo e transporte local×remoto ([relatório](docs/ETAPA-3-RELATORIO.md))
-4. **Etapa 4** — Caderno de produção e validação end-to-end
+4. **Etapa 4** ✅ — Caderno de produção (gravação assíncrona, `.vcad`, `caderno-verify`) e validação end-to-end ([relatório](docs/ETAPA-4-RELATORIO.md))
 5. **Etapa 5** — Qualidade, profiling termodinâmico e otimização
 
-Para rodar a suíte: `make setup && make test`.
+Para rodar a suíte: `make setup && make test` (Python) e `make rust-check` +
+`make rust-e2e` (núcleo Rust, Etapas 2–4).
 Detalhes e critérios de aceite por etapa em [`docs/PLAN.md`](docs/PLAN.md) e [`AGENTS.md`](AGENTS.md).
 
 ## Desenvolvimento assistido por LLMs

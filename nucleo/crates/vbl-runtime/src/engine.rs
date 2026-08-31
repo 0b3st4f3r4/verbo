@@ -23,10 +23,11 @@ use std::collections::BTreeMap;
 use vbl_lang::Conjugation;
 
 /// Engine de tick. O barramento FXP é injetado (simulador/mock — FORMAL §4.2)
-/// e o Caderno (cadeia SHA-256) é embutido.
-pub struct Engine<F: Fxp> {
+/// e o Caderno é injetável pelo mesmo trait (Etapa 4: produção assíncrona
+/// sem mudar o runtime; default: [`ChainCaderno`] em memória).
+pub struct Engine<F: Fxp, C: Caderno = ChainCaderno> {
     pub fxp: F,
-    pub caderno: ChainCaderno,
+    pub caderno: C,
     formas: BTreeMap<String, Form>,
     /// Ordem de declaração das formas ativas (iteração do tick).
     ordem: Vec<String>,
@@ -40,11 +41,23 @@ pub struct Engine<F: Fxp> {
     vencidos: BTreeMap<String, Vec<(Prazo, u64)>>,
 }
 
-impl<F: Fxp> Engine<F> {
+impl<F: Fxp> Engine<F, ChainCaderno> {
     pub fn novo(fxp: F, tick_seconds: f64, persistence_dir: impl Into<std::path::PathBuf>) -> Self {
+        Self::com_caderno(fxp, tick_seconds, persistence_dir, ChainCaderno::new())
+    }
+}
+
+impl<F: Fxp, C: Caderno> Engine<F, C> {
+    /// Engine com Caderno injetado (Etapa 4 — Caderno de produção).
+    pub fn com_caderno(
+        fxp: F,
+        tick_seconds: f64,
+        persistence_dir: impl Into<std::path::PathBuf>,
+        caderno: C,
+    ) -> Self {
         Self {
             fxp,
-            caderno: ChainCaderno::new(),
+            caderno,
             formas: BTreeMap::new(),
             ordem: Vec::new(),
             scheduler: Scheduler::new(),
@@ -55,6 +68,12 @@ impl<F: Fxp> Engine<F> {
             retencao: Retencao::default(),
             vencidos: BTreeMap::new(),
         }
+    }
+
+    /// Propaga o relógio virtual para o Caderno sem avançar o mundo
+    /// (usado antes de ticks externos ao loop principal).
+    pub fn definir_tempo_caderno(&mut self, tick: u64, t: f64) {
+        self.caderno.definir_tempo(tick, t);
     }
 
     pub fn persistence_dir(&self) -> &std::path::Path {
@@ -201,9 +220,16 @@ impl<F: Fxp> Engine<F> {
         self.clock += 1;
         self.sim_time += self.tick_seconds;
         let agora = self.sim_time;
+        // Etapa 4 (AGENTS §1.4): todo evento carrega o relógio virtual.
+        self.caderno.definir_tempo(self.clock, self.sim_time);
 
         // 0. o mundo avança (roteirização do simulador)
         self.fxp.on_tick(&mut self.caderno);
+        // Etapa 4: relógio virtual + potência global propagados ao Caderno
+        // (AGENTS §1.4 — timestamps; PLAN §4.1 — custo de atuações)
+        let potencia_global = self.fxp.cpu_power();
+        self.caderno.definir_tempo(self.clock, self.sim_time);
+        self.caderno.definir_potencia(potencia_global);
 
         // 1. drena os prazos vencidos do escalonador (O(vencidos))
         self.vencidos.clear();
@@ -226,7 +252,7 @@ impl<F: Fxp> Engine<F> {
 
             // 2a. vazamento energético — partilha igual P/N (FORMAL §4.2)
             let potencia = if total_ativas > 0 {
-                self.fxp.cpu_power() / total_ativas as f64
+                potencia_global / total_ativas as f64
             } else {
                 0.0
             };

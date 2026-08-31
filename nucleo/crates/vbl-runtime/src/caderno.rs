@@ -7,9 +7,19 @@
 //! `\x1f` + JSON (chaves ordenadas) — mesma composição do protótipo da
 //! Etapa 1, permitindo auditoria externa a partir do JSONL exportado.
 //!
-//! A gravação é **em memória + export JSONL** nesta etapa; o formato binário
-//! compacto e a escrita assíncrona (buffer + flush, overhead ≤ 1%) são o
-//! Caderno de produção da Etapa 4 (PLAN §4.1).
+//! A gravação em **memória** ([`ChainCaderno`]) é a implementação de
+//! referência (determinística, com os eventos consultáveis). O **Caderno de
+//! produção** da Etapa 4 — gravação assíncrona em buffer, formato binário
+//! compacto `.vcad`, cadeia incremental e agregados — vive em
+//! [`crate::caderno_producao`] (PLAN §4.1) e pluga pelo mesmo trait, sem
+//! mudar o runtime.
+//!
+//! **Timestamp do relógio virtual (Etapa 4, AGENTS §1.4):** todo evento recebe
+//! `tick` e `t` (segundos virtuais) injetados pelo engine via
+//! [`Caderno::definir_tempo`]. Os campos entram no `extra` do evento (chaves
+//! reservadas `tick`/`t`), preservando a composição canônica da linha — a
+//! cadeia continua verificável pelo mesmo método, e o JSONL exportado expõe os
+//! timestamps no nível superior do objeto.
 
 use crate::json::Json;
 use sha2::{Digest, Sha256};
@@ -25,8 +35,9 @@ pub struct Evento {
 }
 
 impl Evento {
-    /// Linha canônica que entra na cadeia (sem o próprio hash).
-    fn linha(&self) -> String {
+    /// Linha canônica que entra na cadeia (sem o próprio hash). Pública para
+    /// o Caderno de produção e o verificador externo (mesma composição).
+    pub fn linha(&self) -> String {
         let mut linha = format!("{}\u{1f}{}\u{1f}{}", self.seq, self.kind, self.msg);
         if let Json::Obj(campos) = &self.extra {
             if !campos.is_empty() {
@@ -65,6 +76,20 @@ pub mod kinds {
 pub trait Caderno {
     fn record(&mut self, kind: &str, msg: &str, extra: Json);
 
+    /// Define o relógio virtual corrente (chamado pelo engine a cada tick).
+    /// Todo evento gravado depois carrega `tick` e `t` no `extra`
+    /// (AGENTS §1.4: timestamp do relógio virtual em todos os eventos).
+    fn definir_tempo(&mut self, _tick: u64, _t: f64) {}
+
+    /// Define a potência global do tick (W) — insumo do custo energético
+    /// estimado das atuações registradas no mesmo tick (PLAN §4.1).
+    fn definir_potencia(&mut self, _watts: f64) {}
+
+    /// Potência global corrente (W), se conhecida.
+    fn potencia_corrente(&self) -> Option<f64> {
+        None
+    }
+
     // ------------------------------------------------------------------
     // Atalhos com os níveis canônicos do protótipo
     // ------------------------------------------------------------------
@@ -90,19 +115,8 @@ pub trait Caderno {
 
     /// Vazamento energético: potência partilhada × duração do tick (FORMAL §4.2).
     fn leak(&mut self, forma: &str, watts: f64, segundos: f64) {
-        let joules = watts * segundos;
-        self.record(
-            "VAZAMENTO",
-            &format!(
-                "Forma '{forma}' dissipou {joules:.2} Joules ({watts:.2} W por {segundos:.2}s)"
-            ),
-            Json::obj([
-                ("forma", Json::str(forma)),
-                ("watts", Json::num(watts)),
-                ("segundos", Json::num(segundos)),
-                ("joules", Json::num(joules)),
-            ]),
-        );
+        let (msg, extra) = evento_vazamento(forma, watts, segundos);
+        self.record("VAZAMENTO", &msg, extra);
     }
 
     fn sensor_read(&mut self, sensor: &str, valor: f64) {
@@ -113,18 +127,96 @@ pub trait Caderno {
         );
     }
 
+    /// Atuação simples (compatibilidade): sem valor aplicado nem latência.
     fn actuator_action(&mut self, ator: &str, valor: &crate::fxp::Value, sucesso: bool) {
-        let status = if sucesso { "sucesso" } else { "falha" };
-        self.record(
-            "ATUACAO",
-            &format!("Ator '{ator}' <- {valor} ({status})"),
-            Json::obj([
-                ("ator", Json::str(ator)),
-                ("valor", valor.to_json()),
-                ("sucesso", Json::boolean(sucesso)),
-            ]),
-        );
+        self.actuator_action_detalhada(Atuacao {
+            ator: ator.to_owned(),
+            solicitado: valor.clone(),
+            aplicado: if sucesso { Some(valor.clone()) } else { None },
+            latencia_us: None,
+            custo_joules: None,
+            sucesso,
+        });
     }
+
+    /// Atuação com a trilha completa da Etapa 4 (PLAN §4.1; FORMAL §4.3):
+    /// ator, valor solicitado, valor aplicado, latência (µs) e custo
+    /// energético da atuação. O custo, quando não informado, é estimado
+    /// honestamente como potência do tick × latência do ack (J), marcado
+    /// `custo_estimado_joules` no `extra`.
+    fn actuator_action_detalhada(&mut self, mut a: Atuacao) {
+        if let (Some(us), None) = (a.latencia_us, a.custo_joules) {
+            a.custo_joules = self.potencia_corrente().map(|w| w * us as f64 / 1e6);
+        }
+        let status = if a.sucesso { "sucesso" } else { "falha" };
+        let msg = match (&a.aplicado, a.latencia_us) {
+            (Some(aplicado), Some(us)) => format!(
+                "Ator '{}' <- {} (aplicado: {aplicado}, {us} µs, {status})",
+                a.ator, a.solicitado
+            ),
+            (Some(aplicado), None) => {
+                format!("Ator '{}' <- {} (aplicado: {aplicado}, {status})", a.ator, a.solicitado)
+            }
+            (None, Some(us)) => {
+                format!("Ator '{}' <- {} ({us} µs, {status})", a.ator, a.solicitado)
+            }
+            (None, None) => format!("Ator '{}' <- {} ({status})", a.ator, a.solicitado),
+        };
+        let mut campos = vec![
+            ("ator", Json::str(&a.ator)),
+            ("valor", a.solicitado.to_json()),
+            ("sucesso", Json::boolean(a.sucesso)),
+        ];
+        if let Some(aplicado) = &a.aplicado {
+            campos.push(("aplicado", aplicado.to_json()));
+        }
+        if let Some(us) = a.latencia_us {
+            campos.push(("latencia_us", Json::num(us as f64)));
+        }
+        if let Some(j) = a.custo_joules {
+            campos.push(("custo_estimado_joules", Json::num(j)));
+        }
+        self.record("ATUACAO", &msg, Json::obj(campos));
+    }
+}
+
+/// Registro completo de uma atuação (Etapa 4 — PLAN §4.1).
+#[derive(Debug, Clone)]
+pub struct Atuacao {
+    pub ator: String,
+    /// Valor solicitado pela regra `act`.
+    pub solicitado: crate::fxp::Value,
+    /// Valor efetivamente aplicado pelo driver (quando houve entrega).
+    pub aplicado: Option<crate::fxp::Value>,
+    /// Latência do ack do driver, em microssegundos.
+    pub latencia_us: Option<u64>,
+    /// Custo energético estimado da atuação: potência × latência (J).
+    pub custo_joules: Option<f64>,
+    pub sucesso: bool,
+}
+
+/// Mensagem/extra canônicos do evento VAZAMENTO (compartilhado pelas
+/// implementações do trait — FORMAL §4.2).
+pub(crate) fn evento_vazamento(forma: &str, watts: f64, segundos: f64) -> (String, Json) {
+    let joules = watts * segundos;
+    (
+        format!("Forma '{forma}' dissipou {joules:.2} Joules ({watts:.2} W por {segundos:.2}s)"),
+        Json::obj([
+            ("forma", Json::str(forma)),
+            ("watts", Json::num(watts)),
+            ("segundos", Json::num(segundos)),
+            ("joules", Json::num(joules)),
+        ]),
+    )
+}
+
+/// Caderno nulo — referência do A/B de overhead (bench da Etapa 4): absorve
+/// os eventos sem custo além do dispatch do trait.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopCaderno;
+
+impl Caderno for NoopCaderno {
+    fn record(&mut self, _kind: &str, _msg: &str, _extra: Json) {}
 }
 
 /// Implementação de referência: eventos em memória + cadeia SHA-256.
@@ -132,6 +224,10 @@ pub trait Caderno {
 pub struct ChainCaderno {
     pub eventos: Vec<Evento>,
     chain_head: String,
+    /// Relógio virtual corrente (tick, segundos) — carimbado em cada evento.
+    tempo: (u64, f64),
+    /// Potência global do tick (W) — insumo do custo estimado de atuações.
+    potencia: f64,
 }
 
 impl Default for ChainCaderno {
@@ -145,12 +241,14 @@ impl ChainCaderno {
     pub const HEAD_INICIAL: &'static str = "0000000000000000000000000000000000000000000000000000000000000000";
 
     pub fn new() -> Self {
-        Self { eventos: Vec::new(), chain_head: Self::HEAD_INICIAL.to_owned() }
+        Self { eventos: Vec::new(), chain_head: Self::HEAD_INICIAL.to_owned(), tempo: (0, 0.0), potencia: 0.0 }
     }
 
     pub fn reset(&mut self) {
         self.eventos.clear();
         self.chain_head = Self::HEAD_INICIAL.to_owned();
+        self.tempo = (0, 0.0);
+        self.potencia = 0.0;
     }
 
     pub fn chain_head(&self) -> &str {
@@ -231,7 +329,20 @@ pub fn sha256_hex(dados: &[u8]) -> String {
 }
 
 impl Caderno for ChainCaderno {
-    fn record(&mut self, kind: &str, msg: &str, extra: Json) {
+    fn definir_tempo(&mut self, tick: u64, t: f64) {
+        self.tempo = (tick, t);
+    }
+
+    fn definir_potencia(&mut self, watts: f64) {
+        self.potencia = watts;
+    }
+
+    fn potencia_corrente(&self) -> Option<f64> {
+        Some(self.potencia)
+    }
+
+    fn record(&mut self, kind: &str, msg: &str, mut extra: Json) {
+        carimbar_tempo(&mut extra, self.tempo.0, self.tempo.1);
         let seq = self.eventos.len();
         let mut evento =
             Evento { seq, kind: kind.to_owned(), msg: msg.to_owned(), extra, hash: String::new() };
@@ -239,5 +350,15 @@ impl Caderno for ChainCaderno {
         evento.hash = sha256_hex(format!("{}{linha}", self.chain_head).as_bytes());
         self.chain_head = evento.hash.clone();
         self.eventos.push(evento);
+    }
+}
+
+/// Injeta o relógio virtual no `extra` do evento (chaves reservadas `tick`
+/// e `t`). Fica DENTRO do extra para preservar a composição canônica da
+/// linha — a cadeia segue verificável pelo método da Etapa 1/2.
+pub fn carimbar_tempo(extra: &mut Json, tick: u64, t: f64) {
+    if let Json::Obj(campos) = extra {
+        campos.insert("tick".to_owned(), Json::num(tick as f64));
+        campos.insert("t".to_owned(), Json::num(t));
     }
 }
