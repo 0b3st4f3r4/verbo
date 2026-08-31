@@ -257,3 +257,33 @@ projeto em `.rtk/filters.toml`. Mapa de uso medido (31/08/2026):
 
 `rtk gain` (analytics) exige escrita fora do workspace — indisponível sob
 sandbox `workspace-write`.
+
+## 7. Verbo Shell (vsh) — CLI com estado persistente para agentes
+
+O tool `bash` do harness executa cada comando em um shell **novo**: cwd,
+variáveis e histórico se perdem entre chamadas. O wrapper
+[`scripts/vsh.sh`](scripts/vsh.sh) (v0.1.1) resolve isso com **sessões
+persistentes** e built-ins de rede/auxílio. Estado em `.vsh/` (git-ignorado).
+
+| Tarefa | Usar | Observação |
+|---|---|---|
+| Comando com estado persistido | `bash scripts/vsh.sh run 'cd core && export X=1'` | na chamada seguinte, cwd/env continuam onde ficaram |
+| Atalho de 1 comando | `bash scripts/vsh.sh 'comando'` | equivalente a `run`; sai com o exit code do comando |
+| Sessão isolada por tópico | `bash scripts/vsh.sh -s build run '…'` | default: sessão `default` |
+| REPL interativo | `bash scripts/vsh.sh [-s NOME]` | readline, cores, `help` |
+| Busca web | `search [--json] [--n N] [--engine ddg\|mojeek] TERMO…` | DuckDuckGo com fallback automático p/ Mojeek (ambos podem sofrer rate-limit); substituto do tool `web_search` quando ele estiver fora |
+| Baixar URL | `fetch [-o ARQUIVO] URL` | metadados HTTP vão para stderr (pipe limpo) |
+| Diagnóstico de rede | `net [URL]` | código, DNS, connect, TLS, total |
+| JSON / hash / rtk | `json 'JQ' [FILE]` · `digest FILE` · `rt CMD…` | `rt` cai no comando direto se rtk faltar |
+| Gestão | `sessions` · `reset` · `doctor` · `help` | `doctor` verifica dependências e rede |
+
+Notas operacionais:
+
+- **Só o exportado persiste**: cwd e variáveis `export`adas são recarregados a
+  cada chamada; saída em arquivo é o caminho para resultados grandes.
+- **Comando de linha única** (sem continuação `\` nem heredoc no modo `run`);
+  no REPL prefira `export` a `declare -x` (limitação documentada no cabeçalho
+  do script, cf. NOTA DE ARQUITETURA sobre escopo top-level).
+- **Guarda heurística** recusa padrões destrutivos (`rm -rf /`, `dd of=/dev/*`,
+  `mkfs`, fork bomb…) — no modo não interativo exige `VSH_ALLOW_DANGEROUS=1`.
+- Customização: `VSH_STATE_DIR`, `VSH_SESSION`, `SEARCH_LIMIT`.
