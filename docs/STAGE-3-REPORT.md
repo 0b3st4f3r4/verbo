@@ -23,7 +23,7 @@ o CLI da Etapa 2.
 | Barramento com modos real/simulado/híbrido | ✅ | `vbl-fxp/src/bus.rs` |
 | Fila de comandos (prioridade, timeout, retry, fallback) | ✅ | `vbl-fxp/src/queue.rs` + `bus.rs` |
 | Transporte local × remoto (Unix/TCP, schema v1, ack/timeout) | ✅ | `vbl-fxp/src/transport.rs` |
-| CLI atualizado para FXP real ou simulado + `fxp-probe` | ✅ | `vbl-cli/src/{main,args,roteiro}.rs` |
+| CLI atualizado para FXP real ou simulado + `fxp-probe` | ✅ | `vbl-cli/src/{main,args,script}.rs` |
 | Testes unitários e de integração | ✅ | 125 testes Rust (§6) + benches criterion |
 | Prioridade máxima pós-`subvert` no escalonador | ✅ | `vbl-runtime/src/{fxp,engine}.rs` (`act_with_priority`) |
 
@@ -67,7 +67,7 @@ sentidos; acks correlacionados por `seq: u32`. Codec zero-dependência
   `cpu_temp.endpoint = thermal_zone:/sys/class/thermal/thermal_zone0`,
   `x.alias_de = y`, `fallback.A = B`), com auto-registro de extensões
   (`VentoinhaReserva.min = 0 …`). Erros de config são variantes tipadas
-  (`ErroRegistro`), inclusive a nova `FallbackDesconhecido`.
+  (`RegistryError`), inclusive a nova `FallbackDesconhecido`.
 
 ### 3.3 Drivers reais (`drivers.rs`)
 
@@ -93,7 +93,7 @@ propósito e virou comportamento fixado).
 - **`hibrido`**: rota por dispositivo (reais onde configurados; simuladas no
   restante, sempre marcadas).
 - **`real`**: **nada sintético** — dispositivo sem rota real fica
-  *registrado porém inacessível* (leitura → `FalhaSensor::Inacessivel` +
+  *registrado porém inacessível* (leitura → `SensorFailure::Inaccessible` +
   alerta; atuação → `ator_indisponivel` + fallback do registro). Nunca 0.0.
 - Cache de leitura só em rotas reais/remotas (TTL 100 ms default; 0 desliga);
   retries=1; fila com `queue_timeout` em ticks; prioridade
@@ -147,7 +147,7 @@ Precisões declaradas no registro: `cpu_temp` ±2%, `cpu_power` ±5%,
    registro local é autoridade; o peer revalida e o ack carrega a rejeição
    tipada (`AckAct::Rejeitado`).
 3. **`fallback` cita apenas dispositivos registrados** (nova variante
-   `ErroRegistro::FallbackDesconhecido`); fallback não recursa na lista do
+   `RegistryError::UnknownFallback`); fallback não recursa na lista do
    alternativo (FORMAL §4.3).
 4. **Simulado global não é "modo do dispositivo"**: o barramento força rota
    `Simulador` para tudo e zera o cache (paridade Etapa 2); dispositivos
@@ -185,14 +185,10 @@ Matriz de rastreabilidade do schema (§8 de [`docs/FXP-SCHEMA-v1.md`](FXP-SCHEMA
 
 ## 7. Como reproduzir
 
-```bash
-make rust-check                                  # clippy + todos os testes
-make rust-bench                                  # orçamentos de latência
-cd nucleo && cargo run -p vbl-cli -- fxp-probe   # auditoria §6 (modo simulado)
-cd nucleo && cargo run -p vbl-cli -- run exemplo.vl --fxp-config registro.conf --fxp-mode hibrido
-```
-
-Exemplo de `registro.conf` (hibrido com drivers reais + fallback):
+`make rust-check` (clippy + testes) · `make rust-bench` (orçamentos) ·
+`cd core && cargo run -p vbl-cli -- fxp-probe` (auditoria §6, simulado) ·
+`cargo run -p vbl-cli -- run exemplo.vl --fxp-config registro.conf --fxp-mode hibrido`.
+Exemplo de `registro.conf` (híbrido, drivers reais + fallback):
 
 ```ini
 mode = hibrido

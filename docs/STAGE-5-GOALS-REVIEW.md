@@ -23,7 +23,7 @@ estimado: todos saem de ferramentas (criterion, auditor de heap, RSS de
 | Memória por forma: ≤ 256 B `event`, ≤ 1 KB `equilibrium`, ≤ 512 B `nonequilibrium` | **743 B / 743 B / 1 448 B** (heap real: contêineres std + chaves + entradas do escalonador; `tests/memoria.rs`) | ⚠️ orçamentos irreais para contêineres std — o nó de `BTreeMap` + chaves já excedem 256 B | **Reancorar:** heap total por forma `event` ≤ 1 KB, `equilibrium` ≤ 1 KB, `nonequilibrium` + 1 regra ≤ 2 KB. O contador-proxy da ADR-001 (96/128/160 B) permanece como **piso** do payload próprio |
 | Steady-state ≤ 10 MB @ 10.000 formas (PLAN §5) | **7,43 MB** @ 10k `event` (pico 7,43 MB) | ✅ mantém com folga | Manter; adicionar teste como gate (`make rust-memoria`) |
 | Escalonador O(log N)/mutação, O(N+vencidos)/tick | agendar 45 ns (estável 100→100k); drenar 105 ns/prazo amortizado | ✅ mantém | Manter |
-| **Dissolução O(N)** — **gargalo identificado**, fora dos orçamentos originais | `remover_forma` reconstrói o heap e `ordem.retain` varre a ordem **por dissolução**; com churn de N/3 por tick o custo domina | ⚠️ novo | Registrar otimização estrutural (tombstones + compaction amortizada) para etapa futura; risco: duplicação de nomes na `ordem` exige dedução por época |
+| **Dissolução O(N)** — **gargalo identificado**, fora dos orçamentos originais | `remove_form` reconstrói o heap e `ordem.retain` varre a ordem **por dissolução**; com churn de N/3 por tick o custo domina | ⚠️ novo | Registrar otimização estrutural (tombstones + compaction amortizada) para etapa futura; risco: duplicação de nomes na `ordem` exige dedução por época |
 
 ## 2. Caderno (AC — AGENTS §1.4)
 
@@ -58,22 +58,22 @@ equivalência (`vazamento_caminho_direto_identico_a_composicao_geral`).
 
 ## 5. Energia (PLAN §5.1 — PowerAPI/RAPL)
 
-O barramento RAPL existe nesta máquina (`/sys/class/powercap/intel-rapl*`),
-porém `energy_uj` é legível apenas por root (`0400`). A validação com hardware
-real — leitura de potência real durante carga e a atribuição causal em Watts
-(≤ 0,1 W, AGENTS §1.4) — **permanece pendente de laboratório**, como já
-registrado na Etapa 4. Rota de laboratório (documentação honesta, sem
-simulação de dado):
+**Resolvido no laboratório (31/08):** `energy_uj` liberado por chmod; erro
+Caderno × RAPL medido em 3 janelas de carga (92 ticks × 1 s): **−0,015 % /
+−0,019 % / −0,015 %** — dentro do orçamento do AGENTS §1.4 (±5 % sensor +
+1 % método) com ~2 ordens de folga. Método e escopo declarados em
+[`STAGE-5-LABORATORY.md`](STAGE-5-LABORATORY.md) §4. A rota manual abaixo
+permite reproduzir a janela de energia em qualquer host Linux com RAPL:
 
 ```bash
-sudo cat /sys/class/powercap/intel-rapl:0/energy_uj   # antes
+cat /sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/energy_uj   # antes
 <executar a carga>
-sudo cat /sys/class/powercap/intel-rapl:0/energy_uj   # depois
+cat /sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/energy_uj   # depois
 # Δenergia = Δ(energy_uj)·1e-6 J (com wraparound em max_energy_range_uj)
 ```
 
-No CI/sessão, a contabilidade energética do runtime continua apoiada no
-simulador determinístico do FXP (modo simulado explícito, FORMAL §4.7).
+No CI, a contabilidade energética do runtime continua apoiada no simulador
+determinístico do FXP (modo simulado explícito, FORMAL §4.7).
 
 ## 6. Decisões ontológicas registradas nesta revisão
 

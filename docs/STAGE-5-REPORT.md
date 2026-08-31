@@ -62,9 +62,9 @@ a meta ≤ 1 % (AGENTS §1.4) agora é atendida com folga nas duas bases.
 ### 3.1 Garantia de equivalência
 
 O encoder direto é **byte a byte idêntico** à composição geral
-(`evento_vazamento` + `carimbar_tempo` + `Evento::linha`), provado por
+(`evento_vazamento` + `stamp_time` + `Evento::linha`), provado por
 `vazamento_caminho_direto_identico_a_composicao_geral`
-(`tests/production_notebook.rs`): referência independente via `ChainCaderno`,
+(`tests/production_notebook.rs`): referência independente via `ChainLedger`,
 casos com escape de aspas/barra/controle, unicode, 0.0 W (§4.7), negativos e
 integrais; cadeia SHA-256 verificada no binário **e** no JSONL exportado.
 
@@ -113,7 +113,7 @@ os proxies da ADR-001 preservados como **piso do payload** próprio da forma.
   comando único e veredito automático (exit 1 se o RSS crescer além de
   patamar + 10 % + 4 MiB).
 - **Gargalo identificado e registrado (não escondido):** dissolução é O(N)
-  (`scheduler.remover_forma` reconstrói o heap; `ordem.retain` varre a
+  (`scheduler.remove_form` reconstrói o heap; `ordem.retain` varre a
   ordem). Com churn de N/3 por tick @10k vivas o custo domina (soak medido:
   362 ms/tick). Correção estrutural (tombstones + compaction amortizada) está
   proposta na revisão de metas, com análise de risco (duplicação na `ordem`).
@@ -125,12 +125,11 @@ os proxies da ADR-001 preservados como **piso do payload** próprio da forma.
 
 ## 6. Energia (PLAN §5.1)
 
-O RAPL existe no host (`/sys/class/powercap/intel-rapl*`), mas `energy_uj` é
-root-only (`0400`) — nenhuma leitura foi falseada. A validação com hardware
-real (leitura de potência sob carga e atribuição causal ≤ 0,1 W) permanece
-pendente de laboratório, com o procedimento exato documentado em
-[METAS-REVISAO §5](STAGE-5-GOALS-REVIEW.md). No CI/sessão, a contabilidade
-segue o simulador determinístico do FXP (modo simulado explícito, FORMAL §4.7).
+**Resolvido no laboratório (31/08):** leitura RAPL real (`energy_uj` liberado
+via chmod) com precisão Caderno × RAPL de **|ε| ≤ 0,019 %** (orçamento ±5 % + 1 %),
+2 bugs de hardware corrigidos e perf fino simbolizado — ver
+[`STAGE-5-LABORATORY.md`](STAGE-5-LABORATORY.md). No CI, a contabilidade segue
+o simulador determinístico (modo explícito, FORMAL §4.7).
 
 ## 7. Validação final do AD (AGENTS §1.1) e pendências da Etapa 4
 
@@ -166,15 +165,17 @@ make rust-e2e                        # E2E com Caderno de produção
 make rust-memoria                    # orçamentos de heap (auditor serial)
 make rust-asan                       # ASan/LSan (nightly)
 make rust-bench                      # criterion completo
-cd nucleo && cargo bench --bench notebook -- --baseline antes   # deltas
+cd core && cargo bench --bench notebook -- --baseline antes   # deltas
 make rust-soak SEGUNDOS=86400        # soak de 24 h (padrão) — laboratório
 ```
 
 ## 10. Trabalho futuro registrado (não bloqueia a entrega)
 
 1. **Dissolução O(1) amortizada** (tombstones + compaction) — proposta com
-   análise de risco em [METAS-REVISAO §1](STAGE-5-GOALS-REVIEW.md).
-2. **24 h de soak e leitura RAPL real** — laboratório (root/supervisão).
-3. **Perf fino/flamegraphs** — requer `perf_event_paranoid` ≤ 1; o harness
-   (`perf record --call-graph dwarf`) já está documentado.
+   análise de risco em [METAS-REVISAO §1](STAGE-5-GOALS-REVIEW.md); perf fino
+   confirma o alvo: `remove_form` = 22,7 % dos ciclos (ver laboratório).
+2. ~~24 h de soak e leitura RAPL real~~ → **24 h em execução** (veredito no
+   §6 do laboratório) · **RAPL real: ✅ concluído** (|ε| ≤ 0,019 %).
+3. ~~Perf fino/flamegraphs~~ → **✅ concluído** — `memcmp` 28,8 %,
+   `remove_form` 22,7 % ([STAGE-5-LABORATORY.md](STAGE-5-LABORATORY.md) §5).
 4. **Metering energético por forma** — extensão futura já prevista na FORMAL §4.2.
