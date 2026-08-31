@@ -16,7 +16,14 @@ LOG := .serve.log
 PYTHON ?= python3
 PYTHON_BIN := $(if $(wildcard .venv/bin/python),.venv/bin/python,$(PYTHON))
 
+# Núcleo Rust (Etapa 2): CARGO_HOME dentro do workspace (HOME é read-only)
+CARGO ?= cargo
+CARGO_HOME := $(abspath nucleo/.cargo-home)
+export CARGO_HOME
+NIGHTLY ?= nightly
+
 .PHONY: help check smoke serve up stop ui setup test test-unit test-bdd validate-cheatsheet
+.PHONY: rust-build rust-test rust-lint rust-asan rust-bench rust-check rust-coverage rust-clean
 
 help:
 > @echo "VerboLang — atalhos:"
@@ -26,6 +33,15 @@ help:
 > @echo "  make test    suíte completa: unitários (pytest) + BDD (behave)"
 > @echo "  make test-unit  apenas testes unitários (pytest)"
 > @echo "  make test-bdd   apenas cenários BDD (behave)"
+> @echo "  --- núcleo Rust (Etapa 2) ---"
+> @echo "  make rust-check    parser/runtime: clippy + todos os testes"
+> @echo "  make rust-build    compila o workspace nucleo/ (vbl, vbl-lang, vbl-runtime)"
+> @echo "  make rust-test     testes: matriz (41), canon (5), transição (36)"
+> @echo "  make rust-lint     clippy --workspace --all-targets (zero warnings)"
+> @echo "  make rust-asan     testes sob AddressSanitizer (vazamentos, AGENTS §1.3)"
+> @echo "  make rust-bench    criterion: transição ≤100µs p95, escalonador, FXP"
+> @echo "  make rust-coverage cobertura via cargo-llvm-cov (relatório em nucleo/target)"
+> @echo "  make rust-clean    limpa nucleo/target"
 > @echo "  make validate-cheatsheet  banco de 20 prompts contra o LLM local (PLAN §7)"
 > @echo "  make serve   sobe o modelo + UI em primeiro plano (Ctrl+C para)"
 > @echo "  make up      sobe em segundo plano (log em $(LOG))"
@@ -65,6 +81,33 @@ test-unit:
 
 test-bdd:
 > @$(PYTHON_BIN) -m behave tests/features
+
+# ------------------------------------------------------------------
+# Núcleo Rust — Etapa 2 (nucleo/: vbl-lang, vbl-runtime, vbl-cli)
+# ------------------------------------------------------------------
+rust-build:
+> @cd nucleo && $(CARGO) build
+
+rust-test:
+> @cd nucleo && $(CARGO) test
+
+rust-lint:
+> @cd nucleo && $(CARGO) clippy --workspace --all-targets -- -D warnings
+
+rust-asan:
+> @cd nucleo && RUSTFLAGS="-Zsanitizer=address" $(CARGO) +$(NIGHTLY) test \
+>   --workspace --target x86_64-unknown-linux-gnu
+
+rust-check: rust-lint rust-test
+
+rust-bench:
+> @cd nucleo && $(CARGO) bench --bench transicao --bench escalonador
+
+rust-coverage:
+> @cd nucleo && $(CARGO) +$(NIGHTLY) llvm-cov --workspace --html --output-dir target/coverage
+
+rust-clean:
+> @cd nucleo && $(CARGO) clean
 
 validate-cheatsheet:
 > @$(PYTHON_BIN) scripts/validate_cheatsheet.py --base-url $${VBL_LLM_URL:-http://127.0.0.1:8000/v1} --model $${VBL_LLM_MODEL:-qwen3-4b}

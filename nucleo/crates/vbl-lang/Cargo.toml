@@ -1,0 +1,9 @@
+[package]
+name = "vbl-lang"
+description = "VerboLang — lexer, parser e AST (FORMAL.md §2–3)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]

@@ -1,0 +1,16 @@
+[package]
+name = "vbl-cli"
+description = "VerboLang — interpretador de console `.vl` (entregável da Etapa 2, PLAN §2.3)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "vbl"
+path = "src/main.rs"
+
+[dependencies]
+vbl-lang = { workspace = true }
+vbl-runtime = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "signal"] }

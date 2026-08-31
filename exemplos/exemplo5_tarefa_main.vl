@@ -1,0 +1,13 @@
+// Exemplo 5 da FORMAL (§5) — bloco main com keep/act/every
+nonequilibrium TarefaImportante {
+    value: "dados_sensiveis",
+    horizon: 30s,
+    source_path: "cpu_power",
+    maintenance_deadline: 5s,
+    exchange_mode: "cooperation"
+}
+
+main {
+    every 4s { keep(TarefaImportante) },
+    every 10s { act(LedIndicador, "verde") }
+}

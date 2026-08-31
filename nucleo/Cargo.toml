@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["crates/vbl-lang", "crates/vbl-runtime", "crates/vbl-cli"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "GPL-3.0-only"
+authors = ["Silvano Neto"]
+
+[workspace.dependencies]
+sha2 = "0.10"
+criterion = "0.5"
+vbl-lang = { path = "crates/vbl-lang" }
+vbl-runtime = { path = "crates/vbl-runtime" }
+
+[profile.bench]
+debug = true
