@@ -3,7 +3,9 @@ resolver = "2"
 members = ["crates/vbl-lang", "crates/vbl-runtime", "crates/vbl-fxp", "crates/vbl-cli"]
 
 [workspace.package]
-version = "0.2.0"
+# Estreia pública no crates.io: 0.1.0-alpha.0 — o análogo SemVer da
+# gramática `vYYYY.0-alphaN` (RELEASES.md): pré-alpha, tudo pode mudar.
+version = "0.1.0-alpha.0"
 edition = "2021"
 license = "GPL-3.0-only"
 authors = ["Silvano Neto"]
@@ -18,10 +20,11 @@ sha2 = "0.10"
 criterion = "0.5"
 # Dependências internas carregam version + path: o path manda dentro do
 # workspace; no `cargo publish` o version é que entra no manifesto — sem ele
-# o crates.io recusa o pacote do dependente.
-vbl-lang = { version = "0.2.0", path = "crates/vbl-lang" }
-vbl-runtime = { version = "0.2.0", path = "crates/vbl-runtime" }
-vbl-fxp = { version = "0.2.0", path = "crates/vbl-fxp" }
+# o crates.io recusa o pacote do dependente. O req ^0.1.0-alpha.0 casa as
+# alphas/betas seguintes do mesmo trio (0.1.0-alpha.N) durante a fase.
+vbl-lang = { version = "0.1.0-alpha.0", path = "crates/vbl-lang" }
+vbl-runtime = { version = "0.1.0-alpha.0", path = "crates/vbl-runtime" }
+vbl-fxp = { version = "0.1.0-alpha.0", path = "crates/vbl-fxp" }
 
 [profile.bench]
 debug = true

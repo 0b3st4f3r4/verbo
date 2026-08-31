@@ -15,6 +15,8 @@ de suporte + 6 meses de descontinuação = 7 anos de ciclo de vida.
   crates (`repository`, `rust-version`, `readme`, `keywords`,
   `categories`), dependências internas com `version` + `path` no workspace
   e alvo `make rust-package` + passo de empacotamento no CI de push.
+  Estreia pública em `0.1.0-alpha.0` — análogo SemVer da gramática
+  `-alphaN` (as versões internas `0.x` anteriores nunca foram lançadas).
 - `core/` — núcleo em Rust: parser (`vbl-lang`), motor de ticks
   (`vbl-runtime`), barramento FXP com registro de dispositivos (`vbl-fxp`)
   e Caderno de produção com cadeia SHA-256 (`vbl-cli`); matriz de testes,

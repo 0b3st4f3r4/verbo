@@ -50,7 +50,8 @@ jobs:
           workspaces: core
 
       # A versão vive só no [workspace.package] — a tag deve confabular com
-      # ela: `v0.2.0` publica 0.2.0. Todos os crates compartilham a mesma
+      # ela: `v0.1.0-alpha.0` publica 0.1.0-alpha.0. Todos os crates
+      # compartilham a mesma
       # versão (release em lockstep).
       - name: Tag == versão do workspace
         if: github.event_name == 'push'
