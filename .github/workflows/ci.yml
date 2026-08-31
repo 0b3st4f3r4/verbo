@@ -40,20 +40,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
+      # Nightly primeiro (só para o ASan abaixo); o stable por último fica
+      # como default do job (RUSTUP_TOOLCHAIN) — clippy/testes/bench rodam no
+      # mesmo toolchain do `make rust-check` local, não no nightly mínimo.
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
 
       - name: Clippy (zero warnings — AGENTS §1.3)
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo +stable clippy --workspace --all-targets -- -D warnings
 
       - name: Testes (matriz 42 · canon 5 · transição 36 · FXP schema/registro/drivers/transporte/bus · Caderno de produção 12)
         run: cargo test
@@ -79,7 +82,7 @@ jobs:
       # FXP: mensagem ≤10µs, leitura local ≤1ms, remota ≤10ms;
       # Caderno (Etapa 4): gravação ≤200µs + A/B de overhead — criterion (quick)
       - name: Benchmarks (critério de latência)
-        run: cargo bench --bench transition --bench scheduler --bench fxp --bench notebook -- --quick
+        run: cargo bench --bench transition --bench scheduler --bench fxp --bench ledger -- --quick
 
       # Auditoria do registro FXP do host (FORMAL §6 — cobertura obrigatória;
       # no runner sem sysfs/registro rico, roda contra o mínimo simulado)
