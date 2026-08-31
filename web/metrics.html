@@ -186,58 +186,58 @@
 <body>
 <header>
   <img src="verbolog.svg" alt="VerboLang">
-  <h1>Métricas do runtime · Caderno de produção</h1>
-  <span id="b-modelo" class="badge" title="modelo local (LLM)"><span class="dot"></span><span>modelo: …</span></span>
-  <span id="b-sse" class="badge" title="conexão com a ponte (webui.py)"><span class="dot"></span><span>SSE: …</span></span>
-  <span id="b-exec" class="badge" title="estado da execução no ledger"><span class="dot"></span><span>execução: …</span></span>
-  <span class="badge"><a href="index.html">← dashboard</a></span>
+  <h1 id="h1">Métricas do runtime · Caderno de produção</h1>
+  <span id="b-modelo" class="badge" title="modelo local (LLM)"><span class="dot"></span><span id="b-modelo-txt">modelo: …</span></span>
+  <span id="b-sse" class="badge" title="conexão com a ponte (webui.py)"><span class="dot"></span><span id="b-sse-txt">SSE: …</span></span>
+  <span id="b-exec" class="badge" title="estado da execução no ledger"><span class="dot"></span><span id="b-exec-txt">execução: …</span></span>
+  <span class="badge"><a id="link-home" href="index.html">← dashboard</a></span>
 </header>
 <div class="horizon" aria-hidden="true"></div>
 
 <div class="barra">
-  <label for="fonte">ledger:</label>
+  <label for="fonte" id="lbl-ledger">ledger:</label>
   <select id="fonte"></select>
   <button id="reconectar" type="button">reconectar</button>
 </div>
 
 <main>
   <section class="cartoes">
-    <div class="cartao joules"><div class="rotulo">energia dissipada</div><div class="valor" id="c-joules">—</div></div>
-    <div class="cartao"><div class="rotulo">eventos</div><div class="valor" id="c-eventos">—</div></div>
-    <div class="cartao"><div class="rotulo">tick atual</div><div class="valor" id="c-tick">—</div></div>
-    <div class="cartao atuacoes"><div class="rotulo">atuações</div><div class="valor" id="c-atua">—</div></div>
+    <div class="cartao joules"><div class="rotulo" id="r-joules">energia dissipada</div><div class="valor" id="c-joules">—</div></div>
+    <div class="cartao"><div class="rotulo" id="r-eventos">eventos</div><div class="valor" id="c-eventos">—</div></div>
+    <div class="cartao"><div class="rotulo" id="r-tick">tick atual</div><div class="valor" id="c-tick">—</div></div>
+    <div class="cartao atuacoes"><div class="rotulo" id="r-atua">atuações</div><div class="valor" id="c-atua">—</div></div>
   </section>
 
   <section class="secao">
-    <h2>Energia acumulada (janela recente do feed)</h2>
+    <h2 id="h2-energia">Energia acumulada (janela recente do feed)</h2>
     <canvas id="grafico" width="1200" height="280"></canvas>
   </section>
 
   <section class="secao">
-    <h2>Eventos por kind</h2>
-    <div class="kinds" id="kinds"><span class="vazio"><svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg>sem dados ainda</span></div>
+    <h2 id="h2-kinds">Eventos por kind</h2>
+    <div class="kinds" id="kinds"><span class="vazio" data-vazio="vazioKinds"><svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg>sem dados ainda</span></div>
   </section>
 
   <section class="secao">
-    <h2>Sensores (última leitura)</h2>
-    <div class="grelha" id="sensores"><span class="vazio"><svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg>sem leituras</span></div>
+    <h2 id="h2-sensores">Sensores (última leitura)</h2>
+    <div class="grelha" id="sensores"><span class="vazio" data-vazio="vazioSensores"><svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg>sem leituras</span></div>
   </section>
 
   <section class="secao">
-    <h2>Atores (última atuação)</h2>
-    <div class="grelha" id="atores"><span class="vazio"><svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg>sem atuações</span></div>
+    <h2 id="h2-atores">Atores (última atuação)</h2>
+    <div class="grelha" id="atores"><span class="vazio" data-vazio="vazioAtores"><svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg>sem atuações</span></div>
   </section>
 
   <section class="secao">
-    <h2>Feed de eventos
+    <h2 id="h2-feed">Feed de eventos
       <select id="filtro" style="margin-left:.5rem"><option value="">todos os kinds</option></select>
     </h2>
-    <div class="feed" id="feed"><span class="vazio">aguardando eventos…</span></div>
+    <div class="feed" id="feed"><span class="vazio" data-vazio="vazioFeed">aguardando eventos…</span></div>
   </section>
 </main>
 
 <footer>
-  <p>Fonte: <code id="f-src">—</code> · a ponte lê o Caderno; a verificação da cadeia é externa:
+  <p id="foot">Fonte: <code id="f-src">—</code> · a ponte lê o Caderno; a verificação da cadeia é externa:
   <code>vbl ledger-verify ARQUIVO</code>. O Caderno faz flush a cada 256 eventos (PLAN §4.3) —
   atualizações chegam em lotes; sem rodapé <code>VFIM</code>, a execução está em andamento.</p>
 </footer>
@@ -250,6 +250,218 @@ const THEME_ORDER = ["light", "metal", "dark"];
 const tema = localStorage.getItem("vllm.theme");
 document.documentElement.dataset.theme = THEME_ORDER.includes(tema) ? tema : "dark";
 
+// ── i18n: as mesmas 7 línguas da família (o seletor vive na home) ─────────
+const I18N = {
+  pt: {
+    docTitle: "VerboLang · métricas do runtime",
+    h1: "Métricas do runtime · Caderno de produção",
+    bModeloTitle: "modelo local (LLM)", bSseTitle: "conexão com a ponte (webui.py)",
+    bExecTitle: "estado da execução no ledger", backHome: "← dashboard",
+    modeloInicial: "modelo: …", sseInicial: "SSE: …", execInicial: "execução: …",
+    lblLedger: "ledger:", btnReconectar: "reconectar",
+    rJoules: "energia dissipada", rEventos: "eventos", rTick: "tick atual", rAtua: "atuações",
+    h2Energia: "Energia acumulada (janela recente do feed)", h2Kinds: "Eventos por kind",
+    h2Sensores: "Sensores (última leitura)", h2Atores: "Atores (última atuação)",
+    h2Feed: "Feed de eventos", optTodosKinds: "todos os kinds",
+    vazioKinds: "sem dados ainda", vazioSensores: "sem leituras",
+    vazioAtores: "sem atuações", vazioFeed: "aguardando eventos…",
+    foot: 'Fonte: <code id="f-src">—</code> · a ponte lê o Caderno; a verificação da cadeia é externa: <code>vbl ledger-verify ARQUIVO</code>. O Caderno faz flush a cada 256 eventos (PLAN §4.3) — atualizações chegam em lotes; sem rodapé <code>VFIM</code>, a execução está em andamento.',
+    execNaoExiste: "execução: ledger ainda não existe", execConcluida: "execução: concluída",
+    execAndamento: "execução: em andamento",
+    sseConectando: "SSE: conectando…", sseAoVivo: "SSE: ao vivo",
+    sseReconectando: "SSE: reconectando…", sseInacessivel: "SSE: ponte inacessível",
+    atorFalhou: "falhou", nenhumKind: "nenhum evento do kind {k} na janela",
+    grafAguardando: "energia por tick — aguardando vazamentos na janela…",
+    ledgerNenhum: "nenhum ledger encontrado (rode vbl run --ledger …)",
+    dir: "ltr",
+  },
+  en: {
+    docTitle: "VerboLang · runtime metrics",
+    h1: "Runtime metrics · Production ledger",
+    bModeloTitle: "local model (LLM)", bSseTitle: "bridge connection (webui.py)",
+    bExecTitle: "run state in the ledger", backHome: "← dashboard",
+    modeloInicial: "model: …", sseInicial: "SSE: …", execInicial: "run: …",
+    lblLedger: "ledger:", btnReconectar: "reconnect",
+    rJoules: "dissipated energy", rEventos: "events", rTick: "current tick", rAtua: "actuations",
+    h2Energia: "Accumulated energy (recent feed window)", h2Kinds: "Events by kind",
+    h2Sensores: "Sensors (last reading)", h2Atores: "Actuators (last actuation)",
+    h2Feed: "Event feed", optTodosKinds: "all kinds",
+    vazioKinds: "no data yet", vazioSensores: "no readings",
+    vazioAtores: "no actuations", vazioFeed: "waiting for events…",
+    foot: 'Source: <code id="f-src">—</code> · the bridge reads the Caderno; chain verification is external: <code>vbl ledger-verify ARQUIVO</code>. The Caderno flushes every 256 events (PLAN §4.3) — updates arrive in batches; without a <code>VFIM</code> trailer, the run is in progress.',
+    execNaoExiste: "run: ledger does not exist yet", execConcluida: "run: completed",
+    execAndamento: "run: in progress",
+    sseConectando: "SSE: connecting…", sseAoVivo: "SSE: live",
+    sseReconectando: "SSE: reconnecting…", sseInacessivel: "SSE: bridge unreachable",
+    atorFalhou: "failed", nenhumKind: "no events of kind {k} in the window",
+    grafAguardando: "energy per tick — waiting for leaks in the window…",
+    ledgerNenhum: "no ledger found (run vbl run --ledger …)",
+    dir: "ltr",
+  },
+  zh: {
+    docTitle: "VerboLang · 运行时指标",
+    h1: "运行时指标 · 生产台账",
+    bModeloTitle: "本地模型（LLM）", bSseTitle: "桥接连接（webui.py）",
+    bExecTitle: "台账中的运行状态", backHome: "← 仪表板",
+    modeloInicial: "模型：…", sseInicial: "SSE：…", execInicial: "执行：…",
+    lblLedger: "ledger:", btnReconectar: "重新连接",
+    rJoules: "耗散能量", rEventos: "事件", rTick: "当前 tick", rAtua: "执行",
+    h2Energia: "累计能量（信息流的近期窗口）", h2Kinds: "按 kind 的事件",
+    h2Sensores: "传感器（最近读数）", h2Atores: "执行器（最近执行）",
+    h2Feed: "事件流", optTodosKinds: "全部 kind",
+    vazioKinds: "暂无数据", vazioSensores: "暂无读数",
+    vazioAtores: "暂无执行", vazioFeed: "等待事件…",
+    foot: '来源：<code id="f-src">—</code> · 桥接读取 Caderno；链验证是外部的：<code>vbl ledger-verify ARQUIVO</code>。Caderno 每 256 个事件刷新一次（PLAN §4.3）— 更新分批到达；没有 <code>VFIM</code> 尾记录时，运行仍在进行。',
+    execNaoExiste: "执行：台账尚不存在", execConcluida: "执行：已完成",
+    execAndamento: "执行：进行中",
+    sseConectando: "SSE：连接中…", sseAoVivo: "SSE：实时",
+    sseReconectando: "SSE：重新连接中…", sseInacessivel: "SSE：桥接不可达",
+    atorFalhou: "失败", nenhumKind: "窗口内没有 kind {k} 的事件",
+    grafAguardando: "每个 tick 的能量 — 等待窗口内的泄漏…",
+    ledgerNenhum: "未找到台账（运行 vbl run --ledger …）",
+    dir: "ltr",
+  },
+  ru: {
+    docTitle: "VerboLang · метрики среды выполнения",
+    h1: "Метрики среды выполнения · Книга производства",
+    bModeloTitle: "локальная модель (LLM)", bSseTitle: "соединение с мостом (webui.py)",
+    bExecTitle: "состояние выполнения в книге", backHome: "← панель",
+    modeloInicial: "модель: …", sseInicial: "SSE: …", execInicial: "выполнение: …",
+    lblLedger: "ledger:", btnReconectar: "переподключить",
+    rJoules: "рассеянная энергия", rEventos: "события", rTick: "текущий tick", rAtua: "акты",
+    h2Energia: "Накопленная энергия (недавнее окно ленты)", h2Kinds: "События по kind",
+    h2Sensores: "Датчики (последнее чтение)", h2Atores: "Актуаторы (последний акт)",
+    h2Feed: "Лента событий", optTodosKinds: "все kinds",
+    vazioKinds: "данных пока нет", vazioSensores: "нет показаний",
+    vazioAtores: "нет актов", vazioFeed: "ожидание событий…",
+    foot: 'Источник: <code id="f-src">—</code> · мост читает Caderno; проверка цепочки внешняя: <code>vbl ledger-verify ARQUIVO</code>. Caderno сбрасывается каждые 256 событий (PLAN §4.3) — обновления приходят пакетами; без подвала <code>VFIM</code> выполнение продолжается.',
+    execNaoExiste: "выполнение: книга ещё не существует", execConcluida: "выполнение: завершено",
+    execAndamento: "выполнение: идёт",
+    sseConectando: "SSE: подключение…", sseAoVivo: "SSE: активен",
+    sseReconectando: "SSE: переподключение…", sseInacessivel: "SSE: мост недоступен",
+    atorFalhou: "сбой", nenhumKind: "в окне нет событий kind {k}",
+    grafAguardando: "энергия за tick — ожидание утечек в окне…",
+    ledgerNenhum: "книга не найдена (запустите vbl run --ledger …)",
+    dir: "ltr",
+  },
+  hi: {
+    docTitle: "VerboLang · रनटाइम मेट्रिक्स",
+    h1: "रनटाइम मेट्रिक्स · उत्पादन बहीखाता",
+    bModeloTitle: "स्थानीय मॉडल (LLM)", bSseTitle: "पुल से कनेक्शन (webui.py)",
+    bExecTitle: "बहीखाते में रन की स्थिति", backHome: "← डैशबोर्ड",
+    modeloInicial: "मॉडल: …", sseInicial: "SSE: …", execInicial: "रन: …",
+    lblLedger: "ledger:", btnReconectar: "पुनः जोड़ें",
+    rJoules: "अपव्ययी ऊर्जा", rEventos: "घटनाएँ", rTick: "वर्तमान tick", rAtua: "क्रियाएँ",
+    h2Energia: "संचित ऊर्जा (फ़ीड की हाल की विंडो)", h2Kinds: "kind के अनुसार घटनाएँ",
+    h2Sensores: "सेंसर (अंतिम रीडिंग)", h2Atores: "एक्चुएटर (अंतिम क्रिया)",
+    h2Feed: "घटना फ़ीड", optTodosKinds: "सभी kind",
+    vazioKinds: "अभी कोई डेटा नहीं", vazioSensores: "कोई रीडिंग नहीं",
+    vazioAtores: "कोई क्रिया नहीं", vazioFeed: "घटनाओं की प्रतीक्षा…",
+    foot: 'स्रोत: <code id="f-src">—</code> · पुल Caderno पढ़ता है; शृंखला सत्यापन बाहरी है: <code>vbl ledger-verify ARQUIVO</code>। Caderno हर 256 घटनाओं पर फ़्लश होता है (PLAN §4.3) — अपडेट बैच में आते हैं; <code>VFIM</code> ट्रेलर के बिना रन जारी है।',
+    execNaoExiste: "रन: बहीखाता अभी मौजूद नहीं", execConcluida: "रन: पूर्ण",
+    execAndamento: "रन: जारी",
+    sseConectando: "SSE: जुड़ रहा है…", sseAoVivo: "SSE: लाइव",
+    sseReconectando: "SSE: पुनः जुड़ रहा है…", sseInacessivel: "SSE: पुल अनुपलब्ध",
+    atorFalhou: "विफल", nenhumKind: "विंडो में kind {k} की कोई घटना नहीं",
+    grafAguardando: "प्रति tick ऊर्जा — विंडो में रिसाव की प्रतीक्षा…",
+    ledgerNenhum: "कोई बहीखाता नहीं मिला (चलाएँ vbl run --ledger …)",
+    dir: "ltr",
+  },
+  af: {
+    docTitle: "VerboLang · runtime-metrics",
+    h1: "Runtime-metrics · Produksieboek",
+    bModeloTitle: "plaaslike model (LLM)", bSseTitle: "brugverbinding (webui.py)",
+    bExecTitle: "loop-toestand in die boek", backHome: "← paneel",
+    modeloInicial: "model: …", sseInicial: "SSE: …", execInicial: "loop: …",
+    lblLedger: "ledger:", btnReconectar: "herverbind",
+    rJoules: "gedissipeerde energie", rEventos: "gebeurtenisse", rTick: "huidige tik", rAtua: "aktuerings",
+    h2Energia: "Geakkumuleerde energie (onlangse feed-venster)", h2Kinds: "Gebeurtenisse per soort",
+    h2Sensores: "Sensors (laaste lesing)", h2Atores: "Aktueerders (laaste aktuering)",
+    h2Feed: "Gebeurtenisstroom", optTodosKinds: "alle soorte",
+    vazioKinds: "nog geen data", vazioSensores: "geen lesings",
+    vazioAtores: "geen aktuerings", vazioFeed: "wag vir gebeurtenisse…",
+    foot: 'Bron: <code id="f-src">—</code> · die brug lees die Caderno; kettingverifikasie is ekstern: <code>vbl ledger-verify ARQUIVO</code>. Die Caderno spoel elke 256 gebeurtenisse (PLAN §4.3) — opdaterings kom in bondels; sonder <code>VFIM</code>-voetskrif loop die uitvoering nog.',
+    execNaoExiste: "loop: die boek bestaan nog nie", execConcluida: "loop: voltooi",
+    execAndamento: "loop: aan die gang",
+    sseConectando: "SSE: verbind…", sseAoVivo: "SSE: lewendig",
+    sseReconectando: "SSE: herverbind…", sseInacessivel: "SSE: brug onbereikbaar",
+    atorFalhou: "gevaal", nenhumKind: "geen gebeurtenisse van soort {k} in die venster",
+    grafAguardando: "energie per tik — wag vir lekkasies in die venster…",
+    ledgerNenhum: "geen boek gevind nie (loop vbl run --ledger …)",
+    dir: "ltr",
+  },
+  ar: {
+    docTitle: "VerboLang · مقاييس بيئة التشغيل",
+    h1: "مقاييس بيئة التشغيل · سجل الإنتاج",
+    bModeloTitle: "النموذج المحلي (LLM)", bSseTitle: "الاتصال بالجسر (webui.py)",
+    bExecTitle: "حالة التنفيذ في السجل", backHome: "← لوحة القيادة",
+    modeloInicial: "النموذج: …", sseInicial: "SSE: …", execInicial: "التنفيذ: …",
+    lblLedger: "ledger:", btnReconectar: "إعادة الاتصال",
+    rJoules: "الطاقة المبددة", rEventos: "الأحداث", rTick: "النبضة الحالية", rAtua: "التنفيذات",
+    h2Energia: "الطاقة المتراكمة (نافذة حديثة من البث)", h2Kinds: "الأحداث حسب النوع",
+    h2Sensores: "الحساسات (آخر قراءة)", h2Atores: "المشغلات (آخر تنفيذ)",
+    h2Feed: "بث الأحداث", optTodosKinds: "كل الأنواع",
+    vazioKinds: "لا بيانات بعد", vazioSensores: "لا قراءات",
+    vazioAtores: "لا تنفيذات", vazioFeed: "في انتظار الأحداث…",
+    foot: 'المصدر: <code id="f-src">—</code> · الجسر يقرأ Caderno؛ التحقق من السلسلة خارجي: <code>vbl ledger-verify ARQUIVO</code>. يقوم Caderno بالتفريغ كل 256 حدثًا (PLAN §4.3) — تصل التحديثات على دفعات؛ بدون ذيل <code>VFIM</code> فإن التنفيذ جارٍ.',
+    execNaoExiste: "التنفيذ: السجل غير موجود بعد", execConcluida: "التنفيذ: مكتمل",
+    execAndamento: "التنفيذ: جارٍ",
+    sseConectando: "SSE: جارٍ الاتصال…", sseAoVivo: "SSE: مباشر",
+    sseReconectando: "SSE: جارٍ إعادة الاتصال…", sseInacessivel: "SSE: الجسر غير قابل للوصول",
+    atorFalhou: "فشل", nenhumKind: "لا أحداث من النوع {k} في النافذة",
+    grafAguardando: "الطاقة لكل نبضة — في انتظار التسريبات في النافذة…",
+    ledgerNenhum: "لم يتم العثور على سجل (شغّل vbl run --ledger …)",
+    dir: "rtl",
+  },
+};
+const LANG_KEYS = Object.keys(I18N);
+let lang = localStorage.getItem("vllm.lang") ||
+  (navigator.language || "pt-BR").slice(0, 2).toLowerCase();
+if (!I18N[lang]) lang = "pt";
+const t = (k) => (I18N[lang][k] ?? I18N.pt[k]);
+const LOCALES = { pt: "pt-BR", en: "en", zh: "zh-CN", ru: "ru-RU", hi: "hi-IN", af: "af", ar: "ar" };
+function aplicarIdioma() {
+  localStorage.setItem("vllm.lang", lang);
+  nf = new Intl.NumberFormat(LOCALES[lang]);
+  nfF = new Intl.NumberFormat(LOCALES[lang], { maximumFractionDigits: 2 });
+  document.documentElement.lang = lang === "pt" ? "pt-BR" : lang;
+  document.documentElement.dir = I18N[lang].dir;
+  document.title = t("docTitle");
+  $("h1").textContent = t("h1");
+  $("b-modelo").title = t("bModeloTitle");
+  $("b-sse").title = t("bSseTitle");
+  $("b-exec").title = t("bExecTitle");
+  $("link-home").textContent = t("backHome");
+  $("b-modelo-txt").textContent = t("modeloInicial");
+  $("b-sse-txt").textContent = t("sseInicial");
+  $("b-exec-txt").textContent = t("execInicial");
+  $("lbl-ledger").textContent = t("lblLedger");
+  $("reconectar").textContent = t("btnReconectar");
+  $("r-joules").textContent = t("rJoules");
+  $("r-eventos").textContent = t("rEventos");
+  $("r-tick").textContent = t("rTick");
+  $("r-atua").textContent = t("rAtua");
+  $("h2-energia").textContent = t("h2Energia");
+  $("h2-kinds").textContent = t("h2Kinds");
+  $("h2-sensores").textContent = t("h2Sensores");
+  $("h2-atores").textContent = t("h2Atores");
+  const hf = $("h2-feed");
+  hf.firstChild.textContent = t("h2Feed") + "\n      ";
+  $("foot").innerHTML = t("foot");
+  $("f-src").textContent = fonteAtual || "—";
+  if ($("filtro").options.length) {
+    $("filtro").options[0].textContent = t("optTodosKinds");
+  }
+  document.querySelectorAll("[data-vazio]").forEach((el) => {
+    el.childNodes[el.childNodes.length - 1].textContent = t(el.dataset.vazio);
+  });
+}
+window.addEventListener("storage", (e) => {
+  if (e.key === "vllm.lang" && e.newValue && I18N[e.newValue]) {
+    lang = e.newValue; aplicarIdioma(); sondarModelo();
+  }
+});
+
 // ── fragmento #k/#u/#m (como no chat): persiste no localStorage ───────────
 const hash = new URLSearchParams(location.hash.slice(1));
 const API_KEY = hash.get("k") || localStorage.getItem("vllm.key") || "";
@@ -260,8 +472,8 @@ if (hash.get("u")) localStorage.setItem("vllm.url", hash.get("u"));
 if (hash.get("m")) localStorage.setItem("vllm.model", hash.get("m"));
 
 const $ = (id) => document.getElementById(id);
-const nf = new Intl.NumberFormat("pt-BR");
-const nfF = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
+let nf = new Intl.NumberFormat(LOCALES[lang]);
+let nfF = new Intl.NumberFormat(LOCALES[lang], { maximumFractionDigits: 2 });
 
 function badge(id, estado, texto) {
   const b = $(id);
@@ -272,10 +484,10 @@ function badge(id, estado, texto) {
 async function sondarModelo() {
   try {
     const r = await fetch(API_URL + "/models", { headers: { "Authorization": "Bearer " + API_KEY } });
-    const s = classificarModelo(r.status, Boolean(API_KEY), MODEL);
+    const s = classificarModelo(r.status, Boolean(API_KEY), MODEL, lang);
     badge("b-modelo", s.classe, s.texto);
   } catch {
-    const s = classificarModelo(null, Boolean(API_KEY), MODEL);
+    const s = classificarModelo(null, Boolean(API_KEY), MODEL, lang);
     badge("b-modelo", s.classe, s.texto);
   }
 }
@@ -288,7 +500,7 @@ const FEED_MAX = 300;
 
 function aplicarSnapshot(snap) {
   if (!snap.exists) {
-    badge("b-exec", "warn", "execução: ledger ainda não existe");
+    badge("b-exec", "warn", t("execNaoExiste"));
     $("c-joules").textContent = "—"; $("c-eventos").textContent = "0";
     $("c-tick").textContent = "—"; $("c-atua").textContent = "—";
     ultimos = [];
@@ -296,7 +508,7 @@ function aplicarSnapshot(snap) {
     return;
   }
   badge("b-exec", snap.completo ? "ok" : "warn",
-        snap.completo ? "execução: concluída" : "execução: em andamento");
+        snap.completo ? t("execConcluida") : t("execAndamento"));
   $("c-joules").innerHTML = nfF.format(snap.joules) + " <small>J</small>";
   $("c-joules").dataset.bruto = String(snap.joules);
   $("c-eventos").textContent = nf.format(snap.eventos);
@@ -371,7 +583,9 @@ function renderSensores(sensores, merge) {
   if (!merge) limpar(alvo);
   const nomes = Object.keys(sensores);
   if (!nomes.length && !alvo.children.length) {
-    alvo.replaceChildren(Object.assign(document.createElement("span"), { className: "vazio", textContent: "sem leituras" }));
+    const v = document.createElement("span");
+    v.className = "vazio"; v.dataset.vazio = "vazioSensores"; v.textContent = t("vazioSensores");
+    alvo.replaceChildren(v);
     return;
   }
   for (const nome of nomes) {
@@ -389,7 +603,9 @@ function renderAtores(atores, merge) {
   if (!merge) limpar(alvo);
   const nomes = Object.keys(atores);
   if (!nomes.length && !alvo.children.length) {
-    alvo.replaceChildren(Object.assign(document.createElement("span"), { className: "vazio", textContent: "sem atuações" }));
+    const v = document.createElement("span");
+    v.className = "vazio"; v.dataset.vazio = "vazioAtores"; v.textContent = t("vazioAtores");
+    alvo.replaceChildren(v);
     return;
   }
   for (const nome of nomes) {
@@ -397,7 +613,7 @@ function renderAtores(atores, merge) {
     alvo.prepend(item(nome, [
       document.createTextNode(String(a.valor)),
       Object.assign(document.createElement("small"), {
-        textContent: `  · ${a.sucesso ? "ok" : "falhou"} · tick ${a.tick}` }),
+        textContent: `  · ${a.sucesso ? "ok" : t("atorFalhou")} · tick ${a.tick}` }),
     ], !a.sucesso));
   }
 }
@@ -422,8 +638,9 @@ function renderFeed() {
     return d;
   }));
   if (!visiveis.length && ultimos.length && filtro) {
-    alvo.replaceChildren(Object.assign(document.createElement("span"),
-      { className: "vazio", textContent: `nenhum evento do kind ${filtro} na janela` }));
+    const v = document.createElement("span");
+    v.className = "vazio"; v.textContent = t("nenhumKind").replace("{k}", filtro);
+    alvo.replaceChildren(v);
   }
   alvo.scrollTop = alvo.scrollHeight;
 }
@@ -435,7 +652,7 @@ function atualizarFiltro() {
   if (sel.dataset.kinds === kinds.join(",")) return;
   sel.dataset.kinds = kinds.join(",");
   sel.replaceChildren(
-    Object.assign(document.createElement("option"), { value: "", textContent: "todos os kinds" }),
+    Object.assign(document.createElement("option"), { value: "", textContent: t("optTodosKinds") }),
     ...kinds.map((k) => Object.assign(document.createElement("option"), { value: k, textContent: k })),
   );
   sel.value = atual;
@@ -459,7 +676,7 @@ function desenhar() {
   if (pontos.length < 2) {
     ctx.fillStyle = cor("--dim");
     ctx.font = "13px Iosevka, monospace";
-    ctx.fillText("energia por tick — aguardando vazamentos na janela…", 16, 28);
+    ctx.fillText(t("grafAguardando"), 16, 28);
     return;
   }
   const maxJ = pontos[pontos.length - 1][1] || 1;
@@ -484,17 +701,17 @@ function desenhar() {
 function conectar() {
   if (es) es.close();
   if (!fonteAtual) return;
-  badge("b-sse", "warn", "SSE: conectando…");
+  badge("b-sse", "warn", t("sseConectando"));
   es = new EventSource("/api/events?src=" + encodeURIComponent(fonteAtual));
   es.addEventListener("snapshot", (m) => {
-    badge("b-sse", "ok", "SSE: ao vivo");
+    badge("b-sse", "ok", t("sseAoVivo"));
     aplicarSnapshot(JSON.parse(m.data));
   });
   es.addEventListener("ev", (m) => {
-    badge("b-sse", "ok", "SSE: ao vivo");
+    badge("b-sse", "ok", t("sseAoVivo"));
     try { aplicarEv(JSON.parse(m.data)); } catch { /* frame inválido: ignora */ }
   });
-  es.onerror = () => badge("b-sse", "err", "SSE: reconectando…");
+  es.onerror = () => badge("b-sse", "err", t("sseReconectando"));
 }
 
 async function carregarFontes() {
@@ -510,7 +727,7 @@ async function carregarFontes() {
     }));
     if (!fontes.length) {
       sel.replaceChildren(Object.assign(document.createElement("option"),
-        { textContent: "nenhum ledger encontrado (rode vbl run --ledger …)" }));
+        { textContent: t("ledgerNenhum") }));
       return;
     }
     if (fonteAtual) sel.value = fonteAtual;
@@ -518,7 +735,7 @@ async function carregarFontes() {
     fonteAtual = sel.value;
     conectar();
   } catch {
-    badge("b-sse", "err", "SSE: ponte inacessível");
+    badge("b-sse", "err", t("sseInacessivel"));
   }
 }
 
@@ -526,6 +743,7 @@ $("fonte").addEventListener("change", () => { fonteAtual = $("fonte").value; con
 $("filtro").addEventListener("change", renderFeed);
 $("reconectar").addEventListener("click", () => { conectar(); });
 
+aplicarIdioma();
 sondarModelo();
 setInterval(sondarModelo, 15000);
 carregarFontes();

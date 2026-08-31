@@ -35,6 +35,25 @@ single-file, zero dependências): hexes da marca `#4da3ff`/`#35c9c1`/
 variantes com contraste suficiente). Cada página carrega uma cor do sistema:
 chat=violeta (o verbo), metrics=amarelo (a energia), home=revela as duas.
 
+## I18n — as 7 línguas da família
+
+Toda a família fala **pt, en, zh, ru, hi, af, ar** (o padrão do projeto é o
+português; o chat é a referência histórica dos dicionários):
+
+| Superfície | Como traduz |
+|---|---|
+| `index.html` (home) | `HOME_I18N` ×7 — o **seletor de idioma** vive aqui (controla a família via `localStorage` `vllm.lang`); títulos, cartões, rodapé e os rótulos do botão de tema |
+| `chat.html` | `I18N` ×7 (original do projeto) — obedece ao `vllm.lang` e reage ao evento `storage` |
+| `metrics.html` | `I18N` ×7 — tudo traduzido: título, badges (modelo/SSE/execução), rótulos dos cartões, seções, estados vazios, rodapé e os textos dinâmicos do gráfico; números seguem o `Intl.NumberFormat` da língua |
+| `badge.js` | `TEXTOS` ×7 — `classificarModelo(status, temChave, modelo, lang)`; o padrão `lang="pt"` mantém o contrato original |
+
+Regras do contrato (testado em `tests/unit/web/i18n.test.js`): paridade total
+de chaves entre as línguas, nenhum valor vazio, `dir: rtl` somente no árabe e
+termos técnicos intocáveis (`ledger`, `kind`, `tick`, `vbl run`,
+`vbl ledger-verify`, `webui.py`, `.vcad`). O seletor muda a língua para todas
+as abas abertas (evento `storage`); sem seleção, cada página cai no idioma do
+navegador e, por fim, no português.
+
 ## Como rodar
 
 ```bash

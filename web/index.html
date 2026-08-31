@@ -192,6 +192,8 @@ const HOME_I18N = {
     chatP: 'Consulta direta ao LLM (vLLM :8000), com alternância "modelo puro ↔ + VerboLang" e medidor de contexto. Requer o modelo ativo.',
     foot: 'O runtime VerboLang é o <b>motor de ticks</b> (<code>vbl run</code>) — o LLM é opcional aqui: com o modelo inativo, as métricas continuam no ar e o estado aparece no badge acima.',
     themeLight: "tema claro", themeMetal: "tema metal", themeDark: "tema escuro", langAria: "idioma",
+    badgeChecking: "verificando modelo…", badgeTitle: "estado do modelo local (LLM)",
+    dir: "ltr",
   },
   en: {
     title: "VerboLang · dashboard", sub: "runtime dashboard",
@@ -201,10 +203,68 @@ const HOME_I18N = {
     chatP: 'Direct LLM chat (vLLM :8000), with "pure model ↔ + VerboLang" toggle and a context meter. Requires the active model.',
     foot: 'The VerboLang runtime is the <b>tick engine</b> (<code>vbl run</code>) — the LLM is optional here: with the model offline, metrics stay up and the badge shows the state.',
     themeLight: "light theme", themeMetal: "metal theme", themeDark: "dark theme", langAria: "language",
+    badgeChecking: "checking model…", badgeTitle: "local model (LLM) state",
+    dir: "ltr",
+  },
+  zh: {
+    title: "VerboLang · 仪表板", sub: "运行时仪表板",
+    metricsH: "实时指标",
+    metricsP: '实时生产台账：耗散能量、传感器、执行、颠覆 — 通过不断增长的 <code>.vcad</code> 的 SSE。',
+    chatH: "聊天（本地模型）",
+    chatP: '直接与 LLM 对话（vLLM :8000），带"纯模型 ↔ + VerboLang"切换和上下文计量表。需要模型处于活动状态。',
+    foot: 'VerboLang 运行时是<b>节拍引擎</b>（<code>vbl run</code>）— LLM 在这里是可选的：模型离线时，指标仍然在线，状态显示在上方的徽章中。',
+    themeLight: "浅色主题", themeMetal: "金属主题", themeDark: "深色主题", langAria: "语言",
+    badgeChecking: "正在检查模型…", badgeTitle: "本地模型（LLM）状态",
+    dir: "ltr",
+  },
+  ru: {
+    title: "VerboLang · панель", sub: "панель среды выполнения",
+    metricsH: "Метрики в реальном времени",
+    metricsP: 'Живая книга производства: рассеянная энергия, датчики, акты, подрывы — SSE по растущему <code>.vcad</code>.',
+    chatH: "Чат (локальная модель)",
+    chatP: 'Прямой запрос к LLM (vLLM :8000) с переключателем «чистая модель ↔ + VerboLang» и индикатором контекста. Требуется активная модель.',
+    foot: 'Среда выполнения VerboLang — это <b>движок тиков</b> (<code>vbl run</code>) — LLM здесь необязателен: при выключенной модели метрики продолжают работать, состояние видно в бейдже выше.',
+    themeLight: "светлая тема", themeMetal: "тема металла", themeDark: "тёмная тема", langAria: "язык",
+    badgeChecking: "проверяем модель…", badgeTitle: "состояние локальной модели (LLM)",
+    dir: "ltr",
+  },
+  hi: {
+    title: "VerboLang · डैशबोर्ड", sub: "रनटाइम डैशबोर्ड",
+    metricsH: "रीयल-टाइम मेट्रिक्स",
+    metricsP: 'लाइव उत्पादन बहीखाता: अपव्ययी ऊर्जा, सेंसर, क्रियाएँ, उलटपुलट — बढ़ते <code>.vcad</code> पर SSE।',
+    chatH: "चैट (स्थानीय मॉडल)",
+    chatP: 'सीधे LLM से पूछें (vLLM :8000), "शुद्ध मॉडल ↔ + VerboLang" टॉगल और संदर्भ मीटर के साथ। सक्रिय मॉडल आवश्यक है।',
+    foot: 'VerboLang रनटाइम <b>टिक इंजन</b> है (<code>vbl run</code>) — यहाँ LLM वैकल्पिक है: मॉडल बंद होने पर भी मेट्रिक्स चालू रहते हैं और स्थिति ऊपर बैज में दिखती है।',
+    themeLight: "हल्की थीम", themeMetal: "धातु थीम", themeDark: "गहरी थीम", langAria: "भाषा",
+    badgeChecking: "मॉडल की जाँच हो रही है…", badgeTitle: "स्थानीय मॉडल (LLM) की स्थिति",
+    dir: "ltr",
+  },
+  af: {
+    title: "VerboLang · paneel", sub: "runtime-paneel",
+    metricsH: "Metrics in werklike tyd",
+    metricsP: 'Lewende produksieboek: gedissipeerde energie, sensors, aktuerings, subversies — SSE oor die groeiende <code>.vcad</code>.',
+    chatH: "Klets (plaaslike model)",
+    chatP: 'Direk aan die LLM (vLLM :8000), met "pure model ↔ + VerboLang"-skakelaar en konteksmeter. Vereis die aktiewe model.',
+    foot: 'Die VerboLang-runtime is die <b>tik-enjin</b> (<code>vbl run</code>) — die LLM is hier opsioneel: met die model af bly metrics aanlyn en toon die kenteken bo die toestand.',
+    themeLight: "ligtema", themeMetal: "metaaltema", themeDark: "donker tema", langAria: "taal",
+    badgeChecking: "model word gekontroleer…", badgeTitle: "toestand van die plaaslike model (LLM)",
+    dir: "ltr",
+  },
+  ar: {
+    title: "VerboLang · لوحة القيادة", sub: "لوحة بيئة التشغيل",
+    metricsH: "المقاييس في الوقت الفعلي",
+    metricsP: 'سجل الإنتاج المباشر: الطاقة المبددة، الحساسات، التنفيذات، الانقلابات — SSE عبر ملف <code>.vcad</code> المتنامي.',
+    chatH: "الدردشة (نموذج محلي)",
+    chatP: 'استعلام مباشر إلى LLM (vLLM :8000)، مع مبدّل "النموذج الخالص ↔ + VerboLang" ومقياس السياق. يتطلب النموذج نشطًا.',
+    foot: 'بيئة تشغيل VerboLang هي <b>محرك النبضات</b> (<code>vbl run</code>) — الـ LLM اختياري هنا: مع توقف النموذج، تبقى المقاييس تعمل وتظهر الحالة في الشارة أعلاه.',
+    themeLight: "سمة فاتحة", themeMetal: "سمة معدنية", themeDark: "سمة داكنة", langAria: "اللغة",
+    badgeChecking: "جارٍ فحص النموذج…", badgeTitle: "حالة النموذج المحلي (LLM)",
+    dir: "rtl",
   },
 };
 let lang = localStorage.getItem("vllm.lang") || (navigator.language || "pt-BR").slice(0, 2).toLowerCase();
 if (!LANGS[lang]) lang = "pt";
+let modeloVerificado = false;   // applyLang só reescreve o texto do badge enquanto verifica
 const homeT = () => HOME_I18N[HOME_I18N[lang] ? lang : "en"];
 
 function applyTheme(name) {
@@ -228,6 +288,7 @@ function buildLangSelect() {
 function applyLang() {
   localStorage.setItem("vllm.lang", lang);
   document.documentElement.lang = lang === "pt" ? "pt-BR" : lang;
+  document.documentElement.dir = homeT().dir;
   const d = homeT();
   document.title = d.title;
   document.getElementById("home-sub").textContent = d.sub;
@@ -236,6 +297,11 @@ function applyLang() {
   document.getElementById("c-chat-h").textContent = d.chatH;
   document.getElementById("c-chat-p").innerHTML = d.chatP;
   document.getElementById("home-foot").innerHTML = d.foot;
+  const badge = document.getElementById("modelo");
+  badge.title = d.badgeTitle;
+  if (!modeloVerificado) {
+    document.getElementById("modelo-txt").textContent = d.badgeChecking;
+  }
   const sel = document.getElementById("lang");
   sel.value = lang;
   sel.title = d.langAria; sel.setAttribute("aria-label", d.langAria);
@@ -265,6 +331,7 @@ const $modelo  = document.getElementById("modelo");
 const $txt     = document.getElementById("modelo-txt");
 
 function setModelo(classe, texto) {
+  modeloVerificado = true;
   $modelo.className = "badge " + classe;
   $txt.textContent = texto;
 }
@@ -272,15 +339,26 @@ function setModelo(classe, texto) {
 async function sondarModelo() {
   try {
     const r = await fetch(API_URL + "/models", { headers: { "Authorization": "Bearer " + API_KEY } });
-    const s = classificarModelo(r.status, Boolean(API_KEY), MODEL);
+    const s = classificarModelo(r.status, Boolean(API_KEY), MODEL, lang);
     setModelo(s.classe, s.texto);
   } catch {
-    const s = classificarModelo(null, Boolean(API_KEY), MODEL);
+    const s = classificarModelo(null, Boolean(API_KEY), MODEL, lang);
     setModelo(s.classe, s.texto);
   }
 }
 sondarModelo();
 setInterval(sondarModelo, 15000);
+
+// ── sincronização viva entre abas (outra home mudou tema/idioma) ──────────
+window.addEventListener("storage", (e) => {
+  if (e.key === "vllm.lang" && e.newValue && HOME_I18N[e.newValue]) {
+    lang = e.newValue; applyLang(); sondarModelo();
+  }
+  if (e.key === "vllm.theme" && e.newValue && THEME_ORDER.includes(e.newValue)) {
+    document.documentElement.dataset.theme = e.newValue;
+    applyTheme(e.newValue);
+  }
+});
 </script>
 </body>
 </html>
