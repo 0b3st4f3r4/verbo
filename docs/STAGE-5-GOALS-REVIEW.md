@@ -31,7 +31,7 @@ estimado: todos saem de ferramentas (criterion, auditor de heap, RSS de
 |---|---|---|---|
 | Overhead de logging ≤ 1% CPU | 0,2% CPU (parede 1 s/1k formas) mas **2,3×** na base encadeada; ~2% @ 10k | **Δ = 236 µs/tick @ 1k formas** (produção 671 µs × desligado 435 µs) → **0,024% CPU** na parede; ~0,24% @ 10k; 1,54× na encadeada | Manter ≤ 1% (parede) **e** acrescentar teto **≤ 2×** na base encadeada (hoje 1,54×) |
 | Latência de gravação ≤ 200 µs/evento | 1,5 µs | **1,27 µs** (−10,7%; encoder direto sem `Json`) | Manter |
-| Memória ≤ 5 MB @ 10k formas | ≲ 1 MB | ≲ 1 MB (inalterado — `--caderno` não remeclado; encoder direto só reduz) | Manter |
+| Memória ≤ 5 MB @ 10k formas | ≲ 1 MB | ≲ 1 MB (inalterado — `--ledger` não remeclado; encoder direto só reduz) | Manter |
 | Cobertura de eventos 100% / robustez 99,99% | 60.000/60.000 verificados | inalterado (suíte Etapa 4 continua verde) | Manter |
 
 O custo de construção do evento era o gargalo dominante (STAGE-4-REPORT

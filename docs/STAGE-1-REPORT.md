@@ -78,7 +78,7 @@ Ambiguidades da FORMAL cuja leitura a suíte fixa (sujeitas a veto do AD):
    sustenta); já "expirar por `horizon`" é `>=` (no limite expira).
 4. **Regras sobrevivem à reclassificação** (a `review` é copiada; pode
    re-disparar na nova conjugação) — semântica plena de conservação → Etapa 2.
-5. **`VentoinhaReserva`** é extensão opcional do registro e não entra no
+5. **`ReserveFan`** é extensão opcional do registro e não entra no
    denominador de cobertura de dispositivos do AGENTS (só os obrigatórios do
    FORMAL §6 contam).
 

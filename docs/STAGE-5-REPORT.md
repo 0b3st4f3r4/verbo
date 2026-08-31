@@ -42,7 +42,7 @@ saída completa em [`logs/stage5/bench-after-vs-before.txt`](../logs/stage5/benc
 |---|---|---|
 | `caderno_overhead/tick_1000_formas_logger_producao`: 2 745 µs → **671 µs** | **−75,5 %** | Encoder direto: `leak` envia dados crus; a linha canônica nasce no buffer do gravador, sem `format!`+`Json::obj`+`BTreeMap` intermediários |
 | `caderno_overhead/tick_1000_formas_logger_memoria`: 3 459 µs → **1 737 µs** | −49,8 % | Hash incremental (duas fatias, sem concatenar `head+linha`), hex por tabela, `Evento::escrever_linha` em buffer |
-| `caderno_overhead/tick_1000_formas_logger_desligado`: 1 005 µs → **435 µs** | −56,3 % | Engine (§abaixo) + A/B honesto: `NoopCaderno::leak` agora é no-op de verdade ("logger desligado" não constrói evento) |
+| `caderno_overhead/tick_1000_formas_logger_desligado`: 1 005 µs → **435 µs** | −56,3 % | Engine (§abaixo) + A/B honesto: `NoopLedger::leak` agora é no-op de verdade ("logger desligado" não constrói evento) |
 | `tick/1000` (logger em memória): 3 418 µs → **1 796 µs** | **−47,4 %** | Sem snapshot de `Vec<String>` por tick (iteração por índice sobre `Rc<str>`), regras avaliadas por índice (clone só no disparo), `source_path` emprestado, `bind` O(log N) |
 | `tick/1`: 2,95 µs → **1,41 µs** · `tick/100`: 336 µs → **164 µs** | −52 % / −51 % | idem |
 | `transicao/revisao_dispara_reclassify_1_forma`: 73,9 µs → **65,7 µs** | −11 % | idem (orçamento ≤ 100 µs p95 com mais folga) |
@@ -64,13 +64,13 @@ a meta ≤ 1 % (AGENTS §1.4) agora é atendida com folga nas duas bases.
 O encoder direto é **byte a byte idêntico** à composição geral
 (`evento_vazamento` + `stamp_time` + `Evento::linha`), provado por
 `vazamento_caminho_direto_identico_a_composicao_geral`
-(`tests/production_notebook.rs`): referência independente via `ChainLedger`,
+(`tests/production_ledger.rs`): referência independente via `ChainLedger`,
 casos com escape de aspas/barra/controle, unicode, 0.0 W (§4.7), negativos e
 integrais; cadeia SHA-256 verificada no binário **e** no JSONL exportado.
 
 ### 3.2 Correção de semântica de medição e de inércia
 
-- **A/B honesto:** `NoopCaderno::leak` sobrescrito — a referência "desligado"
+- **A/B honesto:** `NoopLedger::leak` sobrescrito — a referência "desligado"
   da Etapa 4 ainda construía a mensagem/extra (custo de construção, não de
   logging); agora o A/B mede só o logger.
 - **Prazos órfãos:** forma dissolvida no tick não re-agenda prazos pulados
@@ -155,7 +155,7 @@ o simulador determinístico (modo explícito, FORMAL §4.7).
 | `logs/thermal-subversion.vcad` (+`.jsonl`) | BDD Caso 2 pós-otimização — cadeia ÍNTEGRA |
 | `logs/attention-fatigue.vcad` (+`.jsonl`) | BDD Caso 1 — cadeia ÍNTEGRA |
 | `logs/main-task.vcad` (+`.jsonl`) | bloco `main`/keep — cadeia ÍNTEGRA |
-| `logs/stress-10k.vcad` (+`.jsonl`) | 10.000 formas × 5 ticks = **60.012 eventos**, 750,00 J — cadeia ÍNTEGRA (`caderno-verify`) |
+| `logs/stress-10k.vcad` (+`.jsonl`) | 10.000 formas × 5 ticks = **60.012 eventos**, 750,00 J — cadeia ÍNTEGRA (`ledger-verify`) |
 
 ## 9. Como reproduzir
 

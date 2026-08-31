@@ -35,7 +35,7 @@ loader, persistência) · `vbl-cli` (binário `vbl`, tokio).
   padronização — ver NOTEBOOK-FORMAT-v1).
 - **FXP** (`fxp.rs`): trait `Fxp` injetável + `FxpSimulator` com o registro
   mínimo do §6 (`cpu_temp`/`cpu_power`/`attention`; `CpuPowerCap` [10..250,
-  safety 200], `Ventoinha` [0..255], `LedIndicador`). Falha de sensor **nunca é
+  safety 200], `Fan` [0..255], `StatusLed`). Falha de sensor **nunca é
   0.0** (§4.7). Fallback = rota de I/O alternativa, nunca leitura falsificada.
   Toda atuação grava **um único** evento.
 - **Escalonador** (`scheduler.rs`): min-heap por instante; agendar O(log N),

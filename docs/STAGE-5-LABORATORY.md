@@ -20,7 +20,7 @@ Registro do laboratório: [`logs/stage5/lab/fxp-lab.cfg`](../logs/stage5/lab/fxp
 | `cpu_temp` | **real** — `hwmon_temp:/sys/class/hwmon/hwmon4/temp1_input` (k10temp) | ✓ 87,4 °C (25 µs) |
 | `cpu_power` | **real** — `rapl_energy:/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0` | ✓ após chmod do `energy_uj` |
 | `CpuPowerCap` | **real** — `rapl_constraint:…/intel-rapl:0:0/constraint_0_power_limit_uw` | ✗ endpoint **ausente** (host não expõe constraint) |
-| `Ventoinha`, `LedIndicador`, `attention` | simulado | ✓ (fan sem pwm exportado; attention exige backend próprio, §6) |
+| `Fan`, `StatusLed`, `attention` | simulado | ✓ (fan sem pwm exportado; attention exige backend próprio, §6) |
 
 ### 1.1 Subversão térmica disparada por temperatura FÍSICA (BDD Caso 2 real)
 
@@ -40,7 +40,7 @@ INFO      ALÍVIO TERMODINÂMICO -> Forma dissolvida (mesmo tick).
 - A atuação falha é a **rota §4.7 honesta**: endpoint ausente ⇒ alerta no
   Caderno, comando não enviado, nenhuma fabricação de sucesso.
 - Contraste com ator acessível: `hw-fan-subversion.vcad` — mesmo disparo
-  real, `ATUACAO Ator 'Ventoinha' <- 200 (aplicado: 200, sucesso)`,
+  real, `ATUACAO Ator 'Fan' <- 200 (aplicado: 200, sucesso)`,
   `atuações 1/1 ok`.
 - Log-bandeira com física real: `hw-full-subversion.vcad` — forma viva por
   2 ticks com partilha da potência RAPL real (38,49 J + 35,78 J), disparo
@@ -106,7 +106,7 @@ Perfil confirmado por símbolo:
 | Overhead | Símbolo | Interpretação |
 |---|---|---|
 | 28,8 % | `__memcmp_avx2_movbe` | comparação de strings (`BTreeMap` de formas, `ordem.retain`, heap de prazos) |
-| 22,7 % | `Vec<Reverse<Entrada>>::from_iter` ← **`Scheduler::remover_forma::{closure#0}`** | **reconstrução do heap a cada dissolução — a dissolução O(N) prevista na análise da Etapa 5, agora medida por profiling** |
+| 22,7 % | `Vec<Reverse<Entrada>>::from_iter` ← **`Scheduler::remove_form::{closure#0}`** | **reconstrução do heap a cada dissolução — a dissolução O(N) prevista na análise da Etapa 5, agora medida por profiling** |
 | ~6 % | `__memmove_avx_unaligned_erms` | mutação de `Vec`/`retain` |
 | ~3 % | `_int_malloc`/`_int_free` | alocações do churn (formas nascem/morrem a cada 3 ticks) |
 

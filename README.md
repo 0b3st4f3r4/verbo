@@ -200,7 +200,7 @@ Estado atual: **Etapas 1–5 concluídas** — suíte BDD/TDD, núcleo Rust (par
 engine + Caderno + CLI `vbl`), FXP real (schema v1, drivers sysfs/RAPL/PWM/LED,
 barramento real/simulado/híbrido, fila prioritária e transporte Unix/TCP), o
 **Caderno de produção** (gravação assíncrona, formato binário `.vcad` com
-cadeia SHA-256, verificação externa `vbl caderno-verify` e suíte E2E) e a
+cadeia SHA-256, verificação externa `vbl ledger-verify` e suíte E2E) e a
 **revisão de qualidade/otimização** da Etapa 5 (encoder direto do Caderno,
 hash incremental, auditor de heap, soak de longa execução e revisão formal
 das metas) ([relatório da Etapa 5](docs/STAGE-5-REPORT.md)).
@@ -208,7 +208,7 @@ das metas) ([relatório da Etapa 5](docs/STAGE-5-REPORT.md)).
 1. **Etapa 1** ✅ — Suíte BDD/TDD/E2E com mocks e simulador FXP
 2. **Etapa 2** ✅ — Núcleo da linguagem em **Rust**: lexer, parser, AST e motor de tick assíncrono ([ADR-001](docs/ADR-001-linguagem-nucleo.md))
 3. **Etapa 3** ✅ — FXP real: schema v1, registro de dispositivos, drivers, barramento multi-modo e transporte local×remoto ([relatório](docs/STAGE-3-REPORT.md))
-4. **Etapa 4** ✅ — Caderno de produção (gravação assíncrona, `.vcad`, `caderno-verify`) e validação end-to-end ([relatório](docs/STAGE-4-REPORT.md))
+4. **Etapa 4** ✅ — Caderno de produção (gravação assíncrona, `.vcad`, `ledger-verify`) e validação end-to-end ([relatório](docs/STAGE-4-REPORT.md))
 5. **Etapa 5** ✅ — Qualidade, profiling termodinâmico e otimização ([relatório](docs/STAGE-5-REPORT.md) · [revisão de metas](docs/STAGE-5-GOALS-REVIEW.md))
 
 Para rodar a suíte: `make setup && make test` (Python) e `make rust-check` +

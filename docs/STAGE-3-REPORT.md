@@ -61,12 +61,12 @@ sentidos; acks correlacionados por `seq: u32`. Codec zero-dependência
 - Aliases (`human_attention → attention`): leitura por alias é idêntica à do
   canônico; o Caderno registra o **nome usado** (LEITURA) e o barramento emite
   evento de mapeamento com o **canônico** (FORMAL §6).
-- Fallback = política do **registro** (FORMAL §4.3): `fallback.Ventoinha =
-  VentoinhaReserva`; o runtime não implementa fallback próprio.
+- Fallback = política do **registro** (FORMAL §4.3): `fallback.Fan =
+  ReserveFan`; o runtime não implementa fallback próprio.
 - Config textual `key = value` (`mode`, `cache_ttl_ms`, `cpu_temp.mode`,
   `cpu_temp.endpoint = thermal_zone:/sys/class/thermal/thermal_zone0`,
   `x.alias_de = y`, `fallback.A = B`), com auto-registro de extensões
-  (`VentoinhaReserva.min = 0 …`). Erros de config são variantes tipadas
+  (`ReserveFan.min = 0 …`). Erros de config são variantes tipadas
   (`RegistryError`), inclusive a nova `FallbackDesconhecido`.
 
 ### 3.3 Drivers reais (`drivers.rs`)
@@ -77,8 +77,8 @@ sentidos; acks correlacionados por `seq: u32`. Codec zero-dependência
 | `cpu_power` | `RaplEnergySensor` | `rapl_energy:<dir>` | ΔµJ/Δt → W (wrap por `max_energy_range_uj`) |
 | `attention` | `AttentionSource` (simulado obrigatório) | — | valores plausíveis 0–100 |
 | `CpuPowerCap` | `RaplPowerCapActor` | `rapl_constraint:<arq>` | W → µW |
-| `Ventoinha` | `HwmonPwmActor` | `hwmon_pwm:<arq>` | 0–255 (inteiro) |
-| `LedIndicador` | `LedClassActor` | `led:<dir>` | textual → cor (`brightness`/`max_brightness`) |
+| `Fan` | `HwmonPwmActor` | `hwmon_pwm:<arq>` | 0–255 (inteiro) |
+| `StatusLed` | `LedClassActor` | `led:<dir>` | textual → cor (`brightness`/`max_brightness`) |
 
 **Honestidade de atuação (§4.7):** `escrever_endpoint()` abre com
 `write+truncate` **sem** `O_CREATE` — endpoint deletado é `EscritaFalhou` com
@@ -132,7 +132,7 @@ endpoint), Caderno íntegro (`SUBVERSAO`, `subvert_aplicado`, `dissolve_subvert`
 ## 4. Cobertura de dispositivos obrigatórios (FORMAL §6)
 
 **6/6 (100%)** — `cpu_temp`, `cpu_power`, `attention`, `CpuPowerCap`,
-`Ventoinha`, `LedIndicador` — todos com driver implementado, testes de
+`Fan`, `StatusLed` — todos com driver implementado, testes de
 unidade/integração e presença verificada pelo `fxp-probe` (também no CI).
 Precisões declaradas no registro: `cpu_temp` ±2%, `cpu_power` ±5%,
 `attention` simulada (marca `SINTETICO`); atores com limites inclusivos
@@ -195,11 +195,11 @@ mode = hibrido
 cache_ttl_ms = 100
 cpu_temp.mode = real
 cpu_temp.endpoint = thermal_zone:/sys/class/thermal/thermal_zone0
-Ventoinha.mode = real
-Ventoinha.endpoint = hwmon_pwm:/sys/class/hwmon/hwmon2/pwm1
-VentoinhaReserva.min = 0
-VentoinhaReserva.max = 255
-fallback.Ventoinha = VentoinhaReserva
+Fan.mode = real
+Fan.endpoint = hwmon_pwm:/sys/class/hwmon/hwmon2/pwm1
+ReserveFan.min = 0
+ReserveFan.max = 255
+fallback.Fan = ReserveFan
 ```
 
 ## 8. Pendências conscientes (não bloqueiam a Etapa 3)

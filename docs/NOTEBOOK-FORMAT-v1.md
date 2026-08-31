@@ -25,7 +25,7 @@
 |---|---|
 | Log à prova de adulteração | Cadeia SHA-256 incremental (`hash_n = SHA-256(hash_{n-1} ‖ linha_n)`); cada frame carrega o próprio elo |
 | Formato binário compacto | Linha canônica UTF-8 + hash cru de 32 B; sem JSON de empacotamento |
-| Verificação por agente externo | `vbl caderno-verify` recomputa a cadeia do binário **ou** do JSONL exportado; exit 1 = corrompido |
+| Verificação por agente externo | `vbl ledger-verify` recomputa a cadeia do binário **ou** do JSONL exportado; exit 1 = corrompido |
 | Gravação assíncrona sem auto-interferência | Frames independentes append-only (bufwriter + flush a cada 256 eventos) |
 | Sobreviver a queda | Rodapé fixo gravado por último: arquivo sem rodapé (execução abortada) ainda verifica até o último frame completo |
 
@@ -60,7 +60,7 @@ e mantém o verificador externo trivial (≈ 200 linhas, sem deps).
 | hash | 32 B | elo da cadeia, **bytes crus** (o hex de 64 caracteres é só para o JSONL) |
 
 `hash = SHA-256(hash_{n-1} ‖ linha)`, com `hash_{-1} =` 64 caracteres `'0'`
-(âncora [`ChainCaderno::HEAD_INICIAL`](../core/crates/vbl-runtime/src/notebook.rs)).
+(âncora [`ChainLedger::INITIAL_HEAD`](../core/crates/vbl-runtime/src/ledger.rs)).
 
 ### 2.3 Rodapé (72 bytes, tamanho fixo)
 
@@ -87,7 +87,7 @@ linha = seq ␟ kind ␟ msg [ ␟ extra_json ]
   determinístico; inteiros sem casa decimal);
 - chaves **reservadas** do `extra`: `tick` e `t` — timestamp do relógio
   virtual (AGENTS §1.4), injetado pelo runtime a cada tick (Etapa 4);
-- a MESMA composição é usada pela cadeia em memória (`ChainCaderno`), pelo
+- a MESMA composição é usada pela cadeia em memória (`ChainLedger`), pelo
   binário (frame) e pelo JSONL — um único algoritmo de verificação.
 
 Exemplo (do E2E de subversão térmica):
@@ -107,8 +107,8 @@ resto — o JSONL tem a mesma cadeia do binário (testado:
 ## 5. Verificação externa
 
 ```bash
-vbl caderno-verify caderno.vcad            # binário (detecta pelo magic)
-vbl caderno-verify caderno.vcad.jsonl      # JSONL
+vbl ledger-verify caderno.vcad            # binário (detecta pelo magic)
+vbl ledger-verify caderno.vcad.jsonl      # JSONL
 ```
 
 Relatório: integridade da cadeia (ÍNTEGRA/CORROMPIDA + primeiro elo
@@ -116,7 +116,7 @@ inválido), eventos, cabeça da cadeia, Joules acumulados, atuações (total ×
 com sucesso), divergências (alertas de honestidade §4.7) e contagem por kind.
 Exit codes: `0` íntegro · `1` cadeia corrompida · `2` erro de leitura/formato.
 
-O `vbl run --caderno ARQUIVO` já verifica o arquivo ao final da execução
+O `vbl run --ledger ARQUIVO` já verifica o arquivo ao final da execução
 (agente externo embutido) e exporta o JSONL irmão (`ARQUIVO.jsonl`).
 
 ## 6. Rastreabilidade
@@ -125,7 +125,7 @@ O `vbl run --caderno ARQUIVO` já verifica o arquivo ao final da execução
 |---|---|
 | Timestamp do relógio virtual em todo evento (AGENTS §1.4) | chaves `tick`/`t` (§3); teste `engine_com_caderno_de_producao_carimba_relogio_virtual` |
 | Gravação assíncrona em buffer, overhead medido (PLAN §4.1/§4.3) | thread dedicada + flush a cada 256; benches `caderno_gravacao`/`caderno_overhead` |
-| Formato binário compacto (AGENTS §1.4) | §2; testes de roundtrip/adulteração/truncagem em `tests/production_notebook.rs` |
+| Formato binário compacto (AGENTS §1.4) | §2; testes de roundtrip/adulteração/truncagem em `tests/production_ledger.rs` |
 | Verificação por checksum SHA-256 por agente externo (AGENTS §1.4) | §5; E2E `e2e_caderno_corrompido_falha_o_verificador` |
 | Atuações registradas: solicitado/aplicado/latência/custo (PLAN §4.1) | evento `ACTUATION` (v1: `ATUACAO`; campos `valor`, `aplicado`, `latencia_us`, `custo_estimado_joules`); testes de unidade + E2E |
-| Métricas agregadas (Joules totais, médias) (AGENTS §1.4) | agregados de `CadernoProducao::fechar()` + relatório do verificador |
+| Métricas agregadas (Joules totais, médias) (AGENTS §1.4) | agregados de `ProductionLedger::fechar()` + relatório do verificador |
