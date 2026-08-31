@@ -219,6 +219,21 @@ Para rodar a suíte: `make setup && make test` (Python) e `make rust-check` +
 `make rust-memoria` (orçamentos de heap) e `make rust-soak` (execução longa).
 Detalhes e critérios de aceite por etapa em [`docs/PLAN.md`](docs/PLAN.md) e [`AGENTS.md`](AGENTS.md).
 
+## Releases
+
+O ciclo de vida segue [`docs/RELEASES.md`](docs/RELEASES.md): **6 meses de
+pesquisa e desenvolvimento + 6 anos de suporte + 6 meses de descontinuação =
+7 anos** por linha (`vYYYY.N`). A fase de pesquisa (Jul–Dez) publica
+`vYYYY.0-alphaN`/`-betaN`/`-rc`; o stable nasce em Janeiro; o suporte vai de
+trimestral (1º ano) a anual (4º–6º anos); na despedida, TODAS as minors da
+linha recebem um último patch, na ordem em que nasceram, até
+`vYYYY.final.final` (Jun do 7º ano). Estado atual:
+**pré-alpha**, a caminho da primeira linha, `v2027.0` — a bateria antes de
+qualquer tag é `make release-check`, toda release registra entrada no
+[`CHANGELOG.md`](CHANGELOG.md) e, ao empurrar a tag, o CI
+(`.github/workflows/release.yml`) cria os artefatos (binário `vbl` +
+dashboard + documentos, com SHA-256) na release.
+
 ## Desenvolvimento assistido por LLMs
 
 O projeto usa um pipeline de **dois modelos**: o orquestrador **GLM-5.3/Flash**

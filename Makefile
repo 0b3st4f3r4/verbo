@@ -68,6 +68,15 @@ check:
   done; \
   rm -f .ui-check.js
 
+# Bateria obrigatória antes de marcar qualquer tag (docs/RELEASES.md § Cortando uma release).
+release-check:
+> @set -e; \
+  echo "── release-check: bateria da release ──"; \
+  $(MAKE) --no-print-directory check; \
+  node --test tests/unit/web/*.test.js; \
+  $(MAKE) --no-print-directory smoke; \
+  echo "✓ release-check OK — atualize o CHANGELOG.md e marque a tag anotada"
+
 smoke:
 > @set -e; \
   for p in web/index.html web/chat.html web/metrics.html web/docs.html web/md.js docs/VBL-CHEATSHEET.md \

@@ -1,0 +1,79 @@
+# Release da VerboLang — docs/RELEASES.md.
+# Dispara quando uma tag `v*` criada manualmente
+# (`git tag -a vYYYY.N -m "…"; git push origin vYYYY.N`) chega ao remoto.
+# Repete a portaria da suíte, compila o núcleo em modo release, empacota o
+# interpretador `vbl` com o dashboard (web/), a documentação (docs/, exemplos)
+# e os scripts, carimba SHA-256 e anexa tudo à release da tag. Pré-lançamentos
+# (-alpha/-beta/-rc) saem marcados como prerelease — a fase da tag fala por si.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  artefatos:
+    name: Artefatos da release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      # Portaria (docs/RELEASES.md § Cortando uma release): nada é empacotado
+      # sem a bateria completa — shell/JS da UI, TDD e BDD.
+      - name: Portaria — suíte Python/web (check + TDD + BDD)
+        run: |
+          pip install -r requirements-dev.txt
+          make check
+          python -m pytest -q tests/unit
+          python -m behave tests/features
+
+      # Gates do núcleo na porta da release: clippy sem warnings, matriz de
+      # testes e o E2E do Caderno de produção (o ASan/bench ficam no CI de
+      # push — aqui basta o clippy+testes, como no `make rust-check`).
+      - name: Portaria — núcleo Rust (clippy + testes + E2E do Caderno)
+        working-directory: core
+        run: |
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test
+          cargo test -p vbl-cli --test e2e
+
+      - name: Compilar o interpretador (modo release)
+        working-directory: core
+        run: cargo build --release -p vbl-cli
+
+      # O pacote carrega o verbo inteiro: o binário, o dashboard de vidro
+      # (web/, com vendor e fontes), a documentação, os exemplos e os
+      # scripts — extraído, `python3 scripts/webui.py` serve a raiz do
+      # diretório como no repositório.
+      - name: Empacotar (binário + dashboard + documentos) e carimbar SHA-256
+        run: |
+          V="${GITHUB_REF_NAME}"
+          DIR="verblang-${V}"
+          mkdir -p "${DIR}"
+          cp core/target/release/vbl "${DIR}/"
+          cp -r docs examples scripts web "${DIR}/"
+          cp LICENSE README.md CHANGELOG.md "${DIR}/"
+          tar -czf "verblang-${V}-linux-x86_64.tar.gz" "${DIR}"
+          sha256sum "verblang-${V}-linux-x86_64.tar.gz" > "SHA256SUMS-${V}"
+
+      - name: Anexar à release da tag
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            verblang-*-linux-x86_64.tar.gz
+            SHA256SUMS-*
+          generateReleaseNotes: true
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
