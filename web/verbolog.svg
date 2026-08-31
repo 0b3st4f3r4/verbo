@@ -1,20 +1,32 @@
 <!--
 verbolog.svg — marca do projeto VerboLang.
-  Triângulo invertido de gradientes azul-verde-vermelho — ressoa como
-  o V da marca. Cada lado é um traço de osciloscópio que mergulha num
-  V (um pássaro); os três ápices formam uma fileira alinhada sobre a
-  linha tracejada do horizonte, com a cor vazando para dentro.
+  Triângulo de metal escovado com ranhuras sobre painel de vidro
+  fosco (aurora borrada azul-verde-vermelha) — ressoa como o V da
+  marca. Cada lado é um traço de osciloscópio que mergulha num V
+  (um pássaro); os três ápices formam uma fileira alinhada sobre a
+  linha tracejada do horizonte.
 Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="VerboLang">
   <defs>
-    <radialGradient id="ivbg" cx="0.5" cy="0.4" r="0.8">
-      <stop offset="0" stop-color="#1d2733"/>
-      <stop offset="1" stop-color="#11161d"/>
-    </radialGradient>
-    <filter id="ibw" filterUnits="userSpaceOnUse" x="-64" y="-64" width="192" height="192"><feGaussianBlur stdDeviation="2.2"/></filter>
-    <filter id="ibl1" filterUnits="userSpaceOnUse" x="-64" y="-64" width="192" height="192"><feGaussianBlur stdDeviation="1.2"/></filter>
-    <filter id="ibl2" filterUnits="userSpaceOnUse" x="-64" y="-64" width="192" height="192"><feGaussianBlur stdDeviation="0.55"/></filter>
+    <linearGradient id="iglass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="irim" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="28.8">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="imetal" gradientUnits="userSpaceOnUse" x1="0" y1="16.50" x2="0" y2="49.50">
+      <stop offset="0" stop-color="#3f4a58"/>
+      <stop offset="1" stop-color="#252d37"/>
+    </linearGradient>
+    <filter id="ibb" filterUnits="userSpaceOnUse" x="-256" y="-256" width="576" height="576"><feGaussianBlur stdDeviation="4.5"/></filter>
+    <filter id="ibsh" filterUnits="userSpaceOnUse" x="-256" y="-256" width="576" height="576"><feGaussianBlur stdDeviation="1.2"/></filter>
+    <filter id="ibw" filterUnits="userSpaceOnUse" x="-256" y="-256" width="576" height="576"><feGaussianBlur stdDeviation="2.2"/></filter>
+    <filter id="ibl1" filterUnits="userSpaceOnUse" x="-256" y="-256" width="576" height="576"><feGaussianBlur stdDeviation="1.2"/></filter>
+    <filter id="ibl2" filterUnits="userSpaceOnUse" x="-256" y="-256" width="576" height="576"><feGaussianBlur stdDeviation="0.55"/></filter>
+    <clipPath id="ipane"><rect x="0" y="0" width="64" height="64" rx="14.0"/></clipPath>
     <clipPath id="itri"><polygon points="12.95 16.50 51.05 16.50 32.00 49.50"/></clipPath>
     <linearGradient id="igA" gradientUnits="userSpaceOnUse" x1="12.95" y1="16.50" x2="32.00" y2="49.50">
       <stop offset="0" stop-color="#4da3ff"/>
@@ -32,8 +44,41 @@ Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
       <stop offset="1" stop-color="#4da3ff"/>
     </linearGradient>
   </defs>
-  <rect x="0" y="0" width="64" height="64" rx="14.0" fill="url(#ivbg)"/>
-  <line x1="2.0" y1="29.62" x2="62.0" y2="29.62" stroke="#8a93a3" stroke-opacity="0.3" stroke-width="0.4" stroke-dasharray="0.8 2.8"/>
+  <g clip-path="url(#ipane)">
+    <circle cx="19.90" cy="17.60" r="13.64" fill="#4da3ff" opacity="0.6" filter="url(#ibb)"/>
+    <circle cx="44.10" cy="17.60" r="13.64" fill="#ff5a52" opacity="0.6" filter="url(#ibb)"/>
+    <circle cx="32.00" cy="43.34" r="15.00" fill="#3fb96f" opacity="0.6" filter="url(#ibb)"/>
+  </g>
+  <rect x="0" y="0" width="64" height="64" rx="14.0" fill="url(#iglass)"/>
+  <rect x="1.0" y="1.0" width="62.00" height="62.00" rx="13.00" fill="none" stroke="url(#irim)" stroke-width="1.0"/>
+  <rect x="0" y="0" width="64" height="64" rx="14.0" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1.0"/>
+  <polygon points="10.2,0 28.2,0 10.2,64 -7.7,64" fill="#ffffff" opacity="0.05" clip-path="url(#ipane)"/>
+  <g clip-path="url(#itri)">
+    <polygon points="12.95 16.50 51.05 16.50 32.00 49.50" fill="url(#imetal)"/>
+    <line x1="0" y1="17.30" x2="64" y2="17.30" stroke="#000000" stroke-opacity="0.2" stroke-width="0.28"/>
+    <line x1="0" y1="18.90" x2="64" y2="18.90" stroke="#ffffff" stroke-opacity="0.05" stroke-width="0.28"/>
+    <line x1="0" y1="20.50" x2="64" y2="20.50" stroke="#000000" stroke-opacity="0.2" stroke-width="0.28"/>
+    <line x1="0" y1="22.10" x2="64" y2="22.10" stroke="#ffffff" stroke-opacity="0.05" stroke-width="0.28"/>
+    <line x1="0" y1="23.70" x2="64" y2="23.70" stroke="#000000" stroke-opacity="0.2" stroke-width="0.28"/>
+    <line x1="0" y1="25.30" x2="64" y2="25.30" stroke="#ffffff" stroke-opacity="0.05" stroke-width="0.28"/>
+    <line x1="0" y1="26.90" x2="64" y2="26.90" stroke="#000000" stroke-opacity="0.2" stroke-width="0.28"/>
+    <line x1="0" y1="28.50" x2="64" y2="28.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="0.28"/>
+    <line x1="0" y1="30.10" x2="64" y2="30.10" stroke="#000000" stroke-opacity="0.2" stroke-width="0.28"/>
+    <line x1="0" y1="31.70" x2="64" y2="31.70" stroke="#ffffff" stroke-opacity="0.05" stroke-width="0.28"/>
+    <line x1="0" y1="33.30" x2="64" y2="33.30" stroke="#000000" stroke-opacity="0.2" stroke-width="0.28"/>
+    <line x1="0" y1="34.90" x2="64" y2="34.90" stroke="#ffffff" stroke-opacity="0.05" stroke-width="0.28"/>
+    <line x1="0" y1="36.50" x2="64" y2="36.50" stroke="#000000" stroke-opacity="0.2" stroke-width="0.28"/>
+    <line x1="0" y1="38.10" x2="64" y2="38.10" stroke="#ffffff" stroke-opacity="0.05" stroke-width="0.28"/>
+    <line x1="0" y1="39.70" x2="64" y2="39.70" stroke="#000000" stroke-opacity="0.2" stroke-width="0.28"/>
+    <line x1="0" y1="41.30" x2="64" y2="41.30" stroke="#ffffff" stroke-opacity="0.05" stroke-width="0.28"/>
+    <line x1="0" y1="42.90" x2="64" y2="42.90" stroke="#000000" stroke-opacity="0.2" stroke-width="0.28"/>
+    <line x1="0" y1="44.50" x2="64" y2="44.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="0.28"/>
+    <line x1="0" y1="46.10" x2="64" y2="46.10" stroke="#000000" stroke-opacity="0.2" stroke-width="0.28"/>
+    <line x1="0" y1="47.70" x2="64" y2="47.70" stroke="#ffffff" stroke-opacity="0.05" stroke-width="0.28"/>
+    <line x1="0" y1="49.30" x2="64" y2="49.30" stroke="#000000" stroke-opacity="0.2" stroke-width="0.28"/>
+    <polygon points="11.5,0 25.6,0 6.4,64 -7.7,64" fill="#ffffff" opacity="0.06"/>
+  </g>
+  <line x1="2.0" y1="29.62" x2="62.0" y2="29.62" stroke="#8a93a3" stroke-opacity="0.35" stroke-width="0.4" stroke-dasharray="0.8 2.8"/>
   <g clip-path="url(#itri)">
     <path d="M 12.95 16.50 L 32.00 49.50" fill="none" stroke="url(#igA)" stroke-width="7.5" opacity="0.2" filter="url(#ibw)"/>
     <path d="M 32.00 49.50 L 51.05 16.50" fill="none" stroke="url(#igB)" stroke-width="7.5" opacity="0.2" filter="url(#ibw)"/>
@@ -47,19 +92,22 @@ Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
     <path d="M 38.50 16.50 L 32.62 28.37 Q 32.00 29.62 31.38 28.37 L 25.50 16.50" fill="none" stroke="url(#igC)" stroke-width="8.6" opacity="0.38" stroke-linecap="round" stroke-linejoin="round" filter="url(#ibl1)"/>
     <path d="M 38.50 16.50 L 32.62 28.37 Q 32.00 29.62 31.38 28.37 L 25.50 16.50" fill="none" stroke="url(#igC)" stroke-width="3.7" opacity="0.55" stroke-linecap="round" stroke-linejoin="round" filter="url(#ibl2)"/>
   </g>
+  <path d="M 12.95 16.50 L 15.91 21.63 C 16.90 23.35 15.58 25.06 15.98 25.75 C 16.37 26.44 18.52 26.15 19.51 27.87 L 19.97 28.67 L 26.93 29.47 Q 28.32 29.62 27.76 30.91 L 24.97 37.33 L 25.44 38.13 C 26.43 39.85 25.11 41.56 25.50 42.25 C 25.90 42.94 28.05 42.65 29.04 44.37 L 32.00 49.50" fill="none" stroke="#000000" stroke-opacity="0.35" stroke-width="5.0" stroke-linecap="round" stroke-linejoin="round" filter="url(#ibsh)"/>
+  <path d="M 32.00 49.50 L 34.96 44.37 C 35.95 42.65 38.10 42.94 38.50 42.25 C 38.89 41.56 37.57 39.85 38.56 38.13 L 39.03 37.33 L 36.24 30.91 Q 35.68 29.62 37.07 29.47 L 44.03 28.67 L 44.49 27.87 C 45.48 26.15 47.63 26.44 48.02 25.75 C 48.42 25.06 47.10 23.35 48.09 21.63 L 51.05 16.50" fill="none" stroke="#000000" stroke-opacity="0.35" stroke-width="5.0" stroke-linecap="round" stroke-linejoin="round" filter="url(#ibsh)"/>
+  <path d="M 51.05 16.50 L 45.13 16.50 C 43.15 16.50 42.32 14.50 41.53 14.50 C 40.73 14.50 39.91 16.50 37.93 16.50 L 38.50 16.50 L 32.62 28.37 Q 32.00 29.62 31.38 28.37 L 25.50 16.50 L 26.07 16.50 C 24.09 16.50 23.27 14.50 22.47 14.50 C 21.68 14.50 20.85 16.50 18.87 16.50 L 12.95 16.50" fill="none" stroke="#000000" stroke-opacity="0.35" stroke-width="5.0" stroke-linecap="round" stroke-linejoin="round" filter="url(#ibsh)"/>
   <path d="M 12.95 16.50 L 15.91 21.63 C 16.90 23.35 15.58 25.06 15.98 25.75 C 16.37 26.44 18.52 26.15 19.51 27.87 L 19.97 28.67 L 26.93 29.47 Q 28.32 29.62 27.76 30.91 L 24.97 37.33 L 25.44 38.13 C 26.43 39.85 25.11 41.56 25.50 42.25 C 25.90 42.94 28.05 42.65 29.04 44.37 L 32.00 49.50" fill="none" stroke="url(#igA)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M 32.00 49.50 L 34.96 44.37 C 35.95 42.65 38.10 42.94 38.50 42.25 C 38.89 41.56 37.57 39.85 38.56 38.13 L 39.03 37.33 L 36.24 30.91 Q 35.68 29.62 37.07 29.47 L 44.03 28.67 L 44.49 27.87 C 45.48 26.15 47.63 26.44 48.02 25.75 C 48.42 25.06 47.10 23.35 48.09 21.63 L 51.05 16.50" fill="none" stroke="url(#igB)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M 51.05 16.50 L 45.13 16.50 C 43.15 16.50 42.32 14.50 41.53 14.50 C 40.73 14.50 39.91 16.50 37.93 16.50 L 38.50 16.50 L 32.62 28.37 Q 32.00 29.62 31.38 28.37 L 25.50 16.50 L 26.07 16.50 C 24.09 16.50 23.27 14.50 22.47 14.50 C 21.68 14.50 20.85 16.50 18.87 16.50 L 12.95 16.50" fill="none" stroke="url(#igC)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
   <circle cx="28.32" cy="29.62" r="3.1" fill="#35c9c1" opacity="0.22"/>
-  <circle cx="28.32" cy="29.62" r="1.2" fill="#eaf4ff"/>
+  <circle cx="28.32" cy="29.62" r="1.6" fill="#eaf4ff"/>
   <circle cx="35.68" cy="29.62" r="3.1" fill="#e0c94f" opacity="0.22"/>
-  <circle cx="35.68" cy="29.62" r="1.2" fill="#eaf4ff"/>
+  <circle cx="35.68" cy="29.62" r="1.6" fill="#eaf4ff"/>
   <circle cx="32.00" cy="29.62" r="3.6" fill="#a55cff" opacity="0.28"/>
-  <circle cx="32.00" cy="29.62" r="1.4" fill="#eaf4ff"/>
+  <circle cx="32.00" cy="29.62" r="1.9" fill="#eaf4ff"/>
   <circle cx="12.95" cy="16.50" r="3.4" fill="#4da3ff" opacity="0.25"/>
-  <circle cx="12.95" cy="16.50" r="1.7" fill="#4da3ff"/>
+  <circle cx="12.95" cy="16.50" r="2.1" fill="#4da3ff"/>
   <circle cx="51.05" cy="16.50" r="3.4" fill="#ff5a52" opacity="0.25"/>
-  <circle cx="51.05" cy="16.50" r="1.7" fill="#ff5a52"/>
+  <circle cx="51.05" cy="16.50" r="2.1" fill="#ff5a52"/>
   <circle cx="32.00" cy="49.50" r="3.4" fill="#3fb96f" opacity="0.25"/>
-  <circle cx="32.00" cy="49.50" r="1.7" fill="#3fb96f"/>
+  <circle cx="32.00" cy="49.50" r="2.1" fill="#3fb96f"/>
 </svg>

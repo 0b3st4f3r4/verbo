@@ -1,9 +1,10 @@
 <!--
 verbolog-banner.svg — banner do projeto.
-  Emblema triangular invertido à esquerda; a linha tracejada do
-  horizonte passa pela fileira dos três pássaros do emblema e segue
-  sob o traço espectral (azul→teal→verde→amarelo→vermelho), cujo
-  pássaro mergulha abaixo da linha.
+  Emblema triangular de metal sobre vidro à esquerda; a linha
+  tracejada do horizonte passa pela fileira dos três pássaros do
+  emblema e segue sob o traço espectral
+  (azul→teal→verde→amarelo→vermelho), cujo pássaro mergulha abaixo
+  da linha.
 Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 200" width="880" height="200" role="img" aria-labelledby="vbl-title">
@@ -14,13 +15,24 @@ Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
 
   <g transform="translate(40.0,24.0) scale(0.3125)">
   <defs>
-    <radialGradient id="bvbg" cx="0.5" cy="0.4" r="0.8">
-      <stop offset="0" stop-color="#1d2733"/>
-      <stop offset="1" stop-color="#11161d"/>
-    </radialGradient>
-    <filter id="bbw" filterUnits="userSpaceOnUse" x="-64" y="-64" width="640" height="640"><feGaussianBlur stdDeviation="8.0"/></filter>
-    <filter id="bbl1" filterUnits="userSpaceOnUse" x="-64" y="-64" width="640" height="640"><feGaussianBlur stdDeviation="6.0"/></filter>
-    <filter id="bbl2" filterUnits="userSpaceOnUse" x="-64" y="-64" width="640" height="640"><feGaussianBlur stdDeviation="2.2"/></filter>
+    <linearGradient id="bglass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="brim" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="230.4">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bmetal" gradientUnits="userSpaceOnUse" x1="0" y1="113.50" x2="0" y2="398.50">
+      <stop offset="0" stop-color="#3f4a58"/>
+      <stop offset="1" stop-color="#252d37"/>
+    </linearGradient>
+    <filter id="bbb" filterUnits="userSpaceOnUse" x="-256" y="-256" width="1024" height="1024"><feGaussianBlur stdDeviation="42.0"/></filter>
+    <filter id="bbsh" filterUnits="userSpaceOnUse" x="-256" y="-256" width="1024" height="1024"><feGaussianBlur stdDeviation="3.0"/></filter>
+    <filter id="bbw" filterUnits="userSpaceOnUse" x="-256" y="-256" width="1024" height="1024"><feGaussianBlur stdDeviation="8.0"/></filter>
+    <filter id="bbl1" filterUnits="userSpaceOnUse" x="-256" y="-256" width="1024" height="1024"><feGaussianBlur stdDeviation="6.0"/></filter>
+    <filter id="bbl2" filterUnits="userSpaceOnUse" x="-256" y="-256" width="1024" height="1024"><feGaussianBlur stdDeviation="2.2"/></filter>
+    <clipPath id="bpane"><rect x="0" y="0" width="512" height="512" rx="112.0"/></clipPath>
     <clipPath id="btri"><polygon points="91.46 113.50 420.54 113.50 256.00 398.50"/></clipPath>
     <linearGradient id="bgA" gradientUnits="userSpaceOnUse" x1="91.46" y1="113.50" x2="256.00" y2="398.50">
       <stop offset="0" stop-color="#4da3ff"/>
@@ -38,8 +50,44 @@ Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
       <stop offset="1" stop-color="#4da3ff"/>
     </linearGradient>
   </defs>
-  <rect x="0" y="0" width="512" height="512" rx="112.0" fill="url(#bvbg)"/>
-  <line x1="16.0" y1="229.00" x2="496.0" y2="229.00" stroke="#8a93a3" stroke-opacity="0.3" stroke-width="3.2" stroke-dasharray="6.4 22.4"/>
+  <g clip-path="url(#bpane)">
+    <circle cx="151.50" cy="123.00" r="117.80" fill="#4da3ff" opacity="0.6" filter="url(#bbb)"/>
+    <circle cx="360.50" cy="123.00" r="117.80" fill="#ff5a52" opacity="0.6" filter="url(#bbb)"/>
+    <circle cx="256.00" cy="345.30" r="129.58" fill="#3fb96f" opacity="0.6" filter="url(#bbb)"/>
+  </g>
+  <rect x="0" y="0" width="512" height="512" rx="112.0" fill="url(#bglass)"/>
+  <rect x="3.0" y="3.0" width="506.00" height="506.00" rx="109.00" fill="none" stroke="url(#brim)" stroke-width="3.0"/>
+  <rect x="0" y="0" width="512" height="512" rx="112.0" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="2.0"/>
+  <polygon points="81.9,0 225.3,0 81.9,512 -61.4,512" fill="#ffffff" opacity="0.05" clip-path="url(#bpane)"/>
+  <g clip-path="url(#btri)">
+    <polygon points="91.46 113.50 420.54 113.50 256.00 398.50" fill="url(#bmetal)"/>
+    <line x1="0" y1="119.50" x2="512" y2="119.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="131.50" x2="512" y2="131.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <line x1="0" y1="143.50" x2="512" y2="143.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="155.50" x2="512" y2="155.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <line x1="0" y1="167.50" x2="512" y2="167.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="179.50" x2="512" y2="179.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <line x1="0" y1="191.50" x2="512" y2="191.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="203.50" x2="512" y2="203.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <line x1="0" y1="215.50" x2="512" y2="215.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="227.50" x2="512" y2="227.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <line x1="0" y1="239.50" x2="512" y2="239.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="251.50" x2="512" y2="251.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <line x1="0" y1="263.50" x2="512" y2="263.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="275.50" x2="512" y2="275.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <line x1="0" y1="287.50" x2="512" y2="287.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="299.50" x2="512" y2="299.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <line x1="0" y1="311.50" x2="512" y2="311.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="323.50" x2="512" y2="323.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <line x1="0" y1="335.50" x2="512" y2="335.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="347.50" x2="512" y2="347.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <line x1="0" y1="359.50" x2="512" y2="359.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="371.50" x2="512" y2="371.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <line x1="0" y1="383.50" x2="512" y2="383.50" stroke="#000000" stroke-opacity="0.2" stroke-width="1.1"/>
+    <line x1="0" y1="395.50" x2="512" y2="395.50" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1.1"/>
+    <polygon points="92.2,0 204.8,0 51.2,512 -61.4,512" fill="#ffffff" opacity="0.06"/>
+  </g>
+  <line x1="16.0" y1="229.00" x2="496.0" y2="229.00" stroke="#8a93a3" stroke-opacity="0.35" stroke-width="3.2" stroke-dasharray="6.4 22.4"/>
   <g clip-path="url(#btri)">
     <path d="M 91.46 113.50 L 256.00 398.50" fill="none" stroke="url(#bgA)" stroke-width="58.0" opacity="0.19" filter="url(#bbw)"/>
     <path d="M 256.00 398.50 L 420.54 113.50" fill="none" stroke="url(#bgB)" stroke-width="58.0" opacity="0.19" filter="url(#bbw)"/>
@@ -53,6 +101,9 @@ Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
     <path d="M 308.00 113.50 L 260.52 218.97 Q 256.00 229.00 251.48 218.97 L 204.00 113.50" fill="none" stroke="url(#bgC)" stroke-width="26.0" opacity="0.38" stroke-linecap="round" stroke-linejoin="round" filter="url(#bbl1)"/>
     <path d="M 308.00 113.50 L 260.52 218.97 Q 256.00 229.00 251.48 218.97 L 204.00 113.50" fill="none" stroke="url(#bgC)" stroke-width="11.0" opacity="0.55" stroke-linecap="round" stroke-linejoin="round" filter="url(#bbl2)"/>
   </g>
+  <path d="M 91.46 113.50 L 124.09 170.03 C 128.77 178.12 121.20 187.01 123.07 190.25 C 124.94 193.49 136.42 191.38 141.09 199.47 L 153.73 221.36 L 209.56 227.75 Q 220.49 229.00 216.11 239.09 L 193.73 290.64 L 206.36 312.53 C 211.04 320.62 203.47 329.51 205.34 332.75 C 207.21 335.99 218.69 333.88 223.36 341.97 L 256.00 398.50" fill="none" stroke="#000000" stroke-opacity="0.35" stroke-width="13.0" stroke-linecap="round" stroke-linejoin="round" filter="url(#bbsh)"/>
+  <path d="M 256.00 398.50 L 288.64 341.97 C 293.31 333.88 304.79 335.99 306.66 332.75 C 308.53 329.51 300.96 320.62 305.64 312.53 L 318.27 290.64 L 295.89 239.09 Q 291.51 229.00 302.44 227.75 L 358.27 221.36 L 370.91 199.47 C 375.58 191.38 387.06 193.49 388.93 190.25 C 390.80 187.01 383.23 178.12 387.91 170.03 L 420.54 113.50" fill="none" stroke="#000000" stroke-opacity="0.35" stroke-width="13.0" stroke-linecap="round" stroke-linejoin="round" filter="url(#bbsh)"/>
+  <path d="M 420.54 113.50 L 355.27 113.50 C 345.92 113.50 342.01 102.50 338.27 102.50 C 334.53 102.50 330.62 113.50 321.27 113.50 L 308.00 113.50 L 260.52 218.97 Q 256.00 229.00 251.48 218.97 L 204.00 113.50 L 190.73 113.50 C 181.38 113.50 177.47 102.50 173.73 102.50 C 169.99 102.50 166.08 113.50 156.73 113.50 L 91.46 113.50" fill="none" stroke="#000000" stroke-opacity="0.35" stroke-width="13.0" stroke-linecap="round" stroke-linejoin="round" filter="url(#bbsh)"/>
   <path d="M 91.46 113.50 L 124.09 170.03 C 128.77 178.12 121.20 187.01 123.07 190.25 C 124.94 193.49 136.42 191.38 141.09 199.47 L 153.73 221.36 L 209.56 227.75 Q 220.49 229.00 216.11 239.09 L 193.73 290.64 L 206.36 312.53 C 211.04 320.62 203.47 329.51 205.34 332.75 C 207.21 335.99 218.69 333.88 223.36 341.97 L 256.00 398.50" fill="none" stroke="url(#bgA)" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M 256.00 398.50 L 288.64 341.97 C 293.31 333.88 304.79 335.99 306.66 332.75 C 308.53 329.51 300.96 320.62 305.64 312.53 L 318.27 290.64 L 295.89 239.09 Q 291.51 229.00 302.44 227.75 L 358.27 221.36 L 370.91 199.47 C 375.58 191.38 387.06 193.49 388.93 190.25 C 390.80 187.01 383.23 178.12 387.91 170.03 L 420.54 113.50" fill="none" stroke="url(#bgB)" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M 420.54 113.50 L 355.27 113.50 C 345.92 113.50 342.01 102.50 338.27 102.50 C 334.53 102.50 330.62 113.50 321.27 113.50 L 308.00 113.50 L 260.52 218.97 Q 256.00 229.00 251.48 218.97 L 204.00 113.50 L 190.73 113.50 C 181.38 113.50 177.47 102.50 173.73 102.50 C 169.99 102.50 166.08 113.50 156.73 113.50 L 91.46 113.50" fill="none" stroke="url(#bgC)" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
