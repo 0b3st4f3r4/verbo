@@ -23,7 +23,7 @@ CARGO_HOME := $(abspath core/.cargo-home)
 export CARGO_HOME
 NIGHTLY ?= nightly
 
-.PHONY: help check smoke release-check serve up stop ui web setup test test-unit test-bdd validate-cheatsheet
+.PHONY: help check smoke release-check serve up stop ui web setup test test-unit test-bdd validate-cheatsheet hooks site-check site-build site
 .PHONY: rust-build rust-test rust-e2e rust-lint rust-asan rust-bench rust-check rust-package rust-coverage rust-clean
 .PHONY: rust-memoria rust-soak
 
@@ -36,6 +36,7 @@ help:
 > @echo "  make site-build  monta site/src e compila o livro (mdbook ≥ 0.5)"
 > @echo "  make site        compila e serve o livro em http://127.0.0.1:$(SITE_PORT)/"
 > @echo "  make setup   cria .venv e instala requirements-dev.txt"
+> @echo "  make hooks   ativa o pre-commit (.githooks → core.hooksPath): o CI inteiro antes de cada commit"
 > @echo "  make test    suíte completa: unitários (pytest) + BDD (behave)"
 > @echo "  make test-unit  apenas testes unitários (pytest)"
 > @echo "  make test-bdd   apenas cenários BDD (behave)"
@@ -104,6 +105,12 @@ setup:
 > @$(PYTHON) -m venv .venv
 > @.venv/bin/pip install -r requirements-dev.txt
 > @echo "venv pronto (.venv) — use make test"
+
+# Pre-commit (.githooks/pre-commit): espelho do CI + gates de cobertura ≥95%
+# (pytest-cov e cargo-llvm-cov). Modo rápido por commit: VBL_PRE_COMMIT=quick.
+hooks:
+> @git config core.hooksPath .githooks
+> @echo "pre-commit ativado — teste com: bash .githooks/pre-commit --quick"
 
 # ── site de documentação (site/, mdBook — verbolang.org/docs) ─────────────
 # mdbook ≥ 0.5 (testado em 0.5.4): cargo install mdbook --locked

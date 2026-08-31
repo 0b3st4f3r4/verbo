@@ -3,6 +3,14 @@ __pycache__/
 *.log
 .venv/
 .pytest_cache/
+# cobertura (pytest-cov / coverage.py)
+.coverage
+.coverage.*
+htmlcov/
+# site de documentação (mdBook): src montado, book compilado, artefato Pages
+site/src/
+site/book/
+_pages/
 persistencia/
 core/target/
 core/.cargo-home/

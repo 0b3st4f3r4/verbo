@@ -1,0 +1,9 @@
+# Cobertura da VerboLang — denominador do gate de 95% (pre-commit e CI).
+# Escopo: o SUT exercido pela suíte unitária (prototype + scripts).
+# Omitidos do denominador:
+#   • prototype/verbolang-llm-poc.py  — PoC histórico, sem suíte própria
+#   • scripts/validate_cheatsheet.py  — exige LLM local (job manual, PLAN §7)
+[run]
+omit =
+    prototype/verbolang-llm-poc.py
+    scripts/validate_cheatsheet.py

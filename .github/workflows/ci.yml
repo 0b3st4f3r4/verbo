@@ -100,6 +100,53 @@ jobs:
       # job manual na máquina do desenvolvedor:
       #   make serve  →  make validate-cheatsheet
 
+  coverage:
+    name: Cobertura (pytest-cov ≥ 95% · llvm-cov ≥ 95%)
+    runs-on: ubuntu-latest
+    env:
+      # Piso de cobertura dos dois gates. Rebaixar é decisão explícita,
+      # visível neste arquivo — nunca um ajuste silencioso.
+      VBL_COVERAGE_MIN: "95"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Instalar dependências
+        run: pip install -r requirements-dev.txt
+
+      # Gate Python: SUT exercido pela suíte unitária. O omit (PoC histórico e
+      # o validador de cheat sheet, que exige LLM local) vive no .coveragerc —
+      # mesma regra do pre-commit.
+      - name: pytest-cov (gate ≥ 95%)
+        run: |
+          python -m pytest -q tests/unit \
+            --cov=prototype --cov=scripts \
+            --cov-report=term-missing \
+            --cov-fail-under="$VBL_COVERAGE_MIN"
+
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Instalar cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      # Gate Rust: linhas do workspace inteiro
+      - name: cargo-llvm-cov (gate ≥ 95%)
+        working-directory: core
+        env:
+          CARGO_HOME: ${{ github.workspace }}/core/.cargo-home
+        run: |
+          cargo +nightly llvm-cov --workspace --summary-only \
+            --fail-under-lines "$VBL_COVERAGE_MIN"
+
   site:
     name: Site (mdBook — portaria do livro)
     runs-on: ubuntu-latest
