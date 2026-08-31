@@ -84,7 +84,7 @@ def step_sem_manutencao(context):
 @then('0 bytes permanecem retidos em heap para a forma (verificado com contadores do runtime)')
 def step_zero_bytes_retidos(context):
     nome = context.nome
-    # Interpretação registrada (docs/ETAPA-1-RELATORIO.md): o estado
+    # Interpretação registrada (docs/STAGE-1-REPORT.md): o estado
     # laborativo (nonequilibrium) foi integralmente liberado — 0 bytes de
     # trabalho retidos; o que permanece é a forma equilibrium persistida em
     # disco, dentro do orçamento de retenção da conjugação (ADR-001).

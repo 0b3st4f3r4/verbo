@@ -11,7 +11,7 @@ docs/VBL-CHEATSHEET.md como prompt de sistema, e avalia:
 - rubrica semântica: âncoras obrigatórias da FORMAL presentes na resposta.
 
 Aceito se ≥ 90% das respostas passam (rubrica E sintaxe, quando aplicável).
-O relatório é versionado em docs/CHEATSHEET-VALIDACAO.md.
+O relatório é versionado em docs/CHEATSHEET-VALIDATION.md.
 
 Uso:
   python3 scripts/validate_cheatsheet.py \
@@ -154,7 +154,7 @@ def gerar_relatorio(banco: dict, execucoes: list[dict], base_url: str,
     taxa = passos / total if total else 0.0
     aceito = taxa >= banco["limiar_aceitacao"]
     linhas = [
-        "# CHEATSHEET-VALIDACAO.md — validação do cheat sheet (PLAN §7)",
+        "# CHEATSHEET-VALIDATION.md — validação do cheat sheet (PLAN §7)",
         "",
         f"- Data: {datetime.datetime.now().isoformat(timespec='seconds')}",
         f"- Endpoint: `{base_url}` · modelo: `{model}`",
@@ -186,7 +186,7 @@ def main() -> int:
     parser.add_argument("--api-key-env", default="LOCAL_VLLM_KEY")
     parser.add_argument("--banco", default="docs/CHEATSHEET-PROMPTS.yaml")
     parser.add_argument("--cheatsheet", default="docs/VBL-CHEATSHEET.md")
-    parser.add_argument("--saida", default="docs/CHEATSHEET-VALIDACAO.md")
+    parser.add_argument("--saida", default="docs/CHEATSHEET-VALIDATION.md")
     parser.add_argument("--execucoes", type=int, default=None,
                         help="sobrepõe execucoes_por_prompt do banco")
     parser.add_argument("--temperatura", type=float, default=0.2)

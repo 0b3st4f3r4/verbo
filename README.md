@@ -142,25 +142,25 @@ embeddings com o chat desligado ou em outra máquina.
 | [`docs/FORMAL.md`](docs/FORMAL.md) | Especificação formal: tokens, EBNF, semântica operacional, registro FXP |
 | [`docs/PLAN.md`](docs/PLAN.md) | Roadmap de execução em 5 etapas + análise de riscos |
 | [`docs/FXP-SCHEMA-v1.md`](docs/FXP-SCHEMA-v1.md) | Schema v1 do Flux Protocol: frames, opcodes, flags, timeouts, config e rastreabilidade |
-| [`docs/CADERNO-FORMATO-v1.md`](docs/CADERNO-FORMATO-v1.md) | Formato binário `.vcad` do Caderno de produção: frames, cadeia SHA-256, rodapé e verificação externa |
-| [`nucleo/`](nucleo/) | Núcleo em Rust (Etapa 2+): `vbl-lang`, `vbl-runtime`, `vbl-fxp` (protocolo, drivers, barramento) e `vbl-cli` |
+| [`docs/NOTEBOOK-FORMAT-v1.md`](docs/NOTEBOOK-FORMAT-v1.md) | Formato binário `.vcad` do Caderno de produção: frames, cadeia SHA-256, rodapé e verificação externa |
+| [`core/`](core/) | Núcleo em Rust (Etapa 2+): `vbl-lang`, `vbl-runtime`, `vbl-fxp` (protocolo, drivers, barramento) e `vbl-cli` |
 | [`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md) | Pipeline de LLMs: GLM-5.3/Flash (cloud) + Qwen3-4B-2507 (local) |
 | [`prototype/verbolang-complete-blueprint.py`](prototype/verbolang-complete-blueprint.py) | Protótipo de referência (FXP, runtime, Caderno, bloco `main`) |
 | [`prototype/verbolang-llm-poc.py`](prototype/verbolang-llm-poc.py) | PoC: comunicação inter-LLM (agentes LLM como atores/sensores no FXP) |
 | [`tests/`](tests/) | Suíte da Etapa 1: BDD (behave), unitários (pytest), simulador FXP determinístico e fronteira mock |
 | [`tests/vlcheck.py`](tests/vlcheck.py) | Validador de superfície `.vl` (mini-validador do PLAN §7) |
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | CI (GitHub Actions): checagens estáticas + pytest + behave a cada push/PR |
-| [`docs/ETAPA-1-RELATORIO.md`](docs/ETAPA-1-RELATORIO.md) | Relatório da Etapa 1: matriz de rastreabilidade, interpretações e divergências |
-| [`docs/ETAPA-2-RELATORIO.md`](docs/ETAPA-2-RELATORIO.md) | Relatório da Etapa 2: parser, engine de tick, Caderno e CLI `vbl` |
-| [`docs/ETAPA-3-RELATORIO.md`](docs/ETAPA-3-RELATORIO.md) | Relatório da Etapa 3: FXP real — schema v1, drivers, barramento, fila e transporte |
-| [`docs/ETAPA-4-RELATORIO.md`](docs/ETAPA-4-RELATORIO.md) | Relatório da Etapa 4: Caderno de produção (assíncrono, `.vcad`), E2E e overhead medido |
-| [`docs/ETAPA-5-RELATORIO.md`](docs/ETAPA-5-RELATORIO.md) | Relatório da Etapa 5: profiling, otimizações medidas, heap e execução longa |
-| [`docs/ETAPA-5-METAS-REVISAO.md`](docs/ETAPA-5-METAS-REVISAO.md) | Revisão formal das metas provisórias (AGENTS §4) com números medidos |
-| [`logs/etapa4/`](logs/etapa4/) | Logs reais do Caderno exportados das cargas E2E + relatórios de verificação externa |
-| [`logs/etapa5/`](logs/etapa5/) | Baselines/medidas dos benches, soak de longa execução, ASan e logs do Caderno pós-otimização |
+| [`docs/STAGE-1-REPORT.md`](docs/STAGE-1-REPORT.md) | Relatório da Etapa 1: matriz de rastreabilidade, interpretações e divergências |
+| [`docs/STAGE-2-REPORT.md`](docs/STAGE-2-REPORT.md) | Relatório da Etapa 2: parser, engine de tick, Caderno e CLI `vbl` |
+| [`docs/STAGE-3-REPORT.md`](docs/STAGE-3-REPORT.md) | Relatório da Etapa 3: FXP real — schema v1, drivers, barramento, fila e transporte |
+| [`docs/STAGE-4-REPORT.md`](docs/STAGE-4-REPORT.md) | Relatório da Etapa 4: Caderno de produção (assíncrono, `.vcad`), E2E e overhead medido |
+| [`docs/STAGE-5-REPORT.md`](docs/STAGE-5-REPORT.md) | Relatório da Etapa 5: profiling, otimizações medidas, heap e execução longa |
+| [`docs/STAGE-5-GOALS-REVIEW.md`](docs/STAGE-5-GOALS-REVIEW.md) | Revisão formal das metas provisórias (AGENTS §4) com números medidos |
+| [`logs/stage4/`](logs/stage4/) | Logs reais do Caderno exportados das cargas E2E + relatórios de verificação externa |
+| [`logs/stage5/`](logs/stage5/) | Baselines/medidas dos benches, soak de longa execução, ASan e logs do Caderno pós-otimização |
 | [`docs/ADR-001-linguagem-nucleo.md`](docs/ADR-001-linguagem-nucleo.md) | Decisão Rust × C com orçamentos de memória/latência reancorados |
 | [`docs/CHEATSHEET-PROMPTS.yaml`](docs/CHEATSHEET-PROMPTS.yaml) | Banco fixo de 20 prompts para validação do cheat sheet (PLAN §7) |
-| [`docs/CHEATSHEET-VALIDACAO.md`](docs/CHEATSHEET-VALIDACAO.md) | Resultados versionados da validação do cheat sheet |
+| [`docs/CHEATSHEET-VALIDATION.md`](docs/CHEATSHEET-VALIDATION.md) | Resultados versionados da validação do cheat sheet |
 | [`scripts/validate_cheatsheet.py`](scripts/validate_cheatsheet.py) | Executa o banco de prompts contra o LLM local e avalia com o vlcheck |
 | [`scripts/serve-local-llm.sh`](scripts/serve-local-llm.sh) | Sobe o modelo local Qwen3-4B-Instruct-2507-FP8 via vLLM (e abre a UI de consulta) |
 | [`scripts/verbo-chat/chat.html`](scripts/verbo-chat/chat.html) | UI de consulta: chat single-file, streaming SSE, medidor de contexto, alternância puro ↔ +VerboLang |
@@ -181,13 +181,13 @@ barramento real/simulado/híbrido, fila prioritária e transporte Unix/TCP), o
 cadeia SHA-256, verificação externa `vbl caderno-verify` e suíte E2E) e a
 **revisão de qualidade/otimização** da Etapa 5 (encoder direto do Caderno,
 hash incremental, auditor de heap, soak de longa execução e revisão formal
-das metas) ([relatório da Etapa 5](docs/ETAPA-5-RELATORIO.md)).
+das metas) ([relatório da Etapa 5](docs/STAGE-5-REPORT.md)).
 
 1. **Etapa 1** ✅ — Suíte BDD/TDD/E2E com mocks e simulador FXP
 2. **Etapa 2** ✅ — Núcleo da linguagem em **Rust**: lexer, parser, AST e motor de tick assíncrono ([ADR-001](docs/ADR-001-linguagem-nucleo.md))
-3. **Etapa 3** ✅ — FXP real: schema v1, registro de dispositivos, drivers, barramento multi-modo e transporte local×remoto ([relatório](docs/ETAPA-3-RELATORIO.md))
-4. **Etapa 4** ✅ — Caderno de produção (gravação assíncrona, `.vcad`, `caderno-verify`) e validação end-to-end ([relatório](docs/ETAPA-4-RELATORIO.md))
-5. **Etapa 5** ✅ — Qualidade, profiling termodinâmico e otimização ([relatório](docs/ETAPA-5-RELATORIO.md) · [revisão de metas](docs/ETAPA-5-METAS-REVISAO.md))
+3. **Etapa 3** ✅ — FXP real: schema v1, registro de dispositivos, drivers, barramento multi-modo e transporte local×remoto ([relatório](docs/STAGE-3-REPORT.md))
+4. **Etapa 4** ✅ — Caderno de produção (gravação assíncrona, `.vcad`, `caderno-verify`) e validação end-to-end ([relatório](docs/STAGE-4-REPORT.md))
+5. **Etapa 5** ✅ — Qualidade, profiling termodinâmico e otimização ([relatório](docs/STAGE-5-REPORT.md) · [revisão de metas](docs/STAGE-5-GOALS-REVIEW.md))
 
 Para rodar a suíte: `make setup && make test` (Python) e `make rust-check` +
 `make rust-e2e` (núcleo Rust, Etapas 2–4). Gates da Etapa 5:

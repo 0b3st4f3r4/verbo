@@ -19,7 +19,7 @@ Inclui:
 - Condições de revisão que podem referenciar múltiplos sensores por forma.
 - Ações com atores via act(nome, valor).
 
-Alinhamentos da Etapa 1 (suíte em tests/ — cf. docs/ETAPA-1-RELATORIO.md):
+Alinhamentos da Etapa 1 (suíte em tests/ — cf. docs/STAGE-1-REPORT.md):
 - FXP e tick_seconds injetáveis (simulador determinístico / mock em processo).
 - Fins de forma tipificados no Caderno (FORMAL §6): dissolve_rule,
   dissolve_horizon, collapse_maintenance, dissolve_subvert; além de

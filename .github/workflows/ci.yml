@@ -31,12 +31,12 @@ jobs:
       - name: Cenários BDD — PLAN §1.1
         run: python -m behave tests/features
 
-  nucleo:
+  core:
     name: Núcleo Rust (Etapas 2–3 — clippy + testes + ASan + FXP)
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: nucleo
+        working-directory: core
     steps:
       - uses: actions/checkout@v4
 
@@ -50,7 +50,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: nucleo
+          workspaces: core
 
       - name: Clippy (zero warnings — AGENTS §1.3)
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -79,7 +79,7 @@ jobs:
       # FXP: mensagem ≤10µs, leitura local ≤1ms, remota ≤10ms;
       # Caderno (Etapa 4): gravação ≤200µs + A/B de overhead — criterion (quick)
       - name: Benchmarks (critério de latência)
-        run: cargo bench --bench transicao --bench escalonador --bench fxp --bench caderno -- --quick
+        run: cargo bench --bench transition --bench scheduler --bench fxp --bench notebook -- --quick
 
       # Auditoria do registro FXP do host (FORMAL §6 — cobertura obrigatória;
       # no runner sem sysfs/registro rico, roda contra o mínimo simulado)

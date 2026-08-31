@@ -4,11 +4,15 @@ __pycache__/
 .venv/
 .pytest_cache/
 persistencia/
-nucleo/target/
-nucleo/.cargo-home/
+core/target/
+core/.cargo-home/
 persistencia*/
 caderno*.jsonl
 tmp-logs/
-nucleo/tmp-e2e/
+core/tmp-e2e/
 # logs de referência da Etapa 4: o JSONL irmão dos .vcad é versionado
 !logs/**/*.jsonl
+
+# stress-10k: artefatos grandes intencionais — JAMAAS versionar (27 MB)
+logs/**/stress-10k.vcad
+logs/**/stress-10k.vcad.jsonl

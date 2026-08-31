@@ -18,7 +18,7 @@ PYTHON_BIN := $(if $(wildcard .venv/bin/python),.venv/bin/python,$(PYTHON))
 
 # Núcleo Rust (Etapa 2): CARGO_HOME dentro do workspace (HOME é read-only)
 CARGO ?= cargo
-CARGO_HOME := $(abspath nucleo/.cargo-home)
+CARGO_HOME := $(abspath core/.cargo-home)
 export CARGO_HOME
 NIGHTLY ?= nightly
 
@@ -36,16 +36,16 @@ help:
 > @echo "  make test-bdd   apenas cenários BDD (behave)"
 > @echo "  --- núcleo Rust (Etapas 2–4) ---"
 > @echo "  make rust-check    parser/runtime/FXP/Caderno: clippy + todos os testes"
-> @echo "  make rust-build    compila o workspace nucleo/ (vbl, vbl-lang, vbl-runtime, vbl-fxp)"
+> @echo "  make rust-build    compila o workspace core/ (vbl, vbl-lang, vbl-runtime, vbl-fxp)"
 > @echo "  make rust-test     testes: matriz (42), canon (5), transição (36), FXP (42), Caderno (12)"
 > @echo "  make rust-e2e      E2E da Etapa 4: CLI + FXP + Caderno de produção (7 cenários)"
 > @echo "  make rust-lint     clippy --workspace --all-targets (zero warnings)"
 > @echo "  make rust-asan     testes sob AddressSanitizer (vazamentos, AGENTS §1.3)"
 > @echo "  make rust-bench    criterion: transição ≤100µs p95, escalonador, FXP, Caderno (gravação ≤200µs)"
-> @echo "  make rust-coverage cobertura via cargo-llvm-cov (relatório em nucleo/target)"
+> @echo "  make rust-coverage cobertura via cargo-llvm-cov (relatório em core/target)"
 > @echo "  make rust-memoria orçamentos de heap (Etapa 5; auditor serial: --test-threads=1)"
 > @echo "  make rust-soak     execução longa com churn (Etapa 5; VIVAS/TICKS/SEGUNDOS)"
-> @echo "  make rust-clean    limpa nucleo/target"
+> @echo "  make rust-clean    limpa core/target"
 > @echo "  make validate-cheatsheet  banco de 20 prompts contra o LLM local (PLAN §7)"
 > @echo "  make serve   sobe o modelo + UI em primeiro plano (Ctrl+C para)"
 > @echo "  make up      sobe em segundo plano (log em $(LOG))"
@@ -87,47 +87,47 @@ test-bdd:
 > @$(PYTHON_BIN) -m behave tests/features
 
 # ------------------------------------------------------------------
-# Núcleo Rust — Etapa 2 (nucleo/: vbl-lang, vbl-runtime, vbl-cli)
+# Núcleo Rust — Etapa 2 (core/: vbl-lang, vbl-runtime, vbl-cli)
 # ------------------------------------------------------------------
 rust-build:
-> @cd nucleo && $(CARGO) build
+> @cd core && $(CARGO) build
 
 rust-test:
-> @cd nucleo && $(CARGO) test
+> @cd core && $(CARGO) test
 
 # E2E da Etapa 4 (PLAN §4.2): interpretador integrado + FXP + Caderno de
 # produção, com verificação externa dos logs (vbl caderno-verify)
 rust-e2e:
-> @cd nucleo && $(CARGO) test -p vbl-cli --test e2e
+> @cd core && $(CARGO) test -p vbl-cli --test e2e
 
 rust-lint:
-> @cd nucleo && $(CARGO) clippy --workspace --all-targets -- -D warnings
+> @cd core && $(CARGO) clippy --workspace --all-targets -- -D warnings
 
 rust-asan:
-> @cd nucleo && RUSTFLAGS="-Zsanitizer=address" $(CARGO) +$(NIGHTLY) test \
+> @cd core && RUSTFLAGS="-Zsanitizer=address" $(CARGO) +$(NIGHTLY) test \
 >   --workspace --target x86_64-unknown-linux-gnu
 
 rust-check: rust-lint rust-test
 
 rust-bench:
-> @cd nucleo && $(CARGO) bench --bench transicao --bench escalonador --bench fxp --bench caderno
+> @cd core && $(CARGO) bench --bench transition --bench scheduler --bench fxp --bench notebook
 
 rust-coverage:
-> @cd nucleo && $(CARGO) +$(NIGHTLY) llvm-cov --workspace --html --output-dir target/coverage
+> @cd core && $(CARGO) +$(NIGHTLY) llvm-cov --workspace --html --output-dir target/coverage
 
 # Etapa 5 (PLAN §5.1): fechamento físico dos orçamentos de heap. O auditor
 # mede o PROCESSO — os testes de memória exigem execução serial.
 rust-memoria:
-> @cd nucleo && $(CARGO) test -p vbl-runtime --features heap-audit --test memoria -- --test-threads=1 --nocapture
+> @cd core && $(CARGO) test -p vbl-runtime --features heap-audit --test memoria -- --test-threads=1 --nocapture
 
 # Etapa 5 (AGENTS §2.2: zero vazamentos em longa execução). Padrão: 24 h de
 # parede. Sessão/CI: `make rust-soak SEGUNDOS=60` ou `TICKS=5000`.
 rust-soak:
-> @cd nucleo && $(CARGO) build --release --bin vbl-soak
-> @nucleo/target/release/vbl-soak --vivas $${VIVAS:-1000} --ticks $${TICKS:-100000000} --segundos $${SEGUNDOS:-86400} --relatorio $${RELATORIO:-100000}
+> @cd core && $(CARGO) build --release --bin vbl-soak
+> @core/target/release/vbl-soak --vivas $${VIVAS:-1000} --ticks $${TICKS:-100000000} --segundos $${SEGUNDOS:-86400} --relatorio $${RELATORIO:-100000}
 
 rust-clean:
-> @cd nucleo && $(CARGO) clean
+> @cd core && $(CARGO) clean
 
 validate-cheatsheet:
 > @$(PYTHON_BIN) scripts/validate_cheatsheet.py --base-url $${VBL_LLM_URL:-http://127.0.0.1:8000/v1} --model $${VBL_LLM_MODEL:-qwen3-4b}

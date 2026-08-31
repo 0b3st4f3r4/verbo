@@ -1,7 +1,7 @@
 # FXP — Schema de Mensagem v1
 
 **Status:** canônico para a Etapa 3 (PLAN §3.5). Definido **antes** dos drivers,
-como exige o entregável. Implementação de referência: `nucleo/crates/vbl-fxp/src/schema.rs`
+como exige o entregável. Implementação de referência: `core/crates/vbl-fxp/src/schema.rs`
 (testes de roundtrip em `tests/schema_roundtrip.rs`).
 
 ---

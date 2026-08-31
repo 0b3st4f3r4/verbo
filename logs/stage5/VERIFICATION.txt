@@ -1,0 +1,57 @@
+# Verificação externa dos logs do Caderno — Etapa 5
+# Gerada com: vbl caderno-verify <arquivo> (formato .vcad v1 — docs/NOTEBOOK-FORMAT-v1.md)
+# Execução: release (rustc 1.97.1), simulador FXP determinístico, 2026-08-31T09:27:36Z
+# Pós-otimização da Etapa 5 (encoder direto do VAZAMENTO): linhas byte a byte idênticas
+# à composição geral — garantidas por teste de equivalência (tests/production_notebook.rs).
+# O par de estresse 10k (60.012 eventos) não é versionado (27 MB; regenerável com:
+#   vbl run estresse10k.vl --ticks 5 --caderno logs/stage5/logs/stress-10k.vcad )
+
+=======================================================================
+Caderno: logs/stage5/logs/attention-fatigue.vcad (binário .vcad)
+  cadeia SHA-256: ÍNTEGRA
+  eventos: 51; cabeça: ad1b8defd61fe972…
+  energia: 1500.00 J acumulados
+  atuações: 0/0 com sucesso; divergências (alertas): 9
+    LEITURA: 20
+    VAZAMENTO: 10
+    ALERTA: 9
+    AVALIACAO: 8
+    INFO: 2
+    persistencia: 1
+    transicao: 1
+
+=======================================================================
+Caderno: logs/stage5/logs/main-task.vcad (binário .vcad)
+  cadeia SHA-256: ÍNTEGRA
+  eventos: 53; cabeça: 7c0708000ce05a21…
+  energia: 1800.00 J acumulados
+  atuações: 1/1 com sucesso; divergências (alertas): 0
+    LEITURA: 24
+    VAZAMENTO: 24
+    INFO: 4
+    ATUACAO: 1
+
+=======================================================================
+Caderno: logs/stage5/logs/thermal-subversion.vcad (binário .vcad)
+  cadeia SHA-256: ÍNTEGRA
+  eventos: 17; cabeça: f013d22c3e9a206b…
+  energia: 450.00 J acumulados
+  atuações: 1/1 com sucesso; divergências (alertas): 1
+    LEITURA: 6
+    INFO: 3
+    VAZAMENTO: 3
+    ALERTA: 1
+    ATUACAO: 1
+    SUBVERSAO: 1
+    dissolve_subvert: 1
+    subvert_aplicado: 1
+
+=======================================================================
+Caderno: logs/stage5/logs/stress-10k.vcad (binário .vcad)
+  cadeia SHA-256: ÍNTEGRA
+  eventos: 60012; cabeça: 67400f779672987a…
+  energia: 750.00 J acumulados
+  atuações: 0/0 com sucesso; divergências (alertas): 0
+    VAZAMENTO: 50005
+    INFO: 10002
+    LEITURA: 5

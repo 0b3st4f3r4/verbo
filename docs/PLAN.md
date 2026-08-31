@@ -250,7 +250,7 @@ O simulador será implementado na Etapa 1 como parte dos mocks e evoluído para 
 
 ## 7. Demanda registrada — dotar o modelo local de conhecimento da VerboLang
 
-**Status:** ✅ **atendido (31/08/2026)** — caminho "a" validado: banco fixo de 20 prompts × 3 execuções contra o Qwen3-4B local, com o cheat sheet injetado, **56/60 = 93,3% ≥ 90% — ACEITO** (`docs/CHEATSHEET-VALIDACAO.md`; histórico: v1 45% → v2 71,7% → v3 73,3% → v4 93,3%, iterações registradas no cabeçalho do banco de prompts). O cheat sheet continua canônico: mudanças na `FORMAL.md` devem refletir nele, e revalidações rodam com `make validate-cheatsheet`. **Responsáveis sugeridos:** AD (conteúdo canônico) + EC (validação contra a EBNF) + GQT (critério de aceite).
+**Status:** ✅ **atendido (31/08/2026)** — caminho "a" validado: banco fixo de 20 prompts × 3 execuções contra o Qwen3-4B local, com o cheat sheet injetado, **56/60 = 93,3% ≥ 90% — ACEITO** (`docs/CHEATSHEET-VALIDATION.md`; histórico: v1 45% → v2 71,7% → v3 73,3% → v4 93,3%, iterações registradas no cabeçalho do banco de prompts). O cheat sheet continua canônico: mudanças na `FORMAL.md` devem refletir nele, e revalidações rodam com `make validate-cheatsheet`. **Responsáveis sugeridos:** AD (conteúdo canônico) + EC (validação contra a EBNF) + GQT (critério de aceite).
 
 O modelo local do pipeline (Qwen3-4B-Instruct-2507, via vLLM — ver
 `docs/SETUP-LOCAL-LLM.md`) **não detém conhecimento da VerboLang**: nenhum
