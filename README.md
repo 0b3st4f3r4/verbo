@@ -154,7 +154,10 @@ embeddings com o chat desligado ou em outra máquina.
 | [`docs/ETAPA-2-RELATORIO.md`](docs/ETAPA-2-RELATORIO.md) | Relatório da Etapa 2: parser, engine de tick, Caderno e CLI `vbl` |
 | [`docs/ETAPA-3-RELATORIO.md`](docs/ETAPA-3-RELATORIO.md) | Relatório da Etapa 3: FXP real — schema v1, drivers, barramento, fila e transporte |
 | [`docs/ETAPA-4-RELATORIO.md`](docs/ETAPA-4-RELATORIO.md) | Relatório da Etapa 4: Caderno de produção (assíncrono, `.vcad`), E2E e overhead medido |
+| [`docs/ETAPA-5-RELATORIO.md`](docs/ETAPA-5-RELATORIO.md) | Relatório da Etapa 5: profiling, otimizações medidas, heap e execução longa |
+| [`docs/ETAPA-5-METAS-REVISAO.md`](docs/ETAPA-5-METAS-REVISAO.md) | Revisão formal das metas provisórias (AGENTS §4) com números medidos |
 | [`logs/etapa4/`](logs/etapa4/) | Logs reais do Caderno exportados das cargas E2E + relatórios de verificação externa |
+| [`logs/etapa5/`](logs/etapa5/) | Baselines/medidas dos benches, soak de longa execução, ASan e logs do Caderno pós-otimização |
 | [`docs/ADR-001-linguagem-nucleo.md`](docs/ADR-001-linguagem-nucleo.md) | Decisão Rust × C com orçamentos de memória/latência reancorados |
 | [`docs/CHEATSHEET-PROMPTS.yaml`](docs/CHEATSHEET-PROMPTS.yaml) | Banco fixo de 20 prompts para validação do cheat sheet (PLAN §7) |
 | [`docs/CHEATSHEET-VALIDACAO.md`](docs/CHEATSHEET-VALIDACAO.md) | Resultados versionados da validação do cheat sheet |
@@ -171,21 +174,24 @@ embeddings com o chat desligado ou em outra máquina.
 
 ## Roadmap
 
-Estado atual: **Etapas 1–4 concluídas** — suíte BDD/TDD, núcleo Rust (parser +
+Estado atual: **Etapas 1–5 concluídas** — suíte BDD/TDD, núcleo Rust (parser +
 engine + Caderno + CLI `vbl`), FXP real (schema v1, drivers sysfs/RAPL/PWM/LED,
-barramento real/simulado/híbrido, fila prioritária e transporte Unix/TCP) e o
+barramento real/simulado/híbrido, fila prioritária e transporte Unix/TCP), o
 **Caderno de produção** (gravação assíncrona, formato binário `.vcad` com
-cadeia SHA-256, verificação externa `vbl caderno-verify` e suíte E2E)
-([relatório da Etapa 4](docs/ETAPA-4-RELATORIO.md)).
+cadeia SHA-256, verificação externa `vbl caderno-verify` e suíte E2E) e a
+**revisão de qualidade/otimização** da Etapa 5 (encoder direto do Caderno,
+hash incremental, auditor de heap, soak de longa execução e revisão formal
+das metas) ([relatório da Etapa 5](docs/ETAPA-5-RELATORIO.md)).
 
 1. **Etapa 1** ✅ — Suíte BDD/TDD/E2E com mocks e simulador FXP
 2. **Etapa 2** ✅ — Núcleo da linguagem em **Rust**: lexer, parser, AST e motor de tick assíncrono ([ADR-001](docs/ADR-001-linguagem-nucleo.md))
 3. **Etapa 3** ✅ — FXP real: schema v1, registro de dispositivos, drivers, barramento multi-modo e transporte local×remoto ([relatório](docs/ETAPA-3-RELATORIO.md))
 4. **Etapa 4** ✅ — Caderno de produção (gravação assíncrona, `.vcad`, `caderno-verify`) e validação end-to-end ([relatório](docs/ETAPA-4-RELATORIO.md))
-5. **Etapa 5** — Qualidade, profiling termodinâmico e otimização
+5. **Etapa 5** ✅ — Qualidade, profiling termodinâmico e otimização ([relatório](docs/ETAPA-5-RELATORIO.md) · [revisão de metas](docs/ETAPA-5-METAS-REVISAO.md))
 
 Para rodar a suíte: `make setup && make test` (Python) e `make rust-check` +
-`make rust-e2e` (núcleo Rust, Etapas 2–4).
+`make rust-e2e` (núcleo Rust, Etapas 2–4). Gates da Etapa 5:
+`make rust-memoria` (orçamentos de heap) e `make rust-soak` (execução longa).
 Detalhes e critérios de aceite por etapa em [`docs/PLAN.md`](docs/PLAN.md) e [`AGENTS.md`](AGENTS.md).
 
 ## Desenvolvimento assistido por LLMs

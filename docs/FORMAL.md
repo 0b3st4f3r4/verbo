@@ -141,6 +141,8 @@ stateDiagram-v2
 
 **Matriz de transições legais:** `event→equilibrium`, `equilibrium→nonequilibrium`, `nonequilibrium→equilibrium` e `nonequilibrium→nonequilibrium` (keep). Não há retorno a `event`: `reclassify_as_nonequilibrium` sobre uma forma `event` é erro de runtime registrado no Caderno (a forma permanece `event`). Ação de revisão sobre forma já dissolvida no mesmo tick é ignorada, com registro `review_after_dissolution`.
 
+**Regras de revisão após reclassificação (decisão do AD, Etapa 5):** as regras de revisão **sobrevivem às transições** e permanecem **ativas na `equilibrium`** — o diagrama acima lista `revisão` como caminho de EQ → DIS, e o tick (§4.2) avalia as condições de revisão de cada forma ativa. O que cessa na `equilibrium` é apenas a **manutenção implícita** (§4.1). Disparo cuja ação não altera o estado (ex.: `reclassify_as_equilibrium` sobre forma já `equilibrium`) é **no-op auditado** no Caderno (nível `AVALIACAO`), sem nova transição e sem dissolução.
+
 **`horizon` é absoluto:** contado desde a criação; reclassificações não o renovam (Lei 1 — toda existência é finita).
 
 **Persistência:** toda forma `equilibrium` vive em suporte não volátil. Ao reclassificar para `equilibrium` — de qualquer origem — a forma é gravada como `.vl` canônico reparseável no diretório de persistência do runtime, e o Caderno registra o evento com caminho e SHA-256 do conteúdo. `cost_bytes` ausente passa a valer o tamanho real gravado. Na inicialização, o runtime recarrega as `equilibrium` persistidas cujo `horizon` não venceu.

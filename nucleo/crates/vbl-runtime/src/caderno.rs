@@ -38,14 +38,23 @@ impl Evento {
     /// Linha canônica que entra na cadeia (sem o próprio hash). Pública para
     /// o Caderno de produção e o verificador externo (mesma composição).
     pub fn linha(&self) -> String {
-        let mut linha = format!("{}\u{1f}{}\u{1f}{}", self.seq, self.kind, self.msg);
+        let mut linha = String::new();
+        self.escrever_linha(&mut linha);
+        linha
+    }
+
+    /// Escreve a linha canônica diretamente em `out` (Etapa 5 — caminho
+    /// quente do Caderno de produção reutiliza o buffer; sem alocação da
+    /// string inteira a cada evento). Composição idêntica a [`Evento::linha`].
+    pub fn escrever_linha(&self, out: &mut String) {
+        use std::fmt::Write as _;
+        let _ = write!(out, "{}\u{1f}{}\u{1f}{}", self.seq, self.kind, self.msg);
         if let Json::Obj(campos) = &self.extra {
             if !campos.is_empty() {
-                linha.push('\u{1f}');
-                linha.push_str(&self.extra.serializar());
+                out.push('\u{1f}');
+                self.extra.serializar_em(out);
             }
         }
-        linha
     }
 }
 
@@ -211,12 +220,16 @@ pub(crate) fn evento_vazamento(forma: &str, watts: f64, segundos: f64) -> (Strin
 }
 
 /// Caderno nulo — referência do A/B de overhead (bench da Etapa 4): absorve
-/// os eventos sem custo além do dispatch do trait.
+/// os eventos sem custo além do dispatch do trait. Etapa 5: `leak` também é
+/// no-op — "logger DESLIGADO" não constrói evento algum (o default do trait
+/// monta msg/extra antes de chamar `record`, o que inflaria o A/B com custo
+/// de construção, não de logging).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NoopCaderno;
 
 impl Caderno for NoopCaderno {
     fn record(&mut self, _kind: &str, _msg: &str, _extra: Json) {}
+    fn leak(&mut self, _forma: &str, _watts: f64, _segundos: f64) {}
 }
 
 /// Implementação de referência: eventos em memória + cadeia SHA-256.
@@ -259,7 +272,7 @@ impl ChainCaderno {
     pub fn verify_chain(&self) -> bool {
         let mut head = Self::HEAD_INICIAL.to_owned();
         for e in &self.eventos {
-            head = sha256_hex(format!("{head}{}", e.linha()).as_bytes());
+            head = sha256_hex_duplo(head.as_bytes(), e.linha().as_bytes());
             if head != e.hash {
                 return false;
             }
@@ -325,7 +338,46 @@ fn campo_eq(extra: &Json, chave: &str, esperado: &Json) -> bool {
 pub fn sha256_hex(dados: &[u8]) -> String {
     let mut h = Sha256::new();
     h.update(dados);
-    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+    hex_minusculo(&h.finalize())
+}
+
+/// SHA-256 incremental sobre DUAS fatias (`a || b`) em hex — mesmo digest de
+/// `sha256_hex([a b] concatenados)`, sem alocar a concatenação (Etapa 5: o
+/// elo da cadeia é `SHA-256(head || linha)` e ambos já existem separados).
+pub fn sha256_hex_duplo(a: &[u8], b: &[u8]) -> String {
+    hex_minusculo(&sha256_digest_duplo(a, b))
+}
+
+/// Digest cru (32 bytes) sobre duas fatias — o frame `.vcad` grava o elo em
+/// bytes crus; hex só quando o destino é texto (Etapa 5: elimina a ida e
+/// volta hex → cru da Etapa 4).
+pub fn sha256_bytes_duplo(a: &[u8], b: &[u8]) -> [u8; 32] {
+    sha256_digest_duplo(a, b)
+}
+
+fn sha256_digest_duplo(a: &[u8], b: &[u8]) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(a);
+    h.update(b);
+    h.finalize().into()
+}
+
+/// Tabela hex (Etapa 5 — substitui `format!("{b:02x}")` por byte).
+const HEX: &[u8; 16] = b"0123456789abcdef";
+
+/// Escreve `dados` em hex minúsculo no buffer (sem alocação intermediária).
+pub fn escrever_hex(dados: &[u8], out: &mut String) {
+    out.reserve(dados.len() * 2);
+    for b in dados {
+        out.push(HEX[(b >> 4) as usize] as char);
+        out.push(HEX[(b & 0x0f) as usize] as char);
+    }
+}
+
+fn hex_minusculo(dados: &[u8]) -> String {
+    let mut out = String::with_capacity(dados.len() * 2);
+    escrever_hex(dados, &mut out);
+    out
 }
 
 impl Caderno for ChainCaderno {
@@ -346,8 +398,9 @@ impl Caderno for ChainCaderno {
         let seq = self.eventos.len();
         let mut evento =
             Evento { seq, kind: kind.to_owned(), msg: msg.to_owned(), extra, hash: String::new() };
-        let linha = evento.linha();
-        evento.hash = sha256_hex(format!("{}{linha}", self.chain_head).as_bytes());
+        let mut linha = String::with_capacity(128);
+        evento.escrever_linha(&mut linha);
+        evento.hash = sha256_hex_duplo(self.chain_head.as_bytes(), linha.as_bytes());
         self.chain_head = evento.hash.clone();
         self.eventos.push(evento);
     }

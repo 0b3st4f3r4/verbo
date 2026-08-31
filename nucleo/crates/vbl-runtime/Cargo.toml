@@ -10,6 +10,10 @@ authors.workspace = true
 vbl-lang = { workspace = true }
 sha2 = { workspace = true }
 
+# Etapa 5 (PLAN §5.1): auditor de heap — opt-in, nunca em produção.
+[features]
+heap-audit = []
+
 [dev-dependencies]
 criterion = { workspace = true }
 
@@ -24,3 +28,8 @@ harness = false
 [[bench]]
 name = "caderno"
 harness = false
+
+# Soak de longa execução (Etapa 5 — AGENTS §2.2: heap estável em longa duração)
+[[bin]]
+name = "vbl-soak"
+path = "src/bin/soak.rs"

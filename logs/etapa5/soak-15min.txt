@@ -1,0 +1,16 @@
+vbl-soak: vivas alvo = 1000, teto = 100000000 ticks / 900 s de parede, relatório a cada 20000 ticks
+# patamar inicial: tick 10, RSS = 3204 KiB
+tick     20000 | ativas    666 | prazos    666 | RSS     3276 KiB | pico     3288 KiB | 77 s
+tick     40000 | ativas    666 | prazos    666 | RSS     3276 KiB | pico     3312 KiB | 151 s
+tick     60000 | ativas    666 | prazos    666 | RSS     3276 KiB | pico     3312 KiB | 226 s
+tick     80000 | ativas    666 | prazos    666 | RSS     3276 KiB | pico     3316 KiB | 300 s
+tick    100000 | ativas    666 | prazos    666 | RSS     3316 KiB | pico     3316 KiB | 374 s
+tick    120000 | ativas    666 | prazos    666 | RSS     3276 KiB | pico     3316 KiB | 448 s
+tick    140000 | ativas    666 | prazos    666 | RSS     3292 KiB | pico     3316 KiB | 521 s
+tick    160000 | ativas    666 | prazos    666 | RSS     3276 KiB | pico     3316 KiB | 595 s
+tick    180000 | ativas    666 | prazos    666 | RSS     3292 KiB | pico     3316 KiB | 668 s
+tick    200000 | ativas    666 | prazos    666 | RSS     3276 KiB | pico     3316 KiB | 742 s
+tick    220000 | ativas    666 | prazos    666 | RSS     3296 KiB | pico     3316 KiB | 816 s
+tick    240000 | ativas    666 | prazos    666 | RSS     3276 KiB | pico     3316 KiB | 890 s
+# fim: 242705 ticks em 900 s | ativas 666 | prazos 666 | RSS final 3276 KiB | pico 3316 KiB
+# SOAK OK: RSS estável (final ≤ patamar + 10% + 4 MiB)

@@ -24,8 +24,8 @@
 //! em bytes crus. O verificador recomputa `hash_n = SHA-256(hash_{n-1} ||
 //! linha_n)` — adulteração retroativa quebra a cadeia.
 
-use crate::caderno::{carimbar_tempo, evento_vazamento, sha256_hex, Caderno, ChainCaderno};
-use crate::json::Json;
+use crate::caderno::{carimbar_tempo, sha256_hex_duplo, Caderno, ChainCaderno};
+use crate::json::{escrever_numero, escrever_string, Json};
 use std::collections::BTreeMap;
 use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -47,9 +47,28 @@ const BUFFER_BYTES: usize = 64 * 1024;
 
 /// Mensagem tick-thread → thread de gravação. O carimbo de tempo viaja
 /// solto: a thread de gravação injeta no `extra` antes de compor a linha.
+///
+/// Etapa 5: o caminho quente ([`Caderno::leak`] — um evento por forma por
+/// tick) viaja como dados crus ([`Msg::Vazamento`]); a linha canônica é
+/// composta na thread de gravação diretamente no buffer reutilizado, sem
+/// `Json`/`BTreeMap` intermediários — bytes idênticos à composição geral
+/// (garantido por teste de equivalência).
 enum Msg {
     Evento { seq: usize, tick: u64, t: f64, kind: String, msg: String, extra: Json },
+    Vazamento(Vazamento),
     Fim,
+}
+
+/// Dados crus do evento VAZAMENTO (caminho quente da Etapa 5) — a linha
+/// canônica só existe na thread de gravação, direto no buffer reutilizado.
+struct Vazamento {
+    seq: usize,
+    tick: u64,
+    t: f64,
+    forma: String,
+    watts: f64,
+    segundos: f64,
+    joules: f64,
 }
 
 /// Agregados do Caderno de produção (expostos para monitoramento —
@@ -179,7 +198,14 @@ impl Caderno for CadernoProducao {
     }
 
     fn record(&mut self, kind: &str, msg: &str, extra: Json) {
-        *self.contagens.entry(kind.to_owned()).or_insert(0) += 1;
+        // caminho geral (eventos raros: transições, alertas…) — acumula sem
+        // alocar a chave quando o kind já está na tabela (Etapa 5)
+        match self.contagens.get_mut(kind) {
+            Some(c) => *c += 1,
+            None => {
+                self.contagens.insert(kind.to_owned(), 1);
+            }
+        }
         let seq = self.seq;
         self.seq += 1;
         self.enfileirados += 1;
@@ -198,19 +224,49 @@ impl Caderno for CadernoProducao {
         }
     }
 
-    /// Acumula os Joules no tick-thread (agregado barato) antes de gravar.
-    /// A atuação com trilha completa usa o default do trait (estima o custo
-    /// via `potencia_corrente` e chama `record`) — herdado sem sobreposição.
+    /// Caminho quente (Etapa 5 — PLAN §5.2): acumula os Joules e envia os
+    /// dados crus; a linha canônica é composta na thread de gravação sem
+    /// `format!`+`Json::obj` intermediários (o custo dominante medido na
+    /// Etapa 4 — docs/ETAPA-4-RELATORIO.md §3). Agregados e contagens têm o
+    /// MESMO contrato do caminho geral.
     fn leak(&mut self, forma: &str, watts: f64, segundos: f64) {
         let joules = watts * segundos;
         self.joules_totais += joules;
-        *self.joules_por_forma.entry(forma.to_owned()).or_insert(0.0) += joules;
-        let (msg, extra) = evento_vazamento(forma, watts, segundos);
-        self.record("VAZAMENTO", &msg, extra);
+        match self.joules_por_forma.get_mut(forma) {
+            Some(j) => *j += joules,
+            None => {
+                self.joules_por_forma.insert(forma.to_owned(), joules);
+            }
+        }
+        match self.contagens.get_mut("VAZAMENTO") {
+            Some(c) => *c += 1,
+            None => {
+                self.contagens.insert("VAZAMENTO".to_owned(), 1);
+            }
+        }
+        let seq = self.seq;
+        self.seq += 1;
+        self.enfileirados += 1;
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(Msg::Vazamento(Vazamento {
+                seq,
+                tick: self.tempo.0,
+                t: self.tempo.1,
+                forma: forma.to_owned(),
+                watts,
+                segundos,
+                joules,
+            }));
+        }
     }
 }
 
 /// Corpo da thread de gravação: header, frames, footer.
+///
+/// Etapa 5: linha e cabeça da cadeia vivem em buffers REUTILIZADOS (um único
+/// `String` de linha para todo o log) e o elo é calculado sobre duas fatias
+/// com digest cru — sem concatenar `head+linha` nem fazer a viagem hex → cru
+/// de cada frame (docs/ETAPA-4-RELATORIO.md §3: encoding direto).
 fn thread_gravacao(rec: Receiver<Msg>, caminho: PathBuf) -> std::io::Result<Resumo> {
     let arquivo = std::fs::File::create(&caminho)?;
     let mut w = BufWriter::with_capacity(BUFFER_BYTES, arquivo);
@@ -218,37 +274,73 @@ fn thread_gravacao(rec: Receiver<Msg>, caminho: PathBuf) -> std::io::Result<Resu
     w.write_all(&[VERSAO])?;
 
     let mut head = ChainCaderno::HEAD_INICIAL.to_owned();
+    let mut linha = String::with_capacity(192);
     let mut eventos = 0usize;
     let mut bytes = 0u64;
     while let Ok(msg) = rec.recv() {
-        let Msg::Evento { seq, tick, t, kind, msg, mut extra } = msg else {
-            break; // Msg::Fim
-        };
-        carimbar_tempo(&mut extra, tick, t);
-        let evento = crate::caderno::Evento { seq, kind, msg, extra, hash: String::new() };
-        let linha = evento.linha();
-        let hash = sha256_hex(format!("{head}{linha}").as_bytes());
-        head = hash.clone();
+        match msg {
+            Msg::Fim => break,
+            Msg::Evento { seq, tick, t, kind, msg, mut extra } => {
+                carimbar_tempo(&mut extra, tick, t);
+                let evento =
+                    crate::caderno::Evento { seq, kind, msg, extra, hash: String::new() };
+                linha.clear();
+                evento.escrever_linha(&mut linha);
+            }
+            Msg::Vazamento(v) => {
+                linha.clear();
+                escrever_linha_vazamento(&mut linha, &v);
+            }
+        }
+        let digest = crate::caderno::sha256_bytes_duplo(head.as_bytes(), linha.as_bytes());
         w.write_all(&(linha.len() as u32).to_le_bytes())?;
         w.write_all(linha.as_bytes())?;
-        // hash em bytes crus (compacto; hex só no JSONL)
-        for b in hash.as_bytes().chunks(2) {
-            let byte = u8::from_str_radix(std::str::from_utf8(b).unwrap_or("00"), 16).unwrap_or(0);
-            w.write_all(&[byte])?;
-        }
+        w.write_all(&digest)?;
+        head.clear();
+        crate::caderno::escrever_hex(&digest, &mut head);
         eventos += 1;
         bytes += 4 + linha.len() as u64 + 32;
         if eventos.is_multiple_of(FLUSH_A_CADA) {
             w.flush()?;
         }
     }
-    let meta_head = head.clone();
     w.write_all(RODAPE_MAGIC)?;
     w.write_all(&(eventos as u32).to_le_bytes())?;
-    w.write_all(meta_head.as_bytes())?; // 64 bytes hex
+    w.write_all(head.as_bytes())?; // 64 bytes hex
     bytes += RODAPE_BYTES as u64;
     w.flush()?;
     Ok(Resumo { eventos, bytes, chain_head: head, ..Default::default() })
+}
+
+/// Composição direta da linha canônica do evento VAZAMENTO — byte a byte
+/// idêntica a `evento_vazamento` + `carimbar_tempo` + `Evento::linha`:
+/// `seq ␟ VAZAMENTO ␟ msg ␟ {"forma","joules","segundos","t","tick","watts"}`
+/// (chaves em ordem de classificação; números no formato canônico do `Json`).
+/// Equivalência garantida por teste (`tests/caderno_producao.rs`).
+fn escrever_linha_vazamento(linha: &mut String, v: &Vazamento) {
+    use std::fmt::Write as _;
+    let _ = write!(
+        linha,
+        "{seq}\u{1f}VAZAMENTO\u{1f}Forma '{forma}' dissipou {joules:.2} Joules ({watts:.2} W por {segundos:.2}s)\u{1f}",
+        seq = v.seq,
+        forma = v.forma,
+        joules = v.joules,
+        watts = v.watts,
+        segundos = v.segundos,
+    );
+    linha.push_str("{\"forma\":");
+    escrever_string(&v.forma, linha);
+    linha.push_str(",\"joules\":");
+    escrever_numero(v.joules, linha);
+    linha.push_str(",\"segundos\":");
+    escrever_numero(v.segundos, linha);
+    linha.push_str(",\"t\":");
+    escrever_numero(v.t, linha);
+    linha.push_str(",\"tick\":");
+    escrever_numero(v.tick as f64, linha);
+    linha.push_str(",\"watts\":");
+    escrever_numero(v.watts, linha);
+    linha.push('}');
 }
 
 // ======================================================================
@@ -348,7 +440,7 @@ pub fn verificar_binario(caminho: &Path) -> Result<RelatorioVerificacao, String>
         };
         let linha = std::str::from_utf8(linha_bytes)
             .map_err(|_| format!("{}: frame com UTF-8 inválido", caminho.display()))?;
-        let esperado = sha256_hex(format!("{head}{linha}").as_bytes());
+        let esperado = sha256_hex_duplo(head.as_bytes(), linha.as_bytes());
         let lido_hex: String =
             hash_bytes.iter().map(|b| format!("{b:02x}")).collect();
         if esperado != lido_hex {
@@ -434,7 +526,7 @@ pub fn verificar_jsonl(caminho: &Path) -> Result<RelatorioVerificacao, String> {
         }
         let linha_canonica =
             linha_de(seq, &kind, &msg, &extra);
-        let esperado = sha256_hex(format!("{head}{linha_canonica}").as_bytes());
+        let esperado = sha256_hex_duplo(head.as_bytes(), linha_canonica.as_bytes());
         if esperado != hash_lido {
             rel.cadeia_ok = false;
             rel.primeiro_quebrado.get_or_insert(rel.eventos);

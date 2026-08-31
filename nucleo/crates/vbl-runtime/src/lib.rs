@@ -16,12 +16,21 @@ pub mod caderno_producao;
 pub mod engine;
 pub mod forma;
 pub mod fxp;
+#[cfg(feature = "heap-audit")]
+pub mod heap_auditor;
 pub mod json;
 pub mod loader;
 pub mod main_interp;
 pub mod persist;
 pub mod scheduler;
 pub mod sim;
+
+/// Alocador global de contagem — SOMENTE com a feature `heap-audit` (Etapa 5:
+/// fechamento físico dos orçamentos de retenção; builds de produção não pagam
+/// nada por isso).
+#[cfg(feature = "heap-audit")]
+#[global_allocator]
+static AUDITOR_DE_HEAP: heap_auditor::AuditorAlloc = heap_auditor::AuditorAlloc;
 
 pub use caderno::{Caderno, ChainCaderno, Evento};
 pub use caderno_producao::{

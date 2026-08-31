@@ -70,6 +70,11 @@ jobs:
           RUSTFLAGS="-Zsanitizer=address" \
             cargo +nightly test --workspace --target x86_64-unknown-linux-gnu
 
+      # Orçamentos de heap (Etapa 5 — PLAN §5.1; AGENTS §2.2): auditor de
+      # contagem por forma + steady-state 10k ≤ 10 MB + churn 200k sem inércia
+      - name: Memória (orçamentos de heap, auditor serial)
+        run: cargo test -p vbl-runtime --features heap-audit --test memoria -- --test-threads=1
+
       # Orçamentos de latência (AGENTS §1.3): transição ≤100µs p95,
       # FXP: mensagem ≤10µs, leitura local ≤1ms, remota ≤10ms;
       # Caderno (Etapa 4): gravação ≤200µs + A/B de overhead — criterion (quick)

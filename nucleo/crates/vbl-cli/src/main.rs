@@ -258,7 +258,7 @@ async fn run<F: vbl_runtime::fxp::Fxp>(
                 .iter()
                 .filter_map(|n| {
                     engine.forma(n).map(|f| {
-                        (n.clone(), format!("{}", f.value), f.conjugation.nome().to_string())
+                        (n.to_string(), format!("{}", f.value), f.conjugation.nome().to_string())
                     })
                 })
                 .collect();
@@ -284,7 +284,7 @@ async fn run<F: vbl_runtime::fxp::Fxp>(
                 .iter()
                 .filter_map(|n| {
                     engine.forma(n).map(|f| {
-                        (n.clone(), format!("{}", f.value), f.conjugation.nome().to_string())
+                        (n.to_string(), format!("{}", f.value), f.conjugation.nome().to_string())
                     })
                 })
                 .collect();

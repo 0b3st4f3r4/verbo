@@ -24,6 +24,7 @@ NIGHTLY ?= nightly
 
 .PHONY: help check smoke serve up stop ui setup test test-unit test-bdd validate-cheatsheet
 .PHONY: rust-build rust-test rust-e2e rust-lint rust-asan rust-bench rust-check rust-coverage rust-clean
+.PHONY: rust-memoria rust-soak
 
 help:
 > @echo "VerboLang — atalhos:"
@@ -42,6 +43,8 @@ help:
 > @echo "  make rust-asan     testes sob AddressSanitizer (vazamentos, AGENTS §1.3)"
 > @echo "  make rust-bench    criterion: transição ≤100µs p95, escalonador, FXP, Caderno (gravação ≤200µs)"
 > @echo "  make rust-coverage cobertura via cargo-llvm-cov (relatório em nucleo/target)"
+> @echo "  make rust-memoria orçamentos de heap (Etapa 5; auditor serial: --test-threads=1)"
+> @echo "  make rust-soak     execução longa com churn (Etapa 5; VIVAS/TICKS/SEGUNDOS)"
 > @echo "  make rust-clean    limpa nucleo/target"
 > @echo "  make validate-cheatsheet  banco de 20 prompts contra o LLM local (PLAN §7)"
 > @echo "  make serve   sobe o modelo + UI em primeiro plano (Ctrl+C para)"
@@ -111,6 +114,17 @@ rust-bench:
 
 rust-coverage:
 > @cd nucleo && $(CARGO) +$(NIGHTLY) llvm-cov --workspace --html --output-dir target/coverage
+
+# Etapa 5 (PLAN §5.1): fechamento físico dos orçamentos de heap. O auditor
+# mede o PROCESSO — os testes de memória exigem execução serial.
+rust-memoria:
+> @cd nucleo && $(CARGO) test -p vbl-runtime --features heap-audit --test memoria -- --test-threads=1 --nocapture
+
+# Etapa 5 (AGENTS §2.2: zero vazamentos em longa execução). Padrão: 24 h de
+# parede. Sessão/CI: `make rust-soak SEGUNDOS=60` ou `TICKS=5000`.
+rust-soak:
+> @cd nucleo && $(CARGO) build --release --bin vbl-soak
+> @nucleo/target/release/vbl-soak --vivas $${VIVAS:-1000} --ticks $${TICKS:-100000000} --segundos $${SEGUNDOS:-86400} --relatorio $${RELATORIO:-100000}
 
 rust-clean:
 > @cd nucleo && $(CARGO) clean

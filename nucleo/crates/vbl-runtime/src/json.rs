@@ -41,19 +41,17 @@ impl Json {
         out
     }
 
+    /// Serializa diretamente no buffer (Etapa 5 — caminho quente do Caderno
+    /// reutiliza a string; mesmo output de [`Json::serializar`]).
+    pub fn serializar_em(&self, out: &mut String) {
+        self.escrever(out);
+    }
+
     fn escrever(&self, out: &mut String) {
         match self {
             Json::Nulo => out.push_str("null"),
             Json::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-            Json::Num(n) => {
-                if n.fract() == 0.0 && n.is_finite() && n.abs() < 9.0e15 {
-                    out.push_str(&format!("{}", *n as i64));
-                } else if n.is_finite() {
-                    out.push_str(&format!("{n}"));
-                } else {
-                    out.push_str("null"); // NaN/∞ não têm representação JSON
-                }
-            }
+            Json::Num(n) => escrever_numero(*n, out),
             Json::Str(s) => escrever_string(s, out),
             Json::Arr(itens) => {
                 out.push('[');
@@ -81,7 +79,11 @@ impl Json {
     }
 }
 
-fn escrever_string(s: &str, out: &mut String) {
+/// Escapa e escreve uma string JSON diretamente no buffer de saída (sem
+/// alocação intermediária). Etapa 5: formatter ÚNICO da composição canônica —
+/// o caminho direto do Caderno de produção escreve por aqui para garantir
+/// linhas byte a byte idênticas às do serializador geral.
+pub(crate) fn escrever_string(s: &str, out: &mut String) {
     out.push('"');
     for c in s.chars() {
         match c {
@@ -95,6 +97,19 @@ fn escrever_string(s: &str, out: &mut String) {
         }
     }
     out.push('"');
+}
+
+/// Escreve um número no formato canônico do Caderno (integrais sem casa
+/// decimal; NaN/∞ como `null`) — mesma regra do braço `Json::Num` de
+/// [`Json::escrever`], extraída para o caminho direto reutilizar.
+pub(crate) fn escrever_numero(n: f64, out: &mut String) {
+    if n.fract() == 0.0 && n.is_finite() && n.abs() < 9.0e15 {
+        let _ = std::fmt::Write::write_fmt(out, format_args!("{}", n as i64));
+    } else if n.is_finite() {
+        let _ = std::fmt::Write::write_fmt(out, format_args!("{n}"));
+    } else {
+        out.push_str("null"); // NaN/∞ não têm representação JSON
+    }
 }
 
 // ----------------------------------------------------------------------

@@ -334,3 +334,83 @@ fn arquivo_truncado_e_rejeitado_com_erro_claro() {
     assert!(!rel.cadeia_ok, "truncagem deve quebrar a cadeia");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ======================================================================
+// Etapa 5 — equivalência do caminho direto (encoding sem Json)
+// ======================================================================
+
+/// Extrai as linhas canônicas dos frames de um `.vcad` (u32 LE len + linha).
+fn linhas_do_vcad(caminho: &std::path::Path) -> Vec<String> {
+    let dados = std::fs::read(caminho).unwrap();
+    let mut pos = 5usize; // header: "VCAD" + versão
+    let mut linhas = Vec::new();
+    while pos + 4 <= dados.len() {
+        let tam = u32::from_le_bytes(dados[pos..pos + 4].try_into().unwrap()) as usize;
+        let Some(linha) = dados.get(pos + 4..pos + 4 + tam) else { break };
+        let Some(_) = dados.get(pos + 4 + tam..pos + 4 + tam + 32) else { break };
+        linhas.push(String::from_utf8(linha.to_vec()).unwrap());
+        pos += 4 + tam + 32;
+    }
+    linhas
+}
+
+/// Etapa 5 (PLAN §5.2): o caminho quente `leak` → `Msg::Vazamento` →
+/// composição direta no buffer produz linhas BYTE A BYTE idênticas às do
+/// caminho geral (`evento_vazamento` + `carimbar_tempo` + `Evento::linha`).
+/// Referência independente: a mesma sequência de `leak` num `ChainCaderno`
+/// (implementação de referência, caminho geral) — os casos cobrem escape de
+/// aspas/barra/controle, unicode, 0.0 W válido (FORMAL §4.7), negativos e
+/// valores integrais (formato canônico de números). Nomes são identificadores
+/// da gramática (sem `\u{1f}` — o separador canônico da linha).
+#[test]
+fn vazamento_caminho_direto_identico_a_composicao_geral() {
+    let casos: [(&str, f64, f64, u64, f64); 7] = [
+        ("F1", 0.15, 1.0, 1, 1.0),
+        ("forma com espaço", 45.0, 1.0, 2, 2.0),
+        ("aspas\"e\\barra", 85.5, 0.5, 3, 3.5),
+        ("unicode_oxidado\u{1}", 0.0, 1.0, 4, 4.0),
+        ("negativo", -3.25, 2.0, 5, 5.0),
+        ("inteiro", 45.0, 2.0, 6, 6.0),
+        ("temperatura_média", 12.75, 0.25, 7, 7.25),
+    ];
+    let dir = dir_tempo("equivalencia");
+    let caminho = dir.join("caderno.vcad");
+
+    // referência: caminho GERAL (implementação de referência em memória)
+    let mut referencia = ChainCaderno::new();
+    // direto: caminho quente do Caderno de produção
+    let mut producao = CadernoProducao::abrir(&caminho).unwrap();
+    for (forma, watts, segundos, tick, t) in casos {
+        referencia.definir_tempo(tick, t);
+        producao.definir_tempo(tick, t);
+        referencia.leak(forma, watts, segundos);
+        producao.leak(forma, watts, segundos);
+    }
+    let resumo = producao.fechar().unwrap();
+    assert_eq!(resumo.eventos, casos.len());
+
+    // cadeia do binário íntegra (o encoder novo fecha o elo cru)
+    let rel = verificar_binario(&caminho).unwrap();
+    assert!(rel.cadeia_ok, "cadeia do caminho direto deve verificar");
+    assert_eq!(rel.contagens.get("VAZAMENTO"), Some(&(casos.len() as u64)));
+
+    // linhas byte a byte idênticas
+    let linhas = linhas_do_vcad(&caminho);
+    assert_eq!(linhas.len(), casos.len());
+    for (i, (forma, ..)) in casos.iter().enumerate() {
+        let esperada = referencia.eventos[i].linha();
+        assert_eq!(linhas[i], esperada, "caso {i}: '{forma}'");
+    }
+
+    // roundtrip JSONL: o export do binário novo é auditável pelo verificador
+    let jsonl = dir.join("caderno.jsonl");
+    let n = jsonl_de_binario(&caminho, &jsonl).unwrap();
+    assert_eq!(n, casos.len());
+    let rel_jsonl = verificar_jsonl(&jsonl).unwrap();
+    assert!(rel_jsonl.cadeia_ok, "cadeia do JSONL exportado deve verificar");
+    // Joules agregados batem com a soma canônica dos casos
+    let esperado_j: f64 = casos.iter().map(|(_, w, s, _, _)| w * s).sum();
+    assert!((rel_jsonl.joules_totais - esperado_j).abs() < 1e-9);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

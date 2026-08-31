@@ -816,3 +816,46 @@ fn caso1_fadiga_de_atencao_ponta_a_ponta() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ======================================================================
+// Etapa 5 — decisão AD pendente da Etapa 4 (docs/ETAPA-4-RELATORIO.md §7):
+// as regras de revisão SOBREVIVEM à reclassificação e permanecem ativas na
+// `equilibrium`. Fundamento na FORMAL: o diagrama de estados (§4.1) lista
+// `revisão` como caminho de EQ → DIS e a §4.2 manda avaliar as condições de
+// revisão para CADA forma ativa — nada as desliga na `equilibrium`. O que
+// cessa é a MANUTENÇÃO implícita (a conjugação não recebe ticks de
+// manutenção — BDD Caso 1). Disparo sobre forma já na conjugação-alvo é
+// no-op AUDITADO (AVALIACAO "já equilibrium"), sem nova transição.
+// ======================================================================
+#[test]
+fn regras_permanecem_ativas_na_equilibrium_decisao_ad() {
+    let mut b = montar(sim_padrao(), SENTINELA);
+    b.set_sensor("attention", 15.0);
+    b.tick(); // regra dispara: NEQ → EQ (persistida)
+    assert!(b.tem_com(
+        kinds::TRANSICAO,
+        &[("forma", Json::str("Sentinela")), ("para", Json::str("equilibrium"))]
+    ));
+    assert_eq!(
+        b.engine.forma("Sentinela").unwrap().conjugation,
+        vbl_lang::Conjugation::Equilibrium
+    );
+
+    // ticks seguintes: a regra continua avaliada (condição segue verdadeira)
+    // e o disparo é no-op auditado — sem segunda transição, sem dissolução
+    b.ticks(3);
+    assert_eq!(
+        b.engine.forma("Sentinela").unwrap().conjugation,
+        vbl_lang::Conjugation::Equilibrium,
+        "a forma permanece equilibrium — no-op não reclassifica nem dissolve"
+    );
+    assert!(b.tem_com(
+        "AVALIACAO",
+        &[("forma", Json::str("Sentinela")), ("de", Json::str("equilibrium"))]
+    ));
+
+    // a manutenção implícita cessa: sem prazo de manutenção e sem trabalho
+    // retido (FORMAL §4.1; BDD Caso 1: "deixa de receber ticks de manutenção")
+    assert_eq!(b.engine.forma("Sentinela").unwrap().manutencao, None);
+    assert!(!b.engine.retencao.labor.contains_key("Sentinela"));
+}

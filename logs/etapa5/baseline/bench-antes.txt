@@ -1,0 +1,258 @@
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.05s
+     Running benches/fxp.rs (target/release/deps/fxp-3ff517628ed11a54)
+Gnuplot not found, using plotters backend
+Benchmarking fxp_schema_v1/encode_decode_read_ok
+Benchmarking fxp_schema_v1/encode_decode_read_ok: Warming up for 3.0000 s
+Benchmarking fxp_schema_v1/encode_decode_read_ok: Collecting 100 samples in estimated 5.0004 s (58M iterations)
+Benchmarking fxp_schema_v1/encode_decode_read_ok: Analyzing
+fxp_schema_v1/encode_decode_read_ok
+                        time:   [85.504 ns 85.671 ns 85.842 ns]
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high mild
+Benchmarking fxp_schema_v1/encode_decode_act
+Benchmarking fxp_schema_v1/encode_decode_act: Warming up for 3.0000 s
+Benchmarking fxp_schema_v1/encode_decode_act: Collecting 100 samples in estimated 5.0001 s (61M iterations)
+Benchmarking fxp_schema_v1/encode_decode_act: Analyzing
+fxp_schema_v1/encode_decode_act
+                        time:   [82.492 ns 82.925 ns 83.405 ns]
+Found 7 outliers among 100 measurements (7.00%)
+  4 (4.00%) high mild
+  3 (3.00%) high severe
+
+Benchmarking fxp_leitura_local/simulado
+Benchmarking fxp_leitura_local/simulado: Warming up for 3.0000 s
+Benchmarking fxp_leitura_local/simulado: Collecting 100 samples in estimated 5.0002 s (72M iterations)
+Benchmarking fxp_leitura_local/simulado: Analyzing
+fxp_leitura_local/simulado
+                        time:   [69.217 ns 69.424 ns 69.654 ns]
+                        thrpt:  [14.357 Melem/s 14.404 Melem/s 14.447 Melem/s]
+Found 4 outliers among 100 measurements (4.00%)
+  3 (3.00%) high mild
+  1 (1.00%) high severe
+Benchmarking fxp_leitura_local/real_fixture
+Benchmarking fxp_leitura_local/real_fixture: Warming up for 3.0000 s
+Benchmarking fxp_leitura_local/real_fixture: Collecting 100 samples in estimated 5.0273 s (788k iterations)
+Benchmarking fxp_leitura_local/real_fixture: Analyzing
+fxp_leitura_local/real_fixture
+                        time:   [6.3453 µs 6.3576 µs 6.3717 µs]
+                        thrpt:  [156.94 Kelem/s 157.29 Kelem/s 157.60 Kelem/s]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+
+Benchmarking fxp_leitura_remota/unix_roundtrip
+Benchmarking fxp_leitura_remota/unix_roundtrip: Warming up for 3.0000 s
+Benchmarking fxp_leitura_remota/unix_roundtrip: Collecting 100 samples in estimated 5.0523 s (434k iterations)
+Benchmarking fxp_leitura_remota/unix_roundtrip: Analyzing
+fxp_leitura_remota/unix_roundtrip
+                        time:   [11.690 µs 11.825 µs 11.979 µs]
+                        thrpt:  [83.482 Kelem/s 84.567 Kelem/s 85.544 Kelem/s]
+Found 5 outliers among 100 measurements (5.00%)
+  5 (5.00%) high mild
+
+Benchmarking fxp_atuacao_local/simulado
+Benchmarking fxp_atuacao_local/simulado: Warming up for 3.0000 s
+Benchmarking fxp_atuacao_local/simulado: Collecting 100 samples in estimated 5.0080 s (1.8M iterations)
+Benchmarking fxp_atuacao_local/simulado: Analyzing
+fxp_atuacao_local/simulado
+                        time:   [2.7835 µs 2.7916 µs 2.8013 µs]
+                        thrpt:  [356.97 Kelem/s 358.22 Kelem/s 359.26 Kelem/s]
+Found 9 outliers among 100 measurements (9.00%)
+  1 (1.00%) low mild
+  4 (4.00%) high mild
+  4 (4.00%) high severe
+Benchmarking fxp_atuacao_local/real_fixture
+Benchmarking fxp_atuacao_local/real_fixture: Warming up for 3.0000 s
+Benchmarking fxp_atuacao_local/real_fixture: Collecting 100 samples in estimated 5.0380 s (470k iterations)
+Benchmarking fxp_atuacao_local/real_fixture: Analyzing
+fxp_atuacao_local/real_fixture
+                        time:   [10.719 µs 10.774 µs 10.859 µs]
+                        thrpt:  [92.087 Kelem/s 92.816 Kelem/s 93.296 Kelem/s]
+Found 6 outliers among 100 measurements (6.00%)
+  4 (4.00%) high mild
+  2 (2.00%) high severe
+
+     Running benches/caderno.rs (target/release/deps/caderno-68228733b253528a)
+Gnuplot not found, using plotters backend
+Benchmarking caderno_gravacao/producao_assincrona_evento
+Benchmarking caderno_gravacao/producao_assincrona_evento: Warming up for 3.0000 s
+Benchmarking caderno_gravacao/producao_assincrona_evento: Collecting 100 samples in estimated 5.0037 s (3.3M iterations)
+Benchmarking caderno_gravacao/producao_assincrona_evento: Analyzing
+caderno_gravacao/producao_assincrona_evento
+                        time:   [1.4240 µs 1.4381 µs 1.4532 µs]
+                        thrpt:  [688.12 Kelem/s 695.37 Kelem/s 702.23 Kelem/s]
+Found 11 outliers among 100 measurements (11.00%)
+  3 (3.00%) low severe
+  1 (1.00%) low mild
+  6 (6.00%) high mild
+  1 (1.00%) high severe
+Benchmarking caderno_gravacao/memoria_cadeia_evento
+Benchmarking caderno_gravacao/memoria_cadeia_evento: Warming up for 3.0000 s
+Benchmarking caderno_gravacao/memoria_cadeia_evento: Collecting 100 samples in estimated 5.0017 s (1.7M iterations)
+Benchmarking caderno_gravacao/memoria_cadeia_evento: Analyzing
+caderno_gravacao/memoria_cadeia_evento
+                        time:   [2.4740 µs 2.4937 µs 2.5152 µs]
+                        thrpt:  [397.59 Kelem/s 401.01 Kelem/s 404.20 Kelem/s]
+Found 9 outliers among 100 measurements (9.00%)
+  5 (5.00%) high mild
+  4 (4.00%) high severe
+Benchmarking caderno_gravacao/noop_evento
+Benchmarking caderno_gravacao/noop_evento: Warming up for 3.0000 s
+Benchmarking caderno_gravacao/noop_evento: Collecting 100 samples in estimated 5.0009 s (22M iterations)
+Benchmarking caderno_gravacao/noop_evento: Analyzing
+caderno_gravacao/noop_evento
+                        time:   [225.95 ns 226.62 ns 227.37 ns]
+                        thrpt:  [4.3981 Melem/s 4.4127 Melem/s 4.4258 Melem/s]
+Found 8 outliers among 100 measurements (8.00%)
+  4 (4.00%) high mild
+  4 (4.00%) high severe
+
+Benchmarking caderno_overhead/tick_1000_formas_logger_desligado
+Benchmarking caderno_overhead/tick_1000_formas_logger_desligado: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.0s, enable flat sampling, or reduce sample count to 70.
+Benchmarking caderno_overhead/tick_1000_formas_logger_desligado: Collecting 100 samples in estimated 5.0073 s (5050 iterations)
+Benchmarking caderno_overhead/tick_1000_formas_logger_desligado: Analyzing
+caderno_overhead/tick_1000_formas_logger_desligado
+                        time:   [1.0005 ms 1.0052 ms 1.0099 ms]
+                        thrpt:  [990.24 Kelem/s 994.78 Kelem/s 999.45 Kelem/s]
+Benchmarking caderno_overhead/tick_1000_formas_logger_producao
+Benchmarking caderno_overhead/tick_1000_formas_logger_producao: Warming up for 3.0000 s
+Benchmarking caderno_overhead/tick_1000_formas_logger_producao: Collecting 100 samples in estimated 5.0348 s (1700 iterations)
+Benchmarking caderno_overhead/tick_1000_formas_logger_producao: Analyzing
+caderno_overhead/tick_1000_formas_logger_producao
+                        time:   [2.7297 ms 2.7450 ms 2.7608 ms]
+                        thrpt:  [362.21 Kelem/s 364.30 Kelem/s 366.34 Kelem/s]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+Benchmarking caderno_overhead/tick_1000_formas_logger_memoria
+Benchmarking caderno_overhead/tick_1000_formas_logger_memoria: Warming up for 3.0000 s
+Benchmarking caderno_overhead/tick_1000_formas_logger_memoria: Collecting 100 samples in estimated 5.0892 s (1400 iterations)
+Benchmarking caderno_overhead/tick_1000_formas_logger_memoria: Analyzing
+caderno_overhead/tick_1000_formas_logger_memoria
+                        time:   [3.4466 ms 3.4589 ms 3.4741 ms]
+                        thrpt:  [287.84 Kelem/s 289.11 Kelem/s 290.14 Kelem/s]
+Found 7 outliers among 100 measurements (7.00%)
+  4 (4.00%) high mild
+  3 (3.00%) high severe
+
+     Running benches/escalonador.rs (target/release/deps/escalonador-118f34c1f8d7ed9b)
+Gnuplot not found, using plotters backend
+Benchmarking escalonador/agendar/100
+Benchmarking escalonador/agendar/100: Warming up for 3.0000 s
+Benchmarking escalonador/agendar/100: Collecting 100 samples in estimated 5.0000 s (91M iterations)
+Benchmarking escalonador/agendar/100: Analyzing
+escalonador/agendar/100 time:   [44.558 ns 44.876 ns 45.167 ns]
+Benchmarking escalonador/agendar/1000
+Benchmarking escalonador/agendar/1000: Warming up for 3.0000 s
+Benchmarking escalonador/agendar/1000: Collecting 100 samples in estimated 5.0000 s (89M iterations)
+Benchmarking escalonador/agendar/1000: Analyzing
+escalonador/agendar/1000
+                        time:   [46.327 ns 46.681 ns 46.978 ns]
+Benchmarking escalonador/agendar/10000
+Benchmarking escalonador/agendar/10000: Warming up for 3.0000 s
+Benchmarking escalonador/agendar/10000: Collecting 100 samples in estimated 5.0002 s (90M iterations)
+Benchmarking escalonador/agendar/10000: Analyzing
+escalonador/agendar/10000
+                        time:   [46.128 ns 46.446 ns 46.705 ns]
+Found 24 outliers among 100 measurements (24.00%)
+  24 (24.00%) low mild
+Benchmarking escalonador/agendar/100000
+Benchmarking escalonador/agendar/100000: Warming up for 3.0000 s
+Benchmarking escalonador/agendar/100000: Collecting 100 samples in estimated 5.0001 s (89M iterations)
+Benchmarking escalonador/agendar/100000: Analyzing
+escalonador/agendar/100000
+                        time:   [48.492 ns 48.794 ns 49.105 ns]
+Found 24 outliers among 100 measurements (24.00%)
+  21 (21.00%) low severe
+  2 (2.00%) high mild
+  1 (1.00%) high severe
+
+Benchmarking escalonador/drenar_todos/100
+Benchmarking escalonador/drenar_todos/100: Warming up for 3.0000 s
+Benchmarking escalonador/drenar_todos/100: Collecting 100 samples in estimated 5.0341 s (500k iterations)
+Benchmarking escalonador/drenar_todos/100: Analyzing
+escalonador/drenar_todos/100
+                        time:   [3.7114 µs 3.7172 µs 3.7240 µs]
+Found 6 outliers among 100 measurements (6.00%)
+  2 (2.00%) high mild
+  4 (4.00%) high severe
+Benchmarking escalonador/drenar_todos/1000
+Benchmarking escalonador/drenar_todos/1000: Warming up for 3.0000 s
+Benchmarking escalonador/drenar_todos/1000: Collecting 100 samples in estimated 5.0919 s (45k iterations)
+Benchmarking escalonador/drenar_todos/1000: Analyzing
+escalonador/drenar_todos/1000
+                        time:   [51.489 µs 51.547 µs 51.606 µs]
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking escalonador/drenar_todos/10000
+Benchmarking escalonador/drenar_todos/10000: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 6.7s, enable flat sampling, or reduce sample count to 60.
+Benchmarking escalonador/drenar_todos/10000: Collecting 100 samples in estimated 6.7266 s (5050 iterations)
+Benchmarking escalonador/drenar_todos/10000: Analyzing
+escalonador/drenar_todos/10000
+                        time:   [709.04 µs 711.40 µs 714.11 µs]
+Found 9 outliers among 100 measurements (9.00%)
+  7 (7.00%) high mild
+  2 (2.00%) high severe
+Benchmarking escalonador/drenar_todos/100000
+Benchmarking escalonador/drenar_todos/100000: Warming up for 3.0000 s
+Benchmarking escalonador/drenar_todos/100000: Collecting 100 samples in estimated 5.1228 s (300 iterations)
+Benchmarking escalonador/drenar_todos/100000: Analyzing
+escalonador/drenar_todos/100000
+                        time:   [10.512 ms 10.571 ms 10.630 ms]
+
+     Running benches/transicao.rs (target/release/deps/transicao-efbc676c723bcd56)
+Gnuplot not found, using plotters backend
+Benchmarking transicao/revisao_dispara_reclassify_1_forma
+Benchmarking transicao/revisao_dispara_reclassify_1_forma: Warming up for 3.0000 s
+Benchmarking transicao/revisao_dispara_reclassify_1_forma: Collecting 100 samples in estimated 5.3367 s (56k iterations)
+Benchmarking transicao/revisao_dispara_reclassify_1_forma: Analyzing
+transicao/revisao_dispara_reclassify_1_forma
+                        time:   [73.683 µs 73.914 µs 74.191 µs]
+                        thrpt:  [13.479 Kelem/s 13.529 Kelem/s 13.572 Kelem/s]
+Found 5 outliers among 100 measurements (5.00%)
+  4 (4.00%) high mild
+  1 (1.00%) high severe
+
+Benchmarking tick/1
+Benchmarking tick/1: Warming up for 3.0000 s
+Benchmarking tick/1: Collecting 100 samples in estimated 5.0090 s (1.6M iterations)
+Benchmarking tick/1: Analyzing
+tick/1                  time:   [2.9393 µs 2.9520 µs 2.9685 µs]
+Found 12 outliers among 100 measurements (12.00%)
+  7 (7.00%) high mild
+  5 (5.00%) high severe
+Benchmarking tick/100
+Benchmarking tick/100: Warming up for 3.0000 s
+Benchmarking tick/100: Collecting 100 samples in estimated 5.3205 s (15k iterations)
+Benchmarking tick/100: Analyzing
+tick/100                time:   [334.92 µs 335.73 µs 336.60 µs]
+Found 3 outliers among 100 measurements (3.00%)
+  1 (1.00%) high mild
+  2 (2.00%) high severe
+Benchmarking tick/1000
+Benchmarking tick/1000: Warming up for 3.0000 s
+Benchmarking tick/1000: Collecting 100 samples in estimated 5.0343 s (1400 iterations)
+Benchmarking tick/1000: Analyzing
+tick/1000               time:   [3.4064 ms 3.4179 ms 3.4311 ms]
+Found 8 outliers among 100 measurements (8.00%)
+  2 (2.00%) high mild
+  6 (6.00%) high severe
+
+Benchmarking subvert_mesmo_tick
+Benchmarking subvert_mesmo_tick: Warming up for 3.0000 s
+Benchmarking subvert_mesmo_tick: Collecting 100 samples in estimated 5.1417 s (91k iterations)
+Benchmarking subvert_mesmo_tick: Analyzing
+subvert_mesmo_tick      time:   [41.100 µs 41.310 µs 41.502 µs]
+
+Benchmarking fxp_act_local
+Benchmarking fxp_act_local: Warming up for 3.0000 s
+Benchmarking fxp_act_local: Collecting 100 samples in estimated 5.0646 s (15k iterations)
+Benchmarking fxp_act_local: Analyzing
+fxp_act_local           time:   [323.54 µs 325.33 µs 327.42 µs]
+Found 10 outliers among 100 measurements (10.00%)
+  6 (6.00%) high mild
+  4 (4.00%) high severe
+

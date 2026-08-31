@@ -29,8 +29,11 @@ pub struct Engine<F: Fxp, C: Caderno = ChainCaderno> {
     pub fxp: F,
     pub caderno: C,
     formas: BTreeMap<String, Form>,
-    /// Ordem de declaração das formas ativas (iteração do tick).
-    ordem: Vec<String>,
+    /// Ordem de declaração das formas ativas (iteração do tick). Etapa 5:
+    /// `Rc<str>` — a iteração clona o ponteiro (incremento de contador, sem
+    /// alocação) e itera um nome DONO, sem emprestar `self` (o corpo do tick
+    /// muta campos e chama métodos `&mut self` livremente).
+    ordem: Vec<std::rc::Rc<str>>,
     pub scheduler: Scheduler,
     pub sim_time: f64,
     pub clock: u64,
@@ -94,10 +97,10 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
     }
 
     pub fn formas_ativas(&self) -> Vec<&Form> {
-        self.ordem.iter().filter_map(|n| self.formas.get(n)).collect()
+        self.ordem.iter().filter_map(|n| self.formas.get(n.as_ref())).collect()
     }
 
-    pub fn nomes_ativos(&self) -> &[String] {
+    pub fn nomes_ativos(&self) -> &[std::rc::Rc<str>] {
         &self.ordem
     }
 
@@ -145,6 +148,9 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
     }
 
     /// Registra a forma ativa e agenda seus prazos (O(log N) por prazo).
+    /// Etapa 5: o teste de presença consulta o mapa de formas (O(log N)) —
+    /// `ordem` e `formas` têm sempre os MESMOS nomes (invariante mantido por
+    /// `bind`/`dissolve_form`), o que torna o `contains` O(N) redundante.
     fn bind(&mut self, form: Form) {
         let bytes = form.bytes_retidos();
         let nome = form.name.clone();
@@ -156,8 +162,8 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
         if let Some(m) = &form.manutencao {
             mentry = Some(m.ultima + m.deadline_s);
         }
-        if !self.ordem.contains(&nome) {
-            self.ordem.push(nome.clone());
+        if !self.formas.contains_key(&nome) {
+            self.ordem.push(std::rc::Rc::from(nome.as_str()));
         }
         self.retencao.por_forma.insert(nome.clone(), bytes);
         if neq {
@@ -176,7 +182,7 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
     /// mesmo tick (contadores de retenção → 0).
     pub fn dissolve_form(&mut self, nome: &str, fim: &str) {
         if self.formas.remove(nome).is_some() {
-            self.ordem.retain(|n| n != nome);
+            self.ordem.retain(|n| n.as_ref() != nome);
             self.retencao.por_forma.remove(nome);
             self.retencao.labor.remove(nome);
             self.scheduler.remover_forma(nome);
@@ -240,15 +246,30 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
                 .push((entrada.prazo, entrada.versao));
         }
 
-        // 2. iteração sobre instantâneo da ordem (remoção segura no tick)
-        let nomes: Vec<String> = self.ordem.clone();
-        let total_ativas = nomes.len();
-
-        for nome in nomes {
-            if !self.formas.contains_key(&nome) {
+        // 2. iteração por ÍNDICE sobre a ordem (Etapa 5 — sem snapshot de
+        //    `String`s por tick): no caminho comum toda mutação é de CAMPO
+        //    disjunto de `ordem`, e o nome itera emprestado (zero alocação).
+        //    As dissoluções encolhem `ordem` na posição corrente e `continue`m
+        //    SEM avançar o índice — o elemento seguinte desloca para a
+        //    posição liberada; o divisor P/N usa o total ANTES do tick
+        //    (mesma semântica do instantâneo da Etapa 1).
+        let total_ativas = self.ordem.len();
+        let mut i = 0usize;
+        // condição VIVA (`self.ordem.len()`): uma dissolução encolhe a ordem
+        // na posição corrente e o `continue` sem incrementar processa o
+        // elemento deslocado — `total_ativas` (obsoleto) só divide a potência.
+        while i < self.ordem.len() {
+            // clone do ponteiro (contador de referência — sem alocação); o
+            // nome iterado é DONO local: nenhuma parte do corpo empresta
+            // `self.ordem`, e as mutações de campos/chamadas `&mut self`
+            // permanecem livres de conflito de borrow.
+            let nome_ponteiro: std::rc::Rc<str> = self.ordem[i].clone();
+            let nome: &str = &nome_ponteiro;
+            if !self.formas.contains_key(nome) {
+                i += 1;
                 continue;
             }
-            let vencidos_forma = self.vencidos.remove(&nome).unwrap_or_default();
+            let vencidos_forma = self.vencidos.remove(nome).unwrap_or_default();
 
             // 2a. vazamento energético — partilha igual P/N (FORMAL §4.2)
             let potencia = if total_ativas > 0 {
@@ -256,22 +277,28 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
             } else {
                 0.0
             };
-            self.caderno.leak(&nome, potencia, self.tick_seconds);
+            self.caderno.leak(nome, potencia, self.tick_seconds);
 
             // 2b. leitura do sensor principal (source_path) — formas sem
             //     source_path não geram leitura nem falha (FORMAL §4.7)
-            let source = self.formas.get(&nome).and_then(|f| f.source_path.clone());
+            let source = self.formas.get(nome).and_then(|f| f.source_path.as_deref());
             if let Some(sensor) = source {
-                match self.fxp.read_sensor(&sensor, &mut self.caderno) {
-                    Ok(v) => self.caderno.sensor_read(&sensor, v),
+                match self.fxp.read_sensor(sensor, &mut self.caderno) {
+                    Ok(v) => self.caderno.sensor_read(sensor, v),
                     Err(_) => { /* alerta já registrado pelo FXP (§4.7) */ }
                 }
             }
 
-            // 2c. regras de revisão, na ordem declarada (FORMAL §4.2)
+            // 2c. regras de revisão, na ordem declarada (FORMAL §4.2) —
+            //     Etapa 5: iteração por índice SEM clonar a tabela de regras
+            //     por forma/tick; o clone fica restrito às actions do
+            //     disparo (caminho frio).
             let mut disparou = false;
-            let rules = self.formas.get(&nome).map(|f| f.rules.clone()).unwrap_or_default();
-            for (indice, regra) in rules.iter().enumerate() {
+            let qtd_regras = self.formas.get(nome).map(|f| f.rules.len()).unwrap_or(0);
+            for indice in 0..qtd_regras {
+                let Some(regra) = self.formas.get(nome).and_then(|f| f.rules.get(indice)) else {
+                    break;
+                };
                 let leitura = self.fxp.read_sensor(&regra.sensor, &mut self.caderno);
                 let valor_sensor = match leitura {
                     Ok(v) => v,
@@ -290,13 +317,14 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
                             fmt_threshold(regra.threshold)
                         ),
                         Json::obj([
-                            ("forma", Json::str(&nome)),
+                            ("forma", Json::str(nome)),
                             ("sensor", Json::str(&regra.sensor)),
                         ]),
                     );
-                    if self.execute_actions(&nome, &regra.actions) {
+                    let actions = regra.actions.clone();
+                    if self.execute_actions(nome, &actions) {
                         disparou = true;
-                        let restantes = rules.len() - indice - 1;
+                        let restantes = qtd_regras - indice - 1;
                         if restantes > 0 {
                             // review_short_circuit: regras seguintes da mesma
                             // review não são avaliadas naquele tick — sem
@@ -307,7 +335,7 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
                                     "'{nome}': {restantes} regra(s) seguinte(s) não avaliada(s) neste tick."
                                 ),
                                 Json::obj([
-                                    ("forma", Json::str(&nome)),
+                                    ("forma", Json::str(nome)),
                                     ("regras_restantes", Json::num(restantes as f64)),
                                 ]),
                             );
@@ -316,19 +344,27 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
                     }
                 }
             }
-            if disparou || !self.formas.contains_key(&nome) {
-                // prazos pulados neste tick voltam para o próximo (o estado
-                // decide — mesmo contrato do protótipo da Etapa 1)
-                for (prazo, versao) in &vencidos_forma {
-                    self.scheduler.agendar(&nome, *prazo, agora + self.tick_seconds, *versao);
+            if disparou || !self.formas.contains_key(nome) {
+                if self.formas.contains_key(nome) {
+                    // prazos pulados neste tick voltam para o próximo (o
+                    // estado decide — mesmo contrato do protótipo da Etapa 1;
+                    // Etapa 5: forma DISSOLVIDA não re-agenda — nada de lixo
+                    // de prazos órfãos no heap do escalonador)
+                    for (prazo, versao) in &vencidos_forma {
+                        self.scheduler.agendar(nome, *prazo, agora + self.tick_seconds, *versao);
+                    }
+                    // reclassificação (ordem intacta): próxima forma
+                    i += 1;
                 }
+                // senão: dissolvida/subvertida neste tick — `ordem` encolheu
+                // na posição corrente; NÃO avançar o índice
                 continue;
             }
 
             // versões vivas (validade das entradas do escalonador)
             let (eh_neq, tem_regras, m_viva, h_viva) = self
                 .formas
-                .get(&nome)
+                .get(nome)
                 .map(|f| {
                     (
                         f.conjugation == Conjugation::Nonequilibrium,
@@ -339,13 +375,18 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
                 })
                 .unwrap_or((false, false, 0, 0));
 
+            // marca de dissolução NESTE tick: `ordem` encolheu na posição
+            // corrente → `continue` SEM avançar o índice (o corpo termina em
+            // `if dissolveu { continue; } i += 1;`)
+            let mut dissolveu = false;
+
             // 2d. manutenção (apenas nonequilibrium) — keep implícito com
             //     regra ativa; colapso no primeiro vencimento estrito sem regra
             if eh_neq {
                 if tem_regras {
                     // manutenção implícita (FORMAL §4.1 ii)
                     let (versao, prazo) = {
-                        let f = self.formas.get_mut(&nome).unwrap();
+                        let f = self.formas.get_mut(nome).unwrap();
                         f.keep(agora);
                         f.manutencao_versao += 1;
                         (
@@ -353,18 +394,18 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
                             f.manutencao.as_ref().map(|m| m.ultima + m.deadline_s).unwrap_or(agora),
                         )
                     };
-                    self.scheduler.agendar(&nome, Prazo::Manutencao, prazo, versao);
+                    self.scheduler.agendar(nome, Prazo::Manutencao, prazo, versao);
                 } else {
                     let venceu_prazo = vencidos_forma.iter().any(|(p, _)| *p == Prazo::Manutencao);
                     let vencida_agora = self
                         .formas
-                        .get(&nome)
+                        .get(nome)
                         .map(|f| f.manutencao_vencida(agora))
                         .unwrap_or(false);
                     if venceu_prazo && vencida_agora {
                         let prazo_s = self
                             .formas
-                            .get(&nome)
+                            .get(nome)
                             .and_then(|f| f.manutencao.as_ref())
                             .map(|m| m.deadline_s)
                             .unwrap_or(0.0);
@@ -372,42 +413,53 @@ impl<F: Fxp, C: Caderno> Engine<F, C> {
                             &format!(
                                 "Prazo de manutenção de '{nome}' expirou! (sem keep() por {prazo_s}s)"
                             ),
-                            Json::obj([("forma", Json::str(&nome))]),
+                            Json::obj([("forma", Json::str(nome))]),
                         );
-                        self.dissolve_form(&nome, kinds::COLLAPSE_MAINTENANCE);
-                        continue;
+                        self.dissolve_form(nome, kinds::COLLAPSE_MAINTENANCE);
+                        dissolveu = true;
                     }
-                    // limite exato ainda sustenta: reagenda o prazo atual
-                    for (prazo, versao) in &vencidos_forma {
-                        if *prazo == Prazo::Manutencao && *versao == m_viva {
-                            self.scheduler
-                                .agendar(&nome, *prazo, agora + self.tick_seconds, *versao);
+                    if !dissolveu {
+                        // limite exato ainda sustenta: reagenda o prazo atual
+                        for (prazo, versao) in &vencidos_forma {
+                            if *prazo == Prazo::Manutencao && *versao == m_viva {
+                                self.scheduler
+                                    .agendar(nome, *prazo, agora + self.tick_seconds, *versao);
+                            }
                         }
                     }
                 }
             }
 
             // 2e. horizon — apenas se a forma seguir ativa (FORMAL §4.2)
-            let venceu_horizon = vencidos_forma.iter().any(|(p, _)| *p == Prazo::Horizon);
-            let esgotado_agora = self
-                .formas
-                .get(&nome)
-                .map(|f| f.horizon_esgotado(agora))
-                .unwrap_or(false);
-            if venceu_horizon && esgotado_agora {
-                self.caderno.warn(
-                    &format!("Horizonte de validade de '{nome}' esgotou-se. Dissolvendo."),
-                    Json::obj([("forma", Json::str(&nome))]),
-                );
-                self.dissolve_form(&nome, kinds::DISSOLVE_HORIZON);
-            } else if venceu_horizon {
-                // borda de arredondamento: reagenda para o próximo tick
-                for (prazo, versao) in &vencidos_forma {
-                    if *prazo == Prazo::Horizon && *versao == h_viva {
-                        self.scheduler.agendar(&nome, *prazo, agora + self.tick_seconds, *versao);
+            if !dissolveu {
+                let venceu_horizon = vencidos_forma.iter().any(|(p, _)| *p == Prazo::Horizon);
+                let esgotado_agora = self
+                    .formas
+                    .get(nome)
+                    .map(|f| f.horizon_esgotado(agora))
+                    .unwrap_or(false);
+                if venceu_horizon && esgotado_agora {
+                    self.caderno.warn(
+                        &format!("Horizonte de validade de '{nome}' esgotou-se. Dissolvendo."),
+                        Json::obj([("forma", Json::str(nome))]),
+                    );
+                    self.dissolve_form(nome, kinds::DISSOLVE_HORIZON);
+                    dissolveu = true;
+                } else if venceu_horizon {
+                    // borda de arredondamento: reagenda para o próximo tick
+                    for (prazo, versao) in &vencidos_forma {
+                        if *prazo == Prazo::Horizon && *versao == h_viva {
+                            self.scheduler
+                                .agendar(nome, *prazo, agora + self.tick_seconds, *versao);
+                        }
                     }
                 }
             }
+
+            if dissolveu {
+                continue; // `ordem` encolheu na posição corrente — sem avançar
+            }
+            i += 1;
         }
     }
 
