@@ -75,7 +75,7 @@ def test_subvert_does_not_cancel_act_of_same_rule(engine, ledger, sim):
     sim.set_sensor("cpu_temp", 86.5)
     engine.tick()
     assert ledger.has("dissolve_subvert", forma="Trading")
-    assert ledger.has("subvert_aplicado", forma="Trading",
+    assert ledger.has("subvert_applied", forma="Trading",
                       novo_valor="poesia_gerada_pelo_calor_do_silicio_e_resfriamento_da_mente")
     assert any(e["actor"] == "CpuPowerCap" and e["value"] == 50
                for e in sim.delivered)
@@ -126,7 +126,7 @@ def test_equal_share_of_global_power(engine, ledger):
     )
     engine.fxp.cpu_power = 100.0
     engine.tick()
-    leaks = ledger.find("VAZAMENTO")
+    leaks = ledger.find("LEAK")
     by_form = {e["forma"]: e["watts"] for e in leaks}
     assert by_form["A"] == pytest.approx(50.0)
     assert by_form["B"] == pytest.approx(50.0)
@@ -144,11 +144,11 @@ def test_sha256_chain_detects_tampering(vbl, ledger):
 
 def test_jsonl_export_reproduces_the_chain(vbl, ledger, tmp_path):
     ledger.event("INFO", "a")
-    ledger.event("VAZAMENTO", "b", forma="X", joules=1.5)
+    ledger.event("LEAK", "b", forma="X", joules=1.5)
     path = tmp_path / "log.jsonl"
     vbl.Caderno.export_jsonl(str(path))
     events = [json.loads(line) for line in path.read_text().splitlines()]
-    assert [e["kind"] for e in events] == ["INFO", "VAZAMENTO"]
+    assert [e["kind"] for e in events] == ["INFO", "LEAK"]
     # recomputar a cadeia do arquivo confere com a cabeça registrada
     head = "0" * 64
     for e in events:

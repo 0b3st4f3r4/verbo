@@ -67,15 +67,15 @@ pub mod kinds {
     pub const REVIEW_SHORT_CIRCUIT: &str = "review_short_circuit";
     pub const REVIEW_AFTER_DISSOLUTION: &str = "review_after_dissolution";
     pub const ACTOR_REJECTED_VALUE: &str = "actor_rejected_value";
-    pub const PERSISTENCIA: &str = "persistencia";
-    pub const TRANSICAO: &str = "transicao";
-    pub const SUBVERT_APLICADO: &str = "subvert_aplicado";
-    pub const KEEP_FORMA_INEXISTENTE: &str = "keep_forma_inexistente";
-    pub const KEEP_IGNORADO: &str = "keep_ignorado";
-    pub const RECLASSIFY_SEM_DEADLINE: &str = "reclassify_sem_deadline";
-    pub const ATOR_INEXISTENTE: &str = "ator_inexistente";
-    pub const ATOR_INDISPONIVEL: &str = "ator_indisponivel";
-    pub const FALLBACK_EXECUTADO: &str = "fallback_executado";
+    pub const PERSISTENCE: &str = "persistence";
+    pub const TRANSITION: &str = "transition";
+    pub const SUBVERT_APPLIED: &str = "subvert_applied";
+    pub const KEEP_UNKNOWN_FORM: &str = "keep_unknown_form";
+    pub const KEEP_IGNORED: &str = "keep_ignored";
+    pub const RECLASSIFY_NO_DEADLINE: &str = "reclassify_no_deadline";
+    pub const ACTOR_UNKNOWN: &str = "actor_unknown";
+    pub const ACTOR_UNAVAILABLE: &str = "actor_unavailable";
+    pub const FALLBACK_EXECUTED: &str = "fallback_executed";
 }
 
 /// Interface do Caderno consumida pelo runtime e pelo FXP.
@@ -107,30 +107,30 @@ pub trait Ledger {
     }
 
     fn warn(&mut self, msg: &str, extra: Json) {
-        self.record("AVALIACAO", msg, extra);
+        self.record("ASSESSMENT", msg, extra);
     }
 
     fn alert(&mut self, msg: &str, extra: Json) {
-        self.record("ALERTA", msg, extra);
+        self.record("ALERT", msg, extra);
     }
 
     fn collapse(&mut self, msg: &str, extra: Json) {
-        self.record("COLAPSO", msg, extra);
+        self.record("COLLAPSE", msg, extra);
     }
 
     fn art(&mut self, msg: &str, extra: Json) {
-        self.record("SUBVERSAO", msg, extra);
+        self.record("SUBVERSION", msg, extra);
     }
 
     /// Vazamento energético: potência partilhada × duração do tick (FORMAL §4.2).
     fn leak(&mut self, form: &str, watts: f64, seconds: f64) {
         let (msg, extra) = leak_event(form, watts, seconds);
-        self.record("VAZAMENTO", &msg, extra);
+        self.record("LEAK", &msg, extra);
     }
 
     fn sensor_read(&mut self, sensor: &str, value: f64) {
         self.record(
-            "LEITURA",
+            "SENSOR_READ",
             &format!("Sensor '{sensor}' = {value}"),
             Json::obj([("sensor", Json::str(sensor)), ("valor", Json::num(value))]),
         );
@@ -185,7 +185,7 @@ pub trait Ledger {
         if let Some(j) = a.joule_cost {
             fields.push(("custo_estimado_joules", Json::num(j)));
         }
-        self.record("ATUACAO", &msg, Json::obj(fields));
+        self.record("ACTUATION", &msg, Json::obj(fields));
     }
 }
 

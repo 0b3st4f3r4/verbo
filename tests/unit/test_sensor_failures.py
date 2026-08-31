@@ -30,18 +30,18 @@ def test_zero_reading_is_valid_and_fires_rules(engine, ledger, sim):
     _load(engine, *_attention_form())
     sim.set_sensor("attention", 0.0)
     engine.tick()
-    assert ledger.has("transicao", forma="Sentinela", para="equilibrium")
-    readings = [e for e in ledger.find("LEITURA", sensor="attention")]
+    assert ledger.has("transition", forma="Sentinela", para="equilibrium")
+    readings = [e for e in ledger.find("SENSOR_READ", sensor="attention")]
     assert readings and readings[-1]["valor"] == 0.0
     # zero NÃO é falha de I/O: nenhum alerta de sensor
-    assert not ledger.has("ALERTA", motivo="sensor_nao_registrado")
-    assert not ledger.has("ALERTA", motivo="sensor_inacessivel")
+    assert not ledger.has("ALERT", motivo="sensor_not_registered")
+    assert not ledger.has("ALERT", motivo="sensor_inaccessible")
 
 
 def test_zero_reading_is_never_an_io_failure(engine, ledger, sim):
     sim.set_sensor("cpu_temp", 0.0)
     assert sim.read_sensor("cpu_temp") == 0.0  # valor, não None
-    assert not ledger.has("ALERTA")
+    assert not ledger.has("ALERT")
 
 
 def test_missing_sensor_evaluates_no_condition_nor_fires(engine, ledger, sim):
@@ -59,9 +59,9 @@ def test_missing_sensor_evaluates_no_condition_nor_fires(engine, ledger, sim):
         engine.tick()
     # a regra jamais avaliou: forma permanece nonequilibrium
     assert engine.forms["Fantasma"].conjugation == "nonequilibrium"
-    assert not ledger.has("transicao")
+    assert not ledger.has("transition")
     # alerta registrado a cada tick de leitura
-    alerts = ledger.find("ALERTA", motivo="sensor_nao_registrado",
+    alerts = ledger.find("ALERT", motivo="sensor_not_registered",
                          sensor="sensor_inexistente")
     assert len(alerts) >= 1
 
@@ -73,7 +73,7 @@ def test_missing_sensor_is_not_treated_as_zero(engine, ledger, sim):
     sim.unregister_sensor("attention")
     for _ in range(3):
         engine.tick()
-    assert not ledger.has("transicao")  # nenhum disparo falso
+    assert not ledger.has("transition")  # nenhum disparo falso
     assert engine.forms["Sentinela"].conjugation == "nonequilibrium"
 
 
@@ -83,13 +83,13 @@ def test_registered_but_inaccessible_sensor_follows_same_rule(engine, ledger, si
     _load(engine, *_attention_form())
     sim.fail_sensor("attention")
     engine.tick()
-    assert not ledger.has("transicao")
-    assert ledger.has("ALERTA", motivo="sensor_inacessivel", sensor="attention")
+    assert not ledger.has("transition")
+    assert ledger.has("ALERT", motivo="sensor_inaccessible", sensor="attention")
     # recupera a acessibilidade e a regra volta a avaliar
     sim.sensors["attention"].accessible = True
     sim.set_sensor("attention", 15.0)
     engine.tick()
-    assert ledger.has("transicao", forma="Sentinela", para="equilibrium")
+    assert ledger.has("transition", forma="Sentinela", para="equilibrium")
 
 
 def test_form_without_source_path_generates_no_reading_nor_failure(engine, ledger):
@@ -98,4 +98,4 @@ def test_form_without_source_path_generates_no_reading_nor_failure(engine, ledge
           ir.form("Piscada", "event", "impulso_curto", "2s"))
     engine.tick()
     assert "Piscada" in engine.forms  # sem crash, sem leitura
-    assert not ledger.has("ALERTA", motivo="sensor_nao_registrado")
+    assert not ledger.has("ALERT", motivo="sensor_not_registered")

@@ -286,7 +286,7 @@ impl Fxp for FxpSimulator {
                         "Sensor '{name}' não registrado no FXP (falha de I/O). Condição não avaliada neste tick."
                     ),
                     Json::obj([
-                        ("motivo", Json::str("sensor_nao_registrado")),
+                        ("motivo", Json::str("sensor_not_registered")),
                         ("sensor", Json::str(name)),
                     ]),
                 );
@@ -298,7 +298,7 @@ impl Fxp for FxpSimulator {
                         "Sensor '{name}' registrado porém inacessível (falha de leitura). Condição não avaliada neste tick."
                     ),
                     Json::obj([
-                        ("motivo", Json::str("sensor_inacessivel")),
+                        ("motivo", Json::str("sensor_inaccessible")),
                         ("sensor", Json::str(name)),
                     ]),
                 );
@@ -322,7 +322,7 @@ impl Fxp for FxpSimulator {
 
         let Some(state) = self.actors.get(actor).cloned() else {
             ledger.record(
-                kinds::ATOR_INEXISTENTE,
+                kinds::ACTOR_UNKNOWN,
                 &format!("Ator '{actor}' não registrado no FXP."),
                 Json::obj([("ator", Json::str(actor))]),
             );
@@ -333,7 +333,7 @@ impl Fxp for FxpSimulator {
         if !state.available {
             ledger.actuator_action(actor, &value, false);
             ledger.record(
-                kinds::ATOR_INDISPONIVEL,
+                kinds::ACTOR_UNAVAILABLE,
                 &format!("Heartbeat do ator '{actor}' não respondeu."),
                 Json::obj([("ator", Json::str(actor))]),
             );
@@ -430,7 +430,7 @@ impl FxpSimulator {
             self.outbox.push(msg.clone());
             self.deliver(alt, value, msg, ledger);
             ledger.record(
-                kinds::FALLBACK_EXECUTADO,
+                kinds::FALLBACK_EXECUTED,
                 &format!("Fallback '{alt}' acionado após falha de '{primary}'."),
                 Json::obj([
                     ("primario", Json::str(primary)),

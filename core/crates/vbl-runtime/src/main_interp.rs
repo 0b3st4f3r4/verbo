@@ -61,7 +61,7 @@ impl MainInterpreter {
                     // cláusula de erro: keep de forma inexistente/dissolvida —
                     // registrado no Caderno, sem interromper o runtime
                     engine.ledger.record(
-                        kinds::KEEP_FORMA_INEXISTENTE,
+                        kinds::KEEP_UNKNOWN_FORM,
                         &format!("keep('{name}'): forma inexistente ou já dissolvida."),
                         Json::obj([("forma", Json::str(name))]),
                     );
@@ -83,7 +83,7 @@ impl MainInterpreter {
                 } else {
                     let conj = engine.form(name).map(|f| f.conjugation).unwrap_or(Conjugation::Event);
                     engine.ledger.record(
-                        kinds::KEEP_IGNORADO,
+                        kinds::KEEP_IGNORED,
                         &format!("keep('{name}'): conjugação {} não exige manutenção.", conj.name()),
                         Json::obj([("forma", Json::str(name))]),
                     );

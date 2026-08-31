@@ -32,7 +32,7 @@ fn bench_path(tag: &str) -> PathBuf {
 
 fn example_event(i: usize) -> (&'static str, String, Json) {
     (
-        "VAZAMENTO",
+        "LEAK",
         format!("Forma 'F{i}' dissipou 0.15 Joules (0.15 W por 1.00s)"),
         Json::obj([
             ("forma", Json::str(format!("F{i}"))),

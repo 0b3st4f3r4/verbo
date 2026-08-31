@@ -143,7 +143,7 @@ def test_keep_of_dissolved_form_recorded_at_runtime(engine, ledger):
     engine.tick()  # t=1: vence o primeiro `every 1s`
     engine.dissolve_form("Solo", fim="collapse_maintenance")
     interpreter.run_due()
-    assert ledger.has("keep_forma_inexistente", forma="Solo")
+    assert ledger.has("keep_unknown_form", forma="Solo")
 
 
 def _load_with_main(engine):
@@ -213,7 +213,7 @@ def test_reclassify_to_nonequilibrium_without_declared_deadline(engine, ledger):
     loader.load(engine, program)
     engine.fxp.set_sensor("cpu_temp", 95.0)
     engine.tick()
-    assert ledger.has("reclassify_sem_deadline", forma="Doc")
+    assert ledger.has("reclassify_no_deadline", forma="Doc")
     assert engine.forms["Doc"].conjugation == "equilibrium"  # permaneceu
 
 
@@ -233,6 +233,6 @@ def test_reclassify_to_nonequilibrium_with_declared_deadline(engine, ledger):
     engine.tick()  # NEQ -> EQ
     engine.fxp.set_sensor("attention", 90.0)
     engine.tick()  # EQ -> NEQ (deadline 3s declarado preservado)
-    assert ledger.has("transicao", forma="P", para="nonequilibrium")
+    assert ledger.has("transition", forma="P", para="nonequilibrium")
     assert engine.forms["P"].conjugation == "nonequilibrium"
     assert engine.forms["P"].maintenance_deadline == 3.0

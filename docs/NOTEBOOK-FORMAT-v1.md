@@ -1,6 +1,23 @@
 # NOTEBOOK-FORMAT-v1.md — Formato Binário do Caderno (`.vcad`), v1
 
-**Status:** canônico para a Etapa 4 · **Codec:** [`core/crates/vbl-runtime/src/production_notebook.rs`](../core/crates/vbl-runtime/src/production_notebook.rs) · **Verificador:** `vbl caderno-verify ARQUIVO`
+**Status:** canônico para a Etapa 4 · **Codec:** [`core/crates/vbl-runtime/src/production_ledger.rs`](../core/crates/vbl-runtime/src/production_ledger.rs) · **Verificador:** `vbl ledger-verify ARQUIVO`
+
+> **Nota de versão — v1.1 (31/08/2026): normalização dos `kinds`.** O
+> vocabulário do campo `kind` passou de português para inglês: níveis
+> `VAZAMENTO→LEAK`, `LEITURA→SENSOR_READ`, `ALERTA→ALERT`,
+> `SUBVERSAO→SUBVERSION`, `ATUACAO→ACTUATION`, `AVALIACAO→ASSESSMENT`,
+> `COLAPSO→COLLAPSE`; eventos `transicao→transition`,
+> `persistencia→persistence`, `subvert_aplicado→subvert_applied`,
+> `keep_forma_inexistente→keep_unknown_form`, `keep_ignorado→keep_ignored`,
+> `reclassify_sem_deadline→reclassify_no_deadline`,
+> `ator_inexistente→actor_unknown`, `ator_indisponivel→actor_unavailable`,
+> `fallback_executado→fallback_executed`,
+> `sensor_nao_registrado→sensor_not_registered`,
+> `sensor_inacessivel→sensor_inaccessible`. **O verificador aceita para
+> sempre os dois vocabulários** — artefatos v1 (PT) permanecem verificáveis e
+> produzem estatísticas idênticas (14/14 cadeias históricas conferidas na
+> migração). O header (`magic`/versão `0x01`) e a gramática da linha não
+> mudam: só o vocabulário do campo; exemplos abaixo já mostram o v1.1.
 
 ## 1. Objetivos
 
@@ -76,7 +93,7 @@ linha = seq ␟ kind ␟ msg [ ␟ extra_json ]
 Exemplo (do E2E de subversão térmica):
 
 ```
-14␟ATUACAO␟Ator 'CpuPowerCap' <- 50 (aplicado: 50, sucesso)␟{"aplicado":50,"ator":"CpuPowerCap","forma":"TradingEspeculativo","sucesso":true,"t":3,"tick":3,"valor":50}
+14␟ACTUATION␟Ator 'CpuPowerCap' <- 50 (aplicado: 50, sucesso)␟{"aplicado":50,"ator":"CpuPowerCap","forma":"TradingEspeculativo","sucesso":true,"t":3,"tick":3,"valor":50}
 ```
 
 ## 4. Export JSONL (auditoria textual)
@@ -110,5 +127,5 @@ O `vbl run --caderno ARQUIVO` já verifica o arquivo ao final da execução
 | Gravação assíncrona em buffer, overhead medido (PLAN §4.1/§4.3) | thread dedicada + flush a cada 256; benches `caderno_gravacao`/`caderno_overhead` |
 | Formato binário compacto (AGENTS §1.4) | §2; testes de roundtrip/adulteração/truncagem em `tests/production_notebook.rs` |
 | Verificação por checksum SHA-256 por agente externo (AGENTS §1.4) | §5; E2E `e2e_caderno_corrompido_falha_o_verificador` |
-| Atuações registradas: solicitado/aplicado/latência/custo (PLAN §4.1) | evento `ATUACAO` (campos `valor`, `aplicado`, `latencia_us`, `custo_estimado_joules`); testes de unidade + E2E |
+| Atuações registradas: solicitado/aplicado/latência/custo (PLAN §4.1) | evento `ACTUATION` (v1: `ATUACAO`; campos `valor`, `aplicado`, `latencia_us`, `custo_estimado_joules`); testes de unidade + E2E |
 | Métricas agregadas (Joules totais, médias) (AGENTS §1.4) | agregados de `CadernoProducao::fechar()` + relatório do verificador |

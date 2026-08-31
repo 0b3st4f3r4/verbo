@@ -293,7 +293,7 @@ async fn run<F: vbl_runtime::fxp::Fxp>(
             let events = engine.ledger.events.len();
             let leaks: f64 = engine
                 .ledger
-                .search("VAZAMENTO", &[])
+                .search("LEAK", &[])
                 .iter()
                 .filter_map(|e| match &e.extra {
                     Json::Obj(c) => c.get("joules").and_then(|j| match j {
@@ -510,7 +510,7 @@ fn fxp_probe(fxp_config: &Option<PathBuf>, fxp_mode: &Option<String>) {
     }
     println!(
         "sensores: {sensor_ok}/{sensores} acessíveis; alertas registrados no Caderno desta sonda: {}",
-        ledger.search("ALERTA", &[]).len()
+        ledger.search("ALERT", &[]).len()
     );
 
     // Cobertura dos dispositivos obrigatórios (FORMAL §6) — falha de CI se

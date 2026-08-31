@@ -59,7 +59,7 @@ enum Msg {
     End,
 }
 
-/// Dados crus do evento VAZAMENTO (caminho quente da Etapa 5) — a linha
+/// Dados crus do evento LEAK (v1: VAZAMENTO) (caminho quente da Etapa 5) — a linha
 /// canônica só existe na thread de gravação, direto no buffer reutilizado.
 struct Leak {
     seq: usize,
@@ -238,10 +238,10 @@ impl Ledger for ProductionLedger {
                 self.joules_per_form.insert(form.to_owned(), joules);
             }
         }
-        match self.counts.get_mut("VAZAMENTO") {
+        match self.counts.get_mut("LEAK") {
             Some(c) => *c += 1,
             None => {
-                self.counts.insert("VAZAMENTO".to_owned(), 1);
+                self.counts.insert("LEAK".to_owned(), 1);
             }
         }
         let seq = self.seq;
@@ -312,16 +312,16 @@ fn write_thread(rec: Receiver<Msg>, path: PathBuf) -> std::io::Result<Summary> {
     Ok(Summary { events, bytes, chain_head: head, ..Default::default() })
 }
 
-/// Composição direta da linha canônica do evento VAZAMENTO — byte a byte
+/// Composição direta da linha canônica do evento LEAK (v1: VAZAMENTO) — byte a byte
 /// idêntica a `leak_event` + `stamp_time` + `LedgerEvent::line`:
-/// `seq ␟ VAZAMENTO ␟ msg ␟ {"form","joules","seconds","t","tick","watts"}`
+/// `seq ␟ LEAK ␟ msg ␟ {"form","joules","seconds","t","tick","watts"}`
 /// (chaves em ordem de classificação; números no formato canônico do `Json`).
 /// Equivalência garantida por teste (`tests/production_ledger.rs`).
 fn write_leak_line(line: &mut String, v: &Leak) {
     use std::fmt::Write as _;
     let _ = write!(
         line,
-        "{seq}\u{1f}VAZAMENTO\u{1f}Forma '{form}' dissipou {joules:.2} Joules ({watts:.2} W por {seconds:.2}s)\u{1f}",
+        "{seq}\u{1f}LEAK\u{1f}Forma '{form}' dissipou {joules:.2} Joules ({watts:.2} W por {seconds:.2}s)\u{1f}",
         seq = v.seq,
         form = v.form,
         joules = v.joules,
@@ -532,7 +532,8 @@ pub fn verify_jsonl(path: &Path) -> Result<VerificationReport, String> {
             rel.first_broken.get_or_insert(rel.events);
         }
         head = expected;
-        if kind == "VAZAMENTO" {
+        // kinds v1 (PT) seguem aceitos: artefatos históricos permanecem verificáveis.
+        if matches!(kind.as_str(), "LEAK" | "VAZAMENTO") {
             if let Some(Json::Num(j)) = fields.get("joules") {
                 rel.total_joules += j;
             }
@@ -560,8 +561,10 @@ fn acumular_stats(line: &str, rel: &mut VerificationReport) {
     let _seq = parts.next();
     let kind = parts.next().unwrap_or("");
     *rel.counts.entry(kind.to_owned()).or_insert(0) += 1;
+    // v1 (PT) e v1.1 (EN) dos kinds contados: artefatos históricos continuam
+    // produzindo estatísticas idênticas (NOTA DE VERSÃO em NOTEBOOK-FORMAT-v1.md).
     match kind {
-        "VAZAMENTO" => {
+        "LEAK" | "VAZAMENTO" => {
             if let Some(extra) = parts.next_back() {
                 if let Some(Json::Obj(fields)) = Json::parse(extra) {
                     if let Some(Json::Num(j)) = fields.get("joules") {
@@ -570,7 +573,7 @@ fn acumular_stats(line: &str, rel: &mut VerificationReport) {
                 }
             }
         }
-        "ATUACAO" => {
+        "ACTUATION" | "ATUACAO" => {
             rel.actuations += 1;
             if parts.next_back().is_some_and(|extra| {
                 matches!(
@@ -581,7 +584,7 @@ fn acumular_stats(line: &str, rel: &mut VerificationReport) {
                 rel.atuacoes_ok += 1;
             }
         }
-        "ALERTA" => rel.alerts += 1,
+        "ALERT" | "ALERTA" => rel.alerts += 1,
         _ => {}
     }
 }

@@ -38,7 +38,7 @@ class MockFXP:
             if self.ledger is not None:
                 self.ledger.alert(
                     f"Sensor '{name}' não registrado no FXP (falha de I/O).",
-                    motivo="sensor_nao_registrado", sensor=name,
+                    motivo="sensor_not_registered", sensor=name,
                 )
             return None  # nunca 0.0 — zero é leitura válida (FORMAL §4.7)
         return self.sensors[name]
@@ -51,7 +51,7 @@ class MockFXP:
         actor = self.actors.get(actor_name)
         if actor is None:
             if self.ledger is not None:
-                self.ledger.event("ator_inexistente",
+                self.ledger.event("actor_unknown",
                                   f"Ator '{actor_name}' não registrado no FXP.",
                                   ator=actor_name)
             return False

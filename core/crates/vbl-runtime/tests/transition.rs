@@ -121,11 +121,11 @@ fn horizon_is_absolute_reclassification_does_not_renew() {
     b.set_sensor("attention", 15.0);
     b.tick(); // t=1: reclassifica (persistida)
     assert!(b.count_with(
-        kinds::TRANSICAO,
+        kinds::TRANSITION,
         &[("forma", Json::str("Pensar")), ("para", Json::str("equilibrium"))]
     ));
     assert_eq!(b.engine.form("Pensar").unwrap().creation_time, 0.0); // não renovado
-    assert!(b.has(kinds::PERSISTENCIA)); // gravação `.vl` canônico
+    assert!(b.has(kinds::PERSISTENCE)); // gravação `.vl` canônico
     b.set_sensor("attention", 90.0); // regra para de disparar
     b.ticks(3); // t=2,3,4
     assert!(b.living_form("Pensar"));
@@ -268,7 +268,7 @@ fn subvert_does_not_cancel_same_rule_act() {
     b.tick();
     assert!(b.count_with(kinds::DISSOLVE_SUBVERT, &[("forma", Json::str("Trading"))]));
     assert!(b.count_with(
-        kinds::SUBVERT_APLICADO,
+        kinds::SUBVERT_APPLIED,
         &[("novo_valor", Json::str(CANONICAL_POETIC_VALUE))]
     ));
     assert!(b
@@ -321,7 +321,7 @@ fn equal_sharing_of_global_power() {
     );
     b.engine.fxp.set_sensor("cpu_power", 100.0);
     b.tick();
-    let leaks = b.engine.ledger.search("VAZAMENTO", &[]);
+    let leaks = b.engine.ledger.search("LEAK", &[]);
     let per_form: std::collections::BTreeMap<String, f64> = leaks
         .iter()
         .filter_map(|e| match &e.extra {
@@ -403,7 +403,7 @@ fn act_is_serialized_and_delivered_to_correct_actor() {
         .any(|m| m.actor == "Ventoinha" && m.value == vbl_runtime::Value::Num(200.0)));
     assert_eq!(b.engine.fxp.current_actor("Ventoinha"), Some(&vbl_runtime::Value::Num(200.0)));
     assert!(b.count_with(
-        "ATUACAO",
+        "ACTUATION",
         &[("ator", Json::str("Ventoinha")), ("valor", Json::num(200.0)), ("sucesso", Json::boolean(true))]
     ));
 }
@@ -417,8 +417,8 @@ fn nonexistent_actor_rejected_with_registry() {
     );
     b.set_sensor("cpu_temp", 30.0);
     b.tick();
-    assert!(b.count_with(kinds::ATOR_INEXISTENTE, &[("ator", Json::str("AtorFantasma"))]));
-    assert!(b.count_with("ATUACAO", &[("ator", Json::str("AtorFantasma")), ("sucesso", Json::boolean(false))]));
+    assert!(b.count_with(kinds::ACTOR_UNKNOWN, &[("ator", Json::str("AtorFantasma"))]));
+    assert!(b.count_with("ACTUATION", &[("ator", Json::str("AtorFantasma")), ("sucesso", Json::boolean(false))]));
     assert!(!b.engine.fxp.delivered.iter().any(|m| m.actor == "AtorFantasma"));
 }
 
@@ -526,10 +526,10 @@ fn registry_fallback_triggers_when_primary_fails() {
     b.set_sensor("cpu_temp", 75.0);
     b.tick();
     // tentativa primária registrada, falha registrada, fallback executado
-    assert!(b.count_with("ATUACAO", &[("ator", Json::str("Ventoinha")), ("sucesso", Json::boolean(false))]));
-    assert!(b.count_with(kinds::ATOR_INDISPONIVEL, &[("ator", Json::str("Ventoinha"))]));
+    assert!(b.count_with("ACTUATION", &[("ator", Json::str("Ventoinha")), ("sucesso", Json::boolean(false))]));
+    assert!(b.count_with(kinds::ACTOR_UNAVAILABLE, &[("ator", Json::str("Ventoinha"))]));
     assert!(b.count_with(
-        kinds::FALLBACK_EXECUTADO,
+        kinds::FALLBACK_EXECUTED,
         &[("primario", Json::str("Ventoinha")), ("alternativo", Json::str("VentoinhaReserva"))]
     ));
     assert_eq!(
@@ -557,12 +557,12 @@ fn zero_read_is_valid_and_fires_rules() {
     b.set_sensor("attention", 0.0);
     b.tick();
     assert!(b.count_with(
-        kinds::TRANSICAO,
+        kinds::TRANSITION,
         &[("forma", Json::str("Sentinela")), ("para", Json::str("equilibrium"))]
     ));
     // zero NÃO é falha de I/O: nenhum alerta de sensor
-    assert!(!b.count_with("ALERTA", &[("motivo", Json::str("sensor_nao_registrado"))]));
-    assert!(!b.count_with("ALERTA", &[("motivo", Json::str("sensor_inacessivel"))]));
+    assert!(!b.count_with("ALERT", &[("motivo", Json::str("sensor_not_registered"))]));
+    assert!(!b.count_with("ALERT", &[("motivo", Json::str("sensor_inaccessible"))]));
 }
 
 #[test]
@@ -578,10 +578,10 @@ fn missing_sensor_evaluates_no_condition_nor_fires() {
         b.engine.form("Fantasma").unwrap().conjugation,
         vbl_lang::Conjugation::Nonequilibrium
     );
-    assert!(!b.has(kinds::TRANSICAO));
+    assert!(!b.has(kinds::TRANSITION));
     assert!(b.count_with(
-        "ALERTA",
-        &[("motivo", Json::str("sensor_nao_registrado")), ("sensor", Json::str("sensor_inexistente"))]
+        "ALERT",
+        &[("motivo", Json::str("sensor_not_registered")), ("sensor", Json::str("sensor_inexistente"))]
     ));
 }
 
@@ -590,7 +590,7 @@ fn missing_sensor_is_not_treated_as_zero() {
     let mut b = assemble(default_sim(), SENTINEL);
     b.engine.fxp.unregister_sensor("attention");
     b.ticks(3);
-    assert!(!b.has(kinds::TRANSICAO)); // nenhum disparo falso
+    assert!(!b.has(kinds::TRANSITION)); // nenhum disparo falso
     assert_eq!(
         b.engine.form("Sentinela").unwrap().conjugation,
         vbl_lang::Conjugation::Nonequilibrium
@@ -602,17 +602,17 @@ fn registered_inaccessible_sensor_follows_same_rule() {
     let mut b = assemble(default_sim(), SENTINEL);
     b.engine.fxp.fail_sensor("attention");
     b.tick();
-    assert!(!b.has(kinds::TRANSICAO));
+    assert!(!b.has(kinds::TRANSITION));
     assert!(b.count_with(
-        "ALERTA",
-        &[("motivo", Json::str("sensor_inacessivel")), ("sensor", Json::str("attention"))]
+        "ALERT",
+        &[("motivo", Json::str("sensor_inaccessible")), ("sensor", Json::str("attention"))]
     ));
     // recupera a acessibilidade e a regra volta a avaliar
     b.engine.fxp.recover_sensor("attention");
     b.set_sensor("attention", 15.0);
     b.tick();
     assert!(b.count_with(
-        kinds::TRANSICAO,
+        kinds::TRANSITION,
         &[("forma", Json::str("Sentinela")), ("para", Json::str("equilibrium"))]
     ));
 }
@@ -622,7 +622,7 @@ fn form_without_source_path_generates_no_read_nor_failure() {
     let mut b = assemble(default_sim(), "event Piscada { value: \"impulso_curto\", horizon: 2s }");
     b.tick();
     assert!(b.living_form("Piscada")); // sem crash, sem leitura
-    assert!(!b.count_with("ALERTA", &[("motivo", Json::str("sensor_nao_registrado"))]));
+    assert!(!b.count_with("ALERT", &[("motivo", Json::str("sensor_not_registered"))]));
 }
 
 // ======================================================================
@@ -637,7 +637,7 @@ fn reclassify_to_nonequilibrium_without_deadline_is_recorded_error() {
     );
     b.set_sensor("cpu_temp", 95.0);
     b.tick();
-    assert!(b.has(kinds::RECLASSIFY_SEM_DEADLINE));
+    assert!(b.has(kinds::RECLASSIFY_NO_DEADLINE));
     assert_eq!(
         b.engine.form("Ev").unwrap().conjugation,
         vbl_lang::Conjugation::Event
@@ -658,7 +658,7 @@ fn reclassify_nonequilibrium_preserves_declared_deadline() {
     b.set_sensor("attention", 90.0);
     b.tick(); // EQ -> NEQ (deadline 3s declarado preservado)
     assert!(b.count_with(
-        kinds::TRANSICAO,
+        kinds::TRANSITION,
         &[("forma", Json::str("P")), ("para", Json::str("nonequilibrium"))]
     ));
     let form = b.engine.form("P").unwrap();
@@ -690,7 +690,7 @@ fn reclassify_persists_reparseable_canonical_vl_with_sha256() {
         sha = b
             .engine
             .ledger
-            .search(kinds::PERSISTENCIA, &[("forma", Json::str("Pensar"))])
+            .search(kinds::PERSISTENCE, &[("forma", Json::str("Pensar"))])
             .iter()
             .map(|e| match &e.extra {
                 Json::Obj(c) => match c.get("sha256") {
@@ -806,10 +806,10 @@ fn case1_attention_fatigue_end_to_end() {
         b.tick();
         // transição gravada + persistência com SHA-256 + manutenção cessada
         assert!(b.count_with(
-            kinds::TRANSICAO,
+            kinds::TRANSITION,
             &[("forma", Json::str("PensarLivre")), ("para", Json::str("equilibrium"))]
         ));
-        assert!(b.has(kinds::PERSISTENCIA));
+        assert!(b.has(kinds::PERSISTENCE));
         assert_eq!(b.engine.form("PensarLivre").unwrap().maintenance, None);
         assert!(!b.engine.retention.labor.contains_key("PensarLivre")); // 0 bytes de trabalho
         assert!(b.engine.ledger.verify_chain());
@@ -833,7 +833,7 @@ fn rules_stay_active_in_equilibrium_ad_decision() {
     b.set_sensor("attention", 15.0);
     b.tick(); // regra dispara: NEQ → EQ (persistida)
     assert!(b.count_with(
-        kinds::TRANSICAO,
+        kinds::TRANSITION,
         &[("forma", Json::str("Sentinela")), ("para", Json::str("equilibrium"))]
     ));
     assert_eq!(
@@ -850,7 +850,7 @@ fn rules_stay_active_in_equilibrium_ad_decision() {
         "a forma permanece equilibrium — no-op não reclassifica nem dissolve"
     );
     assert!(b.count_with(
-        "AVALIACAO",
+        "ASSESSMENT",
         &[("forma", Json::str("Sentinela")), ("de", Json::str("equilibrium"))]
     ));
 

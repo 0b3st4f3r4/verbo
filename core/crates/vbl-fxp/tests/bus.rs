@@ -142,7 +142,7 @@ fn real_mode_without_route_inaccessible_never_fabricated() {
         bus.read_sensor("attention", &mut ledger),
         Err(SensorFailure::Inaccessible)
     );
-    assert!(ledger.search("ALERTA", &[]).iter().any(|e| e.msg.contains("attention")));
+    assert!(ledger.search("ALERT", &[]).iter().any(|e| e.msg.contains("attention")));
     // A rota documenta o motivo (honestidade observável).
     assert!(bus.route_of("attention").unwrap().description().contains("inacessível"));
 }
@@ -217,10 +217,10 @@ review TradingEspeculativo {
     // 3) trilha no Caderno: ATUACAO sucesso + SUBVERSAO.
     assert!(engine
         .ledger
-        .search("ATUACAO", &[])
+        .search("ACTUATION", &[])
         .iter()
         .any(|e| e.msg.contains("CpuPowerCap") && e.msg.contains("sucesso")));
-    assert!(!engine.ledger.search("SUBVERSAO", &[]).is_empty());
+    assert!(!engine.ledger.search("SUBVERSION", &[]).is_empty());
     // 4) valor poético canônico aplicado (§4.5).
     assert!(!engine.ledger.search("dissolve_subvert", &[]).is_empty());
 }
@@ -268,8 +268,8 @@ fn real_fallback_alternate_actor_full_trail() {
     assert_eq!(fs::read_to_string(&alt).unwrap(), "180");
 
     // Trilha completa: indisponível + fallback executado.
-    assert!(!ledger.search("ator_indisponivel", &[]).is_empty());
-    assert!(!ledger.search("fallback_executado", &[]).is_empty());
+    assert!(!ledger.search("actor_unavailable", &[]).is_empty());
+    assert!(!ledger.search("fallback_executed", &[]).is_empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -330,7 +330,7 @@ fn queue_redelivers_and_expires_with_audit() {
     assert_eq!(bus.pending_queue(), 0);
     assert!(!ledger.search("comando_expirado", &[]).is_empty());
     assert!(ledger
-        .search("ALERTA", &[])
+        .search("ALERT", &[])
         .iter()
         .any(|e| e.msg.contains("expirou")));
 }
@@ -443,7 +443,7 @@ fn mute_remote_actor_becomes_unavailable_and_queued() {
 
     let outcome = bus.act("Bomba", Value::Num(10.0), &mut ledger);
     assert_eq!(outcome, ActOutcome::FallbackExhausted);
-    assert!(!ledger.search("ator_indisponivel", &[]).is_empty());
+    assert!(!ledger.search("actor_unavailable", &[]).is_empty());
     assert_eq!(bus.pending_queue(), 1);
 
     // tick 1: mudo de novo → re-enfileirado com 1 tick de espera…

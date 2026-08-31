@@ -164,7 +164,7 @@ class FXP:
         """
         if actor_name not in self.actors:
             Caderno.event(
-                "ator_inexistente",
+                "actor_unknown",
                 f"Ator '{actor_name}' não registrado no FXP.",
                 ator=actor_name,
             )
@@ -323,29 +323,29 @@ class Caderno:
 
     @staticmethod
     def warn(msg: str, **extra):
-        Caderno._record("AVALIACAO", msg, **extra)
+        Caderno._record("ASSESSMENT", msg, **extra)
         print(f"{YELLOW}[CADERNO - AVALIAÇÃO]{RESET} {msg}")
 
     @staticmethod
     def alert(msg: str, **extra):
-        Caderno._record("ALERTA", msg, **extra)
-        print(f"{RED}[CADERNO - REVISÃO COGNITIVA/ALERTA]{RESET} {msg}")
+        Caderno._record("ALERT", msg, **extra)
+        print(f"{RED}[CADERNO - REVISÃO COGNITIVA/ALERT]{RESET} {msg}")
 
     @staticmethod
     def colapso(msg: str, **extra):
-        Caderno._record("COLAPSO", msg, **extra)
+        Caderno._record("COLLAPSE", msg, **extra)
         print(f"{RED}{BOLD}[CADERNO - COLAPSO TERMODINÂMICO]{RESET} {msg}")
 
     @staticmethod
     def art(msg: str, **extra):
-        Caderno._record("SUBVERSAO", msg, **extra)
+        Caderno._record("SUBVERSION", msg, **extra)
         print(f"{MAGENTA}{BOLD}[CADERNO - SUBVERSÃO POÉTICA]{RESET} {msg}")
 
     @staticmethod
     def leak(form_name: str, power_watts: float, duration_seconds: float):
         joules = power_watts * duration_seconds
         Caderno._record(
-            "VAZAMENTO",
+            "LEAK",
             f"Forma '{form_name}' dissipou {joules:.2f} Joules "
             f"({power_watts:.2f} W por {duration_seconds:.2f}s)",
             forma=form_name,
@@ -354,24 +354,24 @@ class Caderno:
             joules=round(joules, 2),
         )
         print(
-            f"{CYAN}[CADERNO - VAZAMENTO]{RESET} Forma '{form_name}' dissipou {joules:.2f} Joules ({power_watts:.2f} W por {duration_seconds:.2f}s)"
+            f"{CYAN}[CADERNO - LEAK]{RESET} Forma '{form_name}' dissipou {joules:.2f} Joules ({power_watts:.2f} W por {duration_seconds:.2f}s)"
         )
 
     @staticmethod
     def sensor_read(sensor_name: str, value: float):
         Caderno._record(
-            "LEITURA",
+            "SENSOR_READ",
             f"Sensor '{sensor_name}' = {value}",
             sensor=sensor_name,
             valor=value,
         )
-        print(f"{WHITE}[CADERNO - LEITURA]{RESET} Sensor '{sensor_name}' = {value}")
+        print(f"{WHITE}[CADERNO - SENSOR_READ]{RESET} Sensor '{sensor_name}' = {value}")
 
     @staticmethod
     def actuator_action(actor_name: str, value, success: bool):
         status = "sucesso" if success else "falha"
         Caderno._record(
-            "ATUACAO",
+            "ACTUATION",
             f"Ator '{actor_name}' <- {value} ({status})",
             ator=actor_name,
             valor=value,
@@ -606,7 +606,7 @@ class VerboLangEngine:
         self,
         fxp: "FXP | None" = None,
         tick_seconds: float = 1.0,
-        persistence_dir: str = "persistencia",
+        persistence_dir: str = "persistence",
     ):
         self.fxp = fxp if fxp is not None else FXP()
         self.forms: dict[str, Form] = {}
@@ -674,7 +674,7 @@ class VerboLangEngine:
                 forma=name,
             )
             Caderno.event(
-                "subvert_aplicado",
+                "subvert_applied",
                 f"Novo valor de '{name}': '{form.value}'",
                 forma=name, novo_valor=form.value,
             )
@@ -705,7 +705,7 @@ class VerboLangEngine:
             f.write(conteudo)
         sha256 = hashlib.sha256(dados).hexdigest()
         Caderno.event(
-            "persistencia",
+            "persistence",
             f"Forma '{form.name}' persistida como `.vl` canônico.",
             forma=form.name, caminho=caminho, sha256=sha256, bytes=len(dados),
         )
@@ -764,7 +764,7 @@ class VerboLangEngine:
                 )
                 new_form.review_conditions = form.review_conditions.copy()
                 Caderno.event(
-                    "transicao",
+                    "transition",
                     f"Forma '{form.name}' reclassificada para 'equilibrium' "
                     f"(persistida).",
                     forma=form.name, de=form.conjugation, para="equilibrium",
@@ -779,7 +779,7 @@ class VerboLangEngine:
                 deadline = form.declared_maintenance_deadline
                 if deadline is None:
                     Caderno.event(
-                        "reclassify_sem_deadline",
+                        "reclassify_no_deadline",
                         f"reclassify_as_nonequilibrium recusado para "
                         f"'{form.name}': sem maintenance_deadline declarado "
                         f"(FORMAL §3). A forma permanece como estava.",
@@ -798,7 +798,7 @@ class VerboLangEngine:
                 )
                 new_form.review_conditions = form.review_conditions.copy()
                 Caderno.event(
-                    "transicao",
+                    "transition",
                     f"Forma '{form.name}' reclassificada para "
                     f"'nonequilibrium' (trabalho ativo).",
                     forma=form.name, de=form.conjugation,
@@ -964,7 +964,7 @@ class MainInterpreter:
                 # Cláusula de erro: keep de forma inexistente/dissolvida —
                 # registrado no Caderno, sem interromper o runtime.
                 Caderno.event(
-                    "keep_forma_inexistente",
+                    "keep_unknown_form",
                     f"keep('{st['form']}'): forma inexistente ou já dissolvida.",
                     forma=st["form"],
                 )
@@ -972,7 +972,7 @@ class MainInterpreter:
                 form.keep(self.engine.sim_time)
             else:
                 Caderno.event(
-                    "keep_ignorado",
+                    "keep_ignored",
                     f"keep('{st['form']}'): conjugação {form.conjugation} não "
                     f"exige manutenção.",
                     forma=st["form"],

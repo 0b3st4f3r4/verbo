@@ -39,7 +39,7 @@ def test_act_is_serialized_and_delivered_to_correct_actor(engine, ledger, sim):
     assert any(e["actor"] == "Ventoinha" and e["value"] == 200
                for e in sim.delivered)
     assert sim.actors["Ventoinha"].current == 200
-    assert ledger.has("ATUACAO", ator="Ventoinha", valor=200, sucesso=True)
+    assert ledger.has("ACTUATION", ator="Ventoinha", valor=200, sucesso=True)
 
 
 def test_unregistered_actor_rejected_and_recorded(engine, ledger, sim):
@@ -52,8 +52,8 @@ def test_unregistered_actor_rejected_and_recorded(engine, ledger, sim):
     )
     sim.set_sensor("cpu_temp", 30.0)
     engine.tick()
-    assert ledger.has("ator_inexistente", ator="AtorFantasma")
-    assert ledger.has("ATUACAO", ator="AtorFantasma", sucesso=False)
+    assert ledger.has("actor_unknown", ator="AtorFantasma")
+    assert ledger.has("ACTUATION", ator="AtorFantasma", sucesso=False)
     assert not any(e["actor"] == "AtorFantasma" for e in sim.delivered)
 
 
@@ -143,10 +143,10 @@ def test_fallback_executed_when_primary_does_not_respond(engine, ledger, sim):
     sim.set_sensor("cpu_temp", 75.0)
     engine.tick()
     # tentativa primária registrada como falha + heartbeat indisponível
-    assert ledger.has("ATUACAO", ator="Ventoinha", sucesso=False)
-    assert ledger.has("ator_indisponivel", ator="Ventoinha")
+    assert ledger.has("ACTUATION", ator="Ventoinha", sucesso=False)
+    assert ledger.has("actor_unavailable", ator="Ventoinha")
     # fallback executado e entregue
-    assert ledger.has("fallback_executado", primario="Ventoinha",
+    assert ledger.has("fallback_executed", primario="Ventoinha",
                       alternativo="VentoinhaReserva")
     assert sim.actors["VentoinhaReserva"].current == 200
     assert sim.actors["Ventoinha"].current != 200
@@ -158,7 +158,7 @@ def test_exhausted_fallback_records_alert(engine, ledger, sim):
     sim.fail_actor("VentoinhaReserva")
     ok = sim.act("Ventoinha", 200)
     assert ok is False
-    assert ledger.has("ALERTA", motivo="fallback_esgotado", ator="Ventoinha")
+    assert ledger.has("ALERT", motivo="fallback_esgotado", ator="Ventoinha")
     assert not sim.delivered
 
 

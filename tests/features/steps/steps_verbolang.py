@@ -44,7 +44,7 @@ def step_attention_drop(context, sensor, threshold, value):
 
 @then('the runtime must fire a "reclassify_as_equilibrium" transition')
 def step_transition(context):
-    assert context.ledger.has("transicao", forma=context.form_name, para="equilibrium")
+    assert context.ledger.has("transition", forma=context.form_name, para="equilibrium")
     assert context.engine.forms[context.form_name].conjugation == "equilibrium"
 
 
@@ -63,7 +63,7 @@ def step_persisted_canonical(context):
 
 @then('the Ledger records the persistence event with the SHA-256 of the written file')
 def step_persistence_event(context):
-    events = context.ledger.find("persistencia", forma=context.form_name)
+    events = context.ledger.find("persistence", forma=context.form_name)
     assert events, "evento de persistência ausente no Caderno"
     with open(context.persisted_path, "rb") as f:
         real_sha = hashlib.sha256(f.read()).hexdigest()
@@ -123,7 +123,7 @@ def step_thermal_peak(context, sensor, value, limit):
 @then('the runtime must invoke the "subvert()" operator')
 def step_subvert_invoked(context):
     assert context.ledger.has("dissolve_subvert", forma=context.form_name)
-    assert context.ledger.has("subvert_aplicado", forma=context.form_name)
+    assert context.ledger.has("subvert_applied", forma=context.form_name)
 
 
 @then('the action "act({actor}, {value:d})" must be sent to the corresponding actor via FXP')
@@ -138,7 +138,7 @@ def step_act_sent(context, actor, value):
 
 @then('the trading logical value must be replaced by the canonical poetic value "{poetry}"')
 def step_poetic_value(context, poetry):
-    event = context.ledger.find("subvert_aplicado", forma=context.form_name)
+    event = context.ledger.find("subvert_applied", forma=context.form_name)
     assert event and event[0]["novo_valor"] == poetry == POETRY
 
 
@@ -184,8 +184,8 @@ def step_temperature_exceeds(context, limit, actor, value):
 @then('the FXP detects the failure (heartbeat) and applies the registry fallback policy, trying the alternative actor "VentoinhaReserva" (optional extension)')
 def step_fallback_applied(context):
     primary = context.primary_actor
-    assert context.ledger.has("ator_indisponivel", ator=primary)
-    assert context.ledger.has("fallback_executado", primario=primary,
+    assert context.ledger.has("actor_unavailable", ator=primary)
+    assert context.ledger.has("fallback_executed", primario=primary,
                               alternativo="VentoinhaReserva", valor=200)
     assert context.sim.actors["VentoinhaReserva"].current == 200
     assert context.sim.actors[primary].current != 200
@@ -194,6 +194,6 @@ def step_fallback_applied(context):
 @then('the Ledger records the primary attempt, the failure and the executed fallback')
 def step_ledger_trails_fallback(context):
     primary = context.primary_actor
-    assert context.ledger.has("ATUACAO", ator=primary, sucesso=False)
-    assert context.ledger.has("ATUACAO", ator="VentoinhaReserva", sucesso=True)
-    assert context.ledger.has("fallback_executado")
+    assert context.ledger.has("ACTUATION", ator=primary, sucesso=False)
+    assert context.ledger.has("ACTUATION", ator="VentoinhaReserva", sucesso=True)
+    assert context.ledger.has("fallback_executed")

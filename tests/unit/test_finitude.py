@@ -40,7 +40,7 @@ def test_horizon_is_absolute_reclassification_does_not_renew(engine, ledger, sim
     )
     sim.set_sensor("attention", 15.0)
     engine.tick()  # t=1: reclassifica para equilibrium (persistida)
-    assert ledger.has("transicao", forma="Pensar", para="equilibrium")
+    assert ledger.has("transition", forma="Pensar", para="equilibrium")
     assert engine.forms["Pensar"].creation_time == 0.0  # não renovado
     sim.set_sensor("attention", 90.0)  # regra para de disparar
     for _ in range(3):  # t=2,3,4

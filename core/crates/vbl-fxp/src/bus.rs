@@ -324,7 +324,7 @@ impl FxpBus {
             return Ok(v);
         }
         let Some(dr) = self.real_sensors.get_mut(canonical) else {
-            self.sensor_alert(ledger, "sensor_inacessivel", canonical, "sem driver real.");
+            self.sensor_alert(ledger, "sensor_inaccessible", canonical, "sem driver real.");
             return Err(SensorFailure::Inaccessible);
         };
         match dr.read() {
@@ -339,7 +339,7 @@ impl FxpBus {
                 }
                 let detail =
                     format!("driver real ({}) falhou.", self.route_description(canonical));
-                self.sensor_alert(ledger, "sensor_inacessivel", canonical, &detail);
+                self.sensor_alert(ledger, "sensor_inaccessible", canonical, &detail);
                 Err(SensorFailure::Inaccessible)
             }
         }
@@ -383,9 +383,9 @@ impl FxpBus {
                     Body::ReadErr { reason } => {
                         let (failure, reason) = match reason {
                             reason::NOT_REGISTERED => {
-                                (SensorFailure::NotRegistered, "sensor_nao_registrado")
+                                (SensorFailure::NotRegistered, "sensor_not_registered")
                             }
-                            _ => (SensorFailure::Inaccessible, "sensor_inacessivel"),
+                            _ => (SensorFailure::Inaccessible, "sensor_inaccessible"),
                         };
                         self.sensor_alert(ledger, reason, canonical, "peer respondeu erro.");
                         Err(failure)
@@ -393,7 +393,7 @@ impl FxpBus {
                     _ => {
                         self.sensor_alert(
                             ledger,
-                            "sensor_inacessivel",
+                            "sensor_inaccessible",
                             canonical,
                             "resposta inesperada do peer.",
                         );
@@ -405,7 +405,7 @@ impl FxpBus {
                 self.connections.remove(canonical); // conexão suspeita: reconectar
                 self.sensor_alert(
                     ledger,
-                    "sensor_inacessivel",
+                    "sensor_inaccessible",
                     canonical,
                     &format!("transporte: {e}."),
                 );
@@ -551,7 +551,7 @@ impl FxpBus {
         }
         actuation_with_latency(ledger, canonical, value, last_latency_us, false);
         ledger.record(
-            rt_kinds::ATOR_INDISPONIVEL,
+            rt_kinds::ACTOR_UNAVAILABLE,
             &format!(
                 "Heartbeat do ator '{canonical}' não respondeu (rota {}).",
                 self.route_description(canonical)
@@ -599,7 +599,7 @@ impl FxpBus {
                         }
                         AckAct::MissingActor => {
                             ledger.record(
-                                rt_kinds::ATOR_INEXISTENTE,
+                                rt_kinds::ACTOR_UNKNOWN,
                                 &format!("Ator '{canonical}' não registrado no peer remoto."),
                                 Json::obj([("ator", Json::str(canonical))]),
                             );
@@ -613,7 +613,7 @@ impl FxpBus {
                         AckAct::Unavailable | AckAct::FallbackExhausted => {
                             actuation_with_latency(ledger, canonical, value, latency_us, false);
                             ledger.record(
-                                rt_kinds::ATOR_INDISPONIVEL,
+                                rt_kinds::ACTOR_UNAVAILABLE,
                                 &format!("Heartbeat do ator '{canonical}' não respondeu (peer)."),
                                 Json::obj([("ator", Json::str(canonical))]),
                             );
@@ -623,7 +623,7 @@ impl FxpBus {
                             // O peer executou o fallback do registro DELE (§4.3).
                             actuation_with_latency(ledger, &alternativo, value, latency_us, true);
                             ledger.record(
-                                rt_kinds::FALLBACK_EXECUTADO,
+                                rt_kinds::FALLBACK_EXECUTED,
                                 &format!(
                                     "Fallback '{alternativo}' acionado após falha de '{canonical}'."
                                 ),
@@ -646,7 +646,7 @@ impl FxpBus {
                 self.connections.remove(canonical);
                 actuation_with_latency(ledger, canonical, value, t0.elapsed().as_micros() as u64, false);
                 ledger.record(
-                    rt_kinds::ATOR_INDISPONIVEL,
+                    rt_kinds::ACTOR_UNAVAILABLE,
                     &format!("Heartbeat do ator '{canonical}' não respondeu (transporte: {e})."),
                     Json::obj([("ator", Json::str(canonical))]),
                 );
@@ -684,7 +684,7 @@ impl FxpBus {
             Route::Inaccessible { reason } => {
                 ledger.actuator_action(canonical, value, false);
                 ledger.record(
-                    rt_kinds::ATOR_INDISPONIVEL,
+                    rt_kinds::ACTOR_UNAVAILABLE,
                     &format!("Ator '{canonical}' indisponível ({reason})."),
                     Json::obj([("ator", Json::str(canonical))]),
                 );
@@ -713,7 +713,7 @@ impl FxpBus {
             if let Some(outcome) = self.deliver_route(&alt, value, ledger) {
                 if outcome.ok() {
                     ledger.record(
-                        rt_kinds::FALLBACK_EXECUTADO,
+                        rt_kinds::FALLBACK_EXECUTED,
                         &format!("Fallback '{alt}' acionado após falha de '{primary}'."),
                         Json::obj([
                             ("primario", Json::str(primary)),
@@ -876,7 +876,7 @@ impl Fxp for FxpBus {
         if !self.registry.contains(&canonical) {
             self.sensor_alert(
                 ledger,
-                "sensor_nao_registrado",
+                "sensor_not_registered",
                 name,
                 "fora do registro do FXP.",
             );
@@ -903,14 +903,14 @@ impl Fxp for FxpBus {
             Some(Route::Inaccessible { reason }) => {
                 self.sensor_alert(
                     ledger,
-                    "sensor_inacessivel",
+                    "sensor_inaccessible",
                     &canonical,
                     &format!("{reason}."),
                 );
                 Err(SensorFailure::Inaccessible)
             }
             None => {
-                self.sensor_alert(ledger, "sensor_nao_registrado", &canonical, "sem rota.");
+                self.sensor_alert(ledger, "sensor_not_registered", &canonical, "sem rota.");
                 Err(SensorFailure::NotRegistered)
             }
         }
@@ -930,7 +930,7 @@ impl Fxp for FxpBus {
         let canonical = self.registry.canonical_of(actor).to_string();
         if !self.registry.contains(&canonical) {
             ledger.record(
-                rt_kinds::ATOR_INEXISTENTE,
+                rt_kinds::ACTOR_UNKNOWN,
                 &format!("Ator '{actor}' não registrado no FXP."),
                 Json::obj([("ator", Json::str(actor))]),
             );
@@ -970,7 +970,7 @@ impl Fxp for FxpBus {
             }
             None => {
                 ledger.record(
-                    rt_kinds::ATOR_INEXISTENTE,
+                    rt_kinds::ACTOR_UNKNOWN,
                     &format!("Ator '{actor}' não registrado no FXP."),
                     Json::obj([("ator", Json::str(actor))]),
                 );

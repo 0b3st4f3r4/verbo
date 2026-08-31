@@ -209,7 +209,7 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
                 Json::obj([("forma", Json::str(name))]),
             );
             self.ledger.record(
-                kinds::SUBVERT_APLICADO,
+                kinds::SUBVERT_APPLIED,
                 &format!("Novo valor de '{name}': '{CANONICAL_POETIC_VALUE}'"),
                 Json::obj([
                     ("forma", Json::str(name)),
@@ -565,7 +565,7 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
         new.horizon_version += 1;
 
         self.ledger.record(
-            kinds::TRANSICAO,
+            kinds::TRANSITION,
             &format!("Forma '{name}' reclassificada para 'equilibrium' (persistida)."),
             Json::obj([
                 ("forma", Json::str(name)),
@@ -595,7 +595,7 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
         };
         let Some(deadline) = form.declared_maintenance_deadline else {
             self.ledger.record(
-                kinds::RECLASSIFY_SEM_DEADLINE,
+                kinds::RECLASSIFY_NO_DEADLINE,
                 &format!(
                     "reclassify_as_nonequilibrium recusado para '{name}': sem maintenance_deadline declarado (FORMAL §3). A forma permanece como estava."
                 ),
@@ -617,7 +617,7 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
         new.horizon_version += 1;
         new.exchange_mode = Some(mode);
         self.ledger.record(
-            kinds::TRANSICAO,
+            kinds::TRANSITION,
             &format!("Forma '{name}' reclassificada para 'nonequilibrium' (trabalho ativo)."),
             Json::obj([
                 ("forma", Json::str(name)),
@@ -643,7 +643,7 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
         let sha256 = crate::ledger::sha256_hex(data);
         let bytes = data.len() as u64;
         self.ledger.record(
-            kinds::PERSISTENCIA,
+            kinds::PERSISTENCE,
             &format!("Forma '{}' persistida como `.vl` canônico.", form.name),
             Json::obj([
                 ("forma", Json::str(&form.name)),

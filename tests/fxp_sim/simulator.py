@@ -202,14 +202,14 @@ class FXPSimulator:
             self.ledger.alert(
                 f"Sensor '{name}' não registrado no FXP (falha de I/O). "
                 f"Condição não avaliada neste tick.",
-                motivo="sensor_nao_registrado", sensor=name,
+                motivo="sensor_not_registered", sensor=name,
             )
             return None
         if not sensor.accessible:
             self.ledger.alert(
                 f"Sensor '{name}' registrado porém inacessível (falha de leitura). "
                 f"Condição não avaliada neste tick.",
-                motivo="sensor_inacessivel", sensor=name,
+                motivo="sensor_inaccessible", sensor=name,
             )
             return None
         return round(float(sensor.value), 2)
@@ -234,7 +234,7 @@ class FXPSimulator:
         actor = self.actors.get(actor_name)
         if actor is None:
             self.ledger.event(
-                "ator_inexistente",
+                "actor_unknown",
                 f"Ator '{actor_name}' não registrado no FXP.",
                 ator=actor_name,
             )
@@ -244,7 +244,7 @@ class FXPSimulator:
         if not actor.available:
             self.ledger.actuator_action(actor_name, value, False)
             self.ledger.event(
-                "ator_indisponivel",
+                "actor_unavailable",
                 f"Heartbeat do ator '{actor_name}' não respondeu.",
                 ator=actor_name,
             )
@@ -302,7 +302,7 @@ class FXPSimulator:
                 "value": value, "tick": self.ticks, "fallback_of": primary.name,
             })
             self.ledger.event(
-                "fallback_executado",
+                "fallback_executed",
                 f"Fallback '{alt_name}' acionado após falha de '{primary.name}'.",
                 primario=primary.name, alternativo=alt_name, valor=value,
             )

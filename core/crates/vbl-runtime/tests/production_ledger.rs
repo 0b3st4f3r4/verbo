@@ -160,7 +160,7 @@ fn joules_per_form_aggregates() {
     // os eventos VAZAMENTO também estão no arquivo, com os mesmos Joules
     let rel = verify_binary(&path).unwrap();
     assert!((rel.total_joules - 160.0).abs() < 1e-9);
-    assert_eq!(rel.counts.get("VAZAMENTO"), Some(&3));
+    assert_eq!(rel.counts.get("LEAK"), Some(&3));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -225,7 +225,7 @@ fn engine_with_production_ledger_stamps_virtual_clock() {
     let mut engine = Engine::with_ledger(
         sim,
         1.0,
-        dir.join("persistencia"),
+        dir.join("persistence"),
         ProductionLedger::open(&path).unwrap(),
     );
     let (program, diags) = vbl_lang::parse("event X { value: \"v\", horizon: 3s }");
@@ -260,7 +260,7 @@ fn stress_10k_forms_all_events_recorded() {
     let mut engine = Engine::with_ledger(
         sim,
         1.0,
-        dir.join("persistencia"),
+        dir.join("persistence"),
         ProductionLedger::open(&path).unwrap(),
     );
     let mut source = String::new();
@@ -284,7 +284,7 @@ fn stress_10k_forms_all_events_recorded() {
     assert!(rel.total_joules > 0.0);
     // robustez: nenhum evento perdido na fila (AGENTS §1.4 — 99,99%+)
     assert_eq!(
-        rel.counts.get("VAZAMENTO"),
+        rel.counts.get("LEAK"),
         Some(&((FORMS * TICKS) as u64))
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -298,7 +298,7 @@ fn stress_10k_forms_all_events_recorded() {
 fn deterministic_json_parser_roundtrip() {
     let original = Json::obj([
         ("seq", Json::num(7.0)),
-        ("kind", Json::str("ATUACAO")),
+        ("kind", Json::str("ACTUATION")),
         ("msg", Json::str("Ator 'Ventoinha' <- 200 (sucesso)")),
         ("valor", Json::num(200.0)),
         ("decimal", Json::num(0.5)),
@@ -392,7 +392,7 @@ fn leak_direct_path_identical_to_general_composition() {
     // cadeia do binário íntegra (o encoder novo fecha o elo cru)
     let rel = verify_binary(&path).unwrap();
     assert!(rel.chain_ok, "cadeia do caminho direto deve verificar");
-    assert_eq!(rel.counts.get("VAZAMENTO"), Some(&(casos.len() as u64)));
+    assert_eq!(rel.counts.get("LEAK"), Some(&(casos.len() as u64)));
 
     // linhas byte a byte idênticas
     let lines = vcad_lines(&path);
