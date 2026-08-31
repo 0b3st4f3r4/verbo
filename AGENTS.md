@@ -211,7 +211,7 @@ Para garantir objetividade, as seguintes ferramentas devem ser integradas ao pip
 - **Cobertura de código**: `cargo-llvm-cov` (Rust), `gcov`/`lcov` (C).
 - **Análise estática**: `clippy` (Rust), `cppcheck` (C).
 - **Detecção de vazamentos**: `valgrind`, `AddressSanitizer`, `LeakSanitizer`.
-- **Medição de latência**: `criterion` (Rust), `perf` (C).
+- **Medição de latência**: `criterion` (Rust), `perf` (C) — máquina de referência declarada no README (§ Máquina de referência dos experimentos).
 - **Medição de potência real**: `powerapi`, `RAPL` (Linux).
 - **Testes BDD**: `cucumber-rs` (Rust) ou `behave` (Python para mocks).
 - **Simulação de sensores/atores**: módulo integrado ao FXP que gera leituras sintéticas e respostas de atores para testes em CI.

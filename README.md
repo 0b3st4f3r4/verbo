@@ -172,6 +172,28 @@ embeddings com o chat desligado ou em outra máquina.
 > [`docs/FORMAL.md`](docs/FORMAL.md) → [`docs/PLAN.md`](docs/PLAN.md) →
 > [`AGENTS.md`](AGENTS.md).
 
+## Máquina de referência dos experimentos
+
+Todo número medido neste repositório — µs de latência, MB de heap, W e J do
+Caderno, tok/s do LLM local, % de overhead — refere-se **a esta máquina**: onde
+os testes são produzidos (arte) e as formas são criadas (razão). Fora dela, os
+números são outros; as *lições* são as que viajam.
+
+| Componente | Especificação (medida em 31/08/2026) |
+|---|---|
+| Host | Acer Nitro V 15 (ANV15-41) |
+| CPU | AMD Ryzen 7 7735HS — Zen 3+, 8 núcleos / 16 threads |
+| RAM | 30 GB DDR5 (+ 23 GB de swap) |
+| GPU | RTX 4050 Mobile **6 GB GDDR6** (dGPU) · Radeon 680M (iGPU) |
+| Armazenamento | NVMe 476 GB |
+| SO | Ubuntu 26.04 — kernel `7.0.0-29-generic` |
+| Toolchain | rustc 1.97.1 · Python 3.13.7 · criterion 0.5 |
+| Sensores de energia | RAPL `intel-rapl:0` (package) · k10temp (`hwmon4`) |
+
+Detalhes do pipeline de LLM local e as lições de VRAM em 6 GB:
+[`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md). Metodologia dos benches
+e reancoragem de metas: [`docs/STAGE-5-GOALS-REVIEW.md`](docs/STAGE-5-GOALS-REVIEW.md).
+
 ## Roadmap
 
 Estado atual: **Etapas 1–5 concluídas** — suíte BDD/TDD, núcleo Rust (parser +
