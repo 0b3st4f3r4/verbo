@@ -6,8 +6,9 @@
 SHELL := /bin/bash
 
 SCRIPT  := scripts/serve-local-llm.sh
+WEBUI   := scripts/webui.py
 UI_PORT ?= 8188
-UI_BASE := http://127.0.0.1:$(UI_PORT)/scripts/verbo-chat/chat.html
+UI_BASE := http://127.0.0.1:$(UI_PORT)/web/chat.html
 # chave na mesma ordem do script: env → credenciais do DSH
 KEY := $(shell awk '/^LOCAL_VLLM_KEY:/{print $$2}' $${LOCAL_VLLM_KEY_FILE:-$(HOME)/.dsh}/.credentials.yaml 2>/dev/null)
 LOG := .serve.log
@@ -22,7 +23,7 @@ CARGO_HOME := $(abspath core/.cargo-home)
 export CARGO_HOME
 NIGHTLY ?= nightly
 
-.PHONY: help check smoke serve up stop ui setup test test-unit test-bdd validate-cheatsheet
+.PHONY: help check smoke serve up stop ui web setup test test-unit test-bdd validate-cheatsheet
 .PHONY: rust-build rust-test rust-e2e rust-lint rust-asan rust-bench rust-check rust-coverage rust-clean
 .PHONY: rust-memoria rust-soak
 
@@ -47,25 +48,37 @@ help:
 > @echo "  make rust-soak     execução longa com churn (Etapa 5; VIVAS/TICKS/SEGUNDOS)"
 > @echo "  make rust-clean    limpa core/target"
 > @echo "  make validate-cheatsheet  banco de 20 prompts contra o LLM local (PLAN §7)"
-> @echo "  make serve   sobe o modelo + UI em primeiro plano (Ctrl+C para)"
+> @echo "  make serve   sobe a UI/dashboard (na hora, sem depender do modelo) e o modelo em primeiro plano"
 > @echo "  make up      sobe em segundo plano (log em $(LOG))"
-> @echo "  make stop    encerra vLLM e o servidor estático da UI"
+> @echo "  make web     só a UI/dashboard + métricas do Caderno (sem GPU; porta $(UI_PORT))"
+> @echo "  make stop    encerra vLLM e o servidor da UI"
 > @echo "  make ui      imprime a URL da UI (com a chave, se encontrada)"
 
 check:
 > @set -e; \
   bash -n $(SCRIPT) && echo "✓ shell"; \
-  sed -n '/^<script>$$/,/^<\/script>$$/p' scripts/verbo-chat/chat.html | sed '1d;$$d' > .ui-check.js; \
-  node --check .ui-check.js && rm -f .ui-check.js && echo "✓ js da UI"
+  python3 -m py_compile $(WEBUI) && echo "✓ ponte de métricas"; \
+  node --check web/badge.js && echo "✓ badge.js"; \
+  sed -n '/^<script>$$/,/^<\/script>$$/p' web/chat.html | sed '1d;$$d' > .ui-check.js; \
+  node --check .ui-check.js && rm -f .ui-check.js && echo "✓ js da UI"; \
+  for f in web/index.html web/metrics.html; do \
+    sed -n '/^<script>$$/,/^<\/script>$$/p' $$f | sed '1d;$$d' > .ui-check.js; \
+    node --check .ui-check.js && echo "✓ js de $$f"; \
+  done; \
+  rm -f .ui-check.js
 
 smoke:
 > @set -e; \
-  for p in scripts/verbo-chat/chat.html docs/VBL-CHEATSHEET.md scripts/verbo-chat/verbolog.svg \
-           scripts/verbo-chat/vendor/mermaid.min.js scripts/verbo-chat/vendor/katex/katex.min.js; do \
+  for p in web/index.html web/chat.html web/metrics.html docs/VBL-CHEATSHEET.md web/verbolog.svg \
+           web/vendor/mermaid.min.js web/vendor/katex/katex.min.js; do \
     code=$$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(UI_PORT)/$$p"); \
     echo "$$code  $$p"; \
     test "$$code" = 200; \
   done; \
+  code=$$(curl -s -o /dev/null -w '%{http_code}' \
+    "http://127.0.0.1:$(UI_PORT)/api/snapshot?src=logs/stage4/thermal-subversion.vcad"); \
+  echo "$$code  /api/snapshot (métricas)"; \
+  test "$$code" = 200; \
   code=$$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(KEY)" \
     http://127.0.0.1:8000/v1/models); \
   echo "$$code  /v1/models"; \
@@ -135,12 +148,17 @@ validate-cheatsheet:
 serve:
 > @bash $(SCRIPT)
 
+# Dashboard sem GPU: UI + métricas do Caderno, sem o modelo local
+web:
+> @python3 $(WEBUI) $(UI_PORT)
+
 up:
 > @nohup bash $(SCRIPT) > $(LOG) 2>&1 & echo "PID $$! — log: $(LOG) (make stop para encerrar)"
 
 stop:
 > @pkill -f '[s]erve-local-llm' 2>/dev/null || true; \
   pkill -f '[v]llm serve' 2>/dev/null || true; \
+  pkill -f '[w]ebui\.py $(UI_PORT)' 2>/dev/null || true; \
   pkill -f '[h]ttp\.server $(UI_PORT)' 2>/dev/null || true; \
   echo "encerrado (se estava no ar)"
 

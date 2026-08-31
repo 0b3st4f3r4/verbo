@@ -1662,12 +1662,12 @@ function updateSheetStatus() {   // sem caixa: o tooltip do modo carrega o estad
   b.setAttribute("aria-label", b.title);
 }
 async function loadSheet() {
-  // a 1ª que responder ok vence — cobre página na raiz, em scripts/ e em
-  // scripts/verbo-chat/ com o servidor estático na raiz do repositório
+  // a 1ª que responder ok vence — cobre página na raiz, em web/ e em
+  // web/ aninhada um nível, com o servidor estático na raiz do repositório
   const candidates = [
     "/docs/VBL-CHEATSHEET.md",        // absoluto: raiz do servidor = raiz do repo
-    "../../docs/VBL-CHEATSHEET.md",   // página em scripts/verbo-chat/
-    "../docs/VBL-CHEATSHEET.md",      // página direto em scripts/
+    "../docs/VBL-CHEATSHEET.md",      // página em web/
+    "../../docs/VBL-CHEATSHEET.md",   // página aninhada um nível abaixo da raiz
     "docs/VBL-CHEATSHEET.md",         // página na raiz do repositório
   ];
   for (const path of candidates) {

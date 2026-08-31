@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VerboLang · métricas do runtime</title>
+<link rel="icon" type="image/svg+xml" href="verbolog.svg">
+<!--
+  metrics.html — métricas em tempo real do runtime VerboLang, lidas do
+  Caderno de produção (.vcad / .jsonl) via SSE (/api/events de webui.py).
+  Zero dependências; tema e fontes compartilhados com o chat.html.
+  Honestidade: esta página LÊ o Caderno — a verificação da cadeia SHA-256
+  é do `vbl ledger-verify` (agente externo, AGENTS §1.4).
+  Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
+-->
+<style>
+  @font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url("fonts/inter-latin-400.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap;
+    src: url("fonts/inter-latin-600.woff2") format("woff2"); }
+  @font-face { font-family: "Iosevka"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url("fonts/iosevka-latin-400.woff2") format("woff2"); }
+
+  :root, html[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e1319; --bg-glow: #16202b; --panel: #171d24; --panel-2: #1b232c;
+    --border: #29323e; --border-soft: #212a34; --text: #dde6f0; --dim: #8fa1b5;
+    --accent: #46aeb7; --ok: #3fb96f; --warn: #e0a83a; --bad: #e05c5c;
+    --code-bg: #0d1116; --code-border: #212a34; --shadow: 0 4px 14px rgba(0,0,0,.35);
+  }
+  html[data-theme="metal"] {
+    color-scheme: dark;
+    --bg: #24292f; --bg-glow: #2e353d; --panel: #333941; --panel-2: #3d4450;
+    --border: #4a525d; --border-soft: #3f4750; --text: #e6eaee; --dim: #9aa6b2;
+    --accent: #52b1bb; --ok: #4cba7f; --warn: #d8a944; --bad: #e06565;
+    --code-bg: #272d34; --code-border: #3f4750; --shadow: 0 4px 14px rgba(0,0,0,.3);
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f2f5f8; --bg-glow: #e7edf4; --panel: #ffffff; --panel-2: #eaeef3;
+    --border: #cfd7e0; --border-soft: #dde3ea; --text: #1b2530; --dim: #5a6a7b;
+    --accent: #106c80; --ok: #23804d; --warn: #a06f12; --bad: #c04343;
+    --code-bg: #eef2f6; --code-border: #dfe5ec; --shadow: 0 4px 12px rgba(27,37,48,.12);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; font: 15px/1.5 "Inter", system-ui, sans-serif;
+    color: var(--text); background: radial-gradient(80rem 40rem at 50% -10%, var(--bg-glow), var(--bg));
+  }
+  .mono { font-family: "Iosevka", ui-monospace, monospace; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .7rem;
+    padding: .9rem 1.2rem; border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header img { width: 30px; height: 30px; }
+  header h1 { font-size: 1rem; font-weight: 600; margin: 0 auto 0 0; }
+  .badge {
+    display: inline-flex; align-items: center; gap: .4rem;
+    font: 400 .74rem/1 "Iosevka", ui-monospace, monospace; color: var(--dim);
+    border: 1px solid var(--border); border-radius: 999px; padding: .38rem .7rem;
+    background: var(--panel); white-space: nowrap;
+  }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
+  .badge.ok .dot { background: var(--ok); }
+  .badge.warn .dot { background: var(--warn); }
+  .badge.err .dot { background: var(--bad); }
+  .badge a { color: inherit; text-decoration: none; }
+  .badge a:hover { color: var(--accent); }
+
+  .barra {
+    display: flex; flex-wrap: wrap; gap: .6rem; align-items: center;
+    padding: .8rem 1.2rem; border-bottom: 1px solid var(--border-soft);
+  }
+  select, button {
+    font: 400 .82rem/1.2 "Iosevka", ui-monospace, monospace; color: var(--text);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: .42rem .6rem; max-width: 100%;
+  }
+  select:focus, button:focus { outline: 1px solid var(--accent); }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  label { color: var(--dim); font-size: .8rem; }
+
+  main { max-width: 72rem; margin: 0 auto; padding: 1rem 1.2rem 2.5rem; }
+
+  .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .8rem; }
+  .cartao {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: .85rem 1rem; box-shadow: var(--shadow);
+  }
+  .cartao .rotulo { color: var(--dim); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+  .cartao .valor { font: 600 1.45rem/1.2 "Iosevka", ui-monospace, monospace; margin-top: .2rem; }
+  .cartao .valor small { font-size: .8rem; color: var(--dim); font-weight: 400; }
+  .cartao.joules .valor { color: var(--warn); }
+  .cartao.atuacoes .valor { color: var(--accent); }
+
+  .secao { margin-top: 1.3rem; }
+  .secao h2 { font-size: .85rem; font-weight: 600; color: var(--dim); margin: 0 0 .5rem;
+    text-transform: uppercase; letter-spacing: .06em; }
+  .grelha { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .6rem; }
+  .item {
+    background: var(--panel); border: 1px solid var(--border-soft); border-radius: 10px;
+    padding: .6rem .75rem;
+  }
+  .item .nome { font: 400 .8rem/1.3 "Iosevka", ui-monospace, monospace; color: var(--dim);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .dado { font: 600 1.05rem/1.3 "Iosevka", ui-monospace, monospace; }
+  .item .dado small { font-size: .72rem; color: var(--dim); font-weight: 400; }
+  .item.falha .dado { color: var(--bad); }
+  .vazio { color: var(--dim); font-size: .85rem; font-style: italic; }
+
+  canvas { width: 100%; height: 140px; display: block;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+
+  .kinds { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .chip {
+    font: 400 .72rem/1 "Iosevka", ui-monospace, monospace; color: var(--dim);
+    border: 1px solid var(--border); border-radius: 999px; padding: .3rem .6rem; background: var(--panel);
+  }
+  .chip b { color: var(--text); font-weight: 600; }
+
+  .feed { display: flex; flex-direction: column; gap: .3rem; max-height: 26rem; overflow-y: auto; }
+  .ev {
+    display: flex; gap: .6rem; align-items: baseline;
+    background: var(--panel); border: 1px solid var(--border-soft); border-radius: 8px;
+    padding: .38rem .6rem; font: 400 .78rem/1.45 "Iosevka", ui-monospace, monospace;
+  }
+  .ev .seq { color: var(--placeholder, var(--dim)); flex: none; min-width: 3.2ch; text-align: right; }
+  .ev .kind { flex: none; border-radius: 5px; padding: .05rem .35rem; font-weight: 600;
+    background: var(--panel-2); border: 1px solid var(--border-soft); }
+  .ev .msg { overflow-wrap: anywhere; }
+  .ev .tick { color: var(--dim); flex: none; }
+  .ev.k-LEAK .kind { color: var(--warn); border-color: var(--warn); }
+  .ev.k-SUBVERSION .kind, .ev.k-COLLAPSE .kind { color: var(--bad); border-color: var(--bad); }
+  .ev.k-ACTUATION .kind { color: var(--accent); border-color: var(--accent); }
+  .ev.k-SENSOR_READ .kind { color: var(--ok); border-color: var(--ok); }
+
+  footer { max-width: 72rem; margin: 0 auto; padding: 0 1.2rem 2rem;
+    color: var(--dim); font-size: .75rem; }
+  footer code { font-family: "Iosevka", ui-monospace, monospace; background: var(--code-bg);
+    border: 1px solid var(--code-border); border-radius: 5px; padding: .05rem .3rem; }
+</style>
+</head>
+<body>
+<header>
+  <img src="verbolog.svg" alt="VerboLang">
+  <h1>Métricas do runtime · Caderno de produção</h1>
+  <span id="b-modelo" class="badge" title="modelo local (LLM)"><span class="dot"></span><span>modelo: …</span></span>
+  <span id="b-sse" class="badge" title="conexão com a ponte (webui.py)"><span class="dot"></span><span>SSE: …</span></span>
+  <span id="b-exec" class="badge" title="estado da execução no ledger"><span class="dot"></span><span>execução: …</span></span>
+  <span class="badge"><a href="index.html">← dashboard</a></span>
+</header>
+
+<div class="barra">
+  <label for="fonte">ledger:</label>
+  <select id="fonte"></select>
+  <button id="reconectar" type="button">reconectar</button>
+</div>
+
+<main>
+  <section class="cartoes">
+    <div class="cartao joules"><div class="rotulo">energia dissipada</div><div class="valor" id="c-joules">—</div></div>
+    <div class="cartao"><div class="rotulo">eventos</div><div class="valor" id="c-eventos">—</div></div>
+    <div class="cartao"><div class="rotulo">tick atual</div><div class="valor" id="c-tick">—</div></div>
+    <div class="cartao atuacoes"><div class="rotulo">atuações</div><div class="valor" id="c-atua">—</div></div>
+  </section>
+
+  <section class="secao">
+    <h2>Energia acumulada (janela recente do feed)</h2>
+    <canvas id="grafico" width="1200" height="280"></canvas>
+  </section>
+
+  <section class="secao">
+    <h2>Eventos por kind</h2>
+    <div class="kinds" id="kinds"><span class="vazio">sem dados ainda</span></div>
+  </section>
+
+  <section class="secao">
+    <h2>Sensores (última leitura)</h2>
+    <div class="grelha" id="sensores"><span class="vazio">sem leituras</span></div>
+  </section>
+
+  <section class="secao">
+    <h2>Atores (última atuação)</h2>
+    <div class="grelha" id="atores"><span class="vazio">sem atuações</span></div>
+  </section>
+
+  <section class="secao">
+    <h2>Feed de eventos
+      <select id="filtro" style="margin-left:.5rem"><option value="">todos os kinds</option></select>
+    </h2>
+    <div class="feed" id="feed"><span class="vazio">aguardando eventos…</span></div>
+  </section>
+</main>
+
+<footer>
+  <p>Fonte: <code id="f-src">—</code> · a ponte lê o Caderno; a verificação da cadeia é externa:
+  <code>vbl ledger-verify ARQUIVO</code>. O Caderno faz flush a cada 256 eventos (PLAN §4.3) —
+  atualizações chegam em lotes; sem rodapé <code>VFIM</code>, a execução está em andamento.</p>
+</footer>
+
+<script src="badge.js"></script>
+<script>
+"use strict";
+// ── tema compartilhado com o chat ─────────────────────────────────────────
+const THEME_ORDER = ["light", "metal", "dark"];
+const tema = localStorage.getItem("vllm.theme");
+document.documentElement.dataset.theme = THEME_ORDER.includes(tema) ? tema : "dark";
+
+// ── fragmento #k/#u/#m (como no chat): persiste no localStorage ───────────
+const hash = new URLSearchParams(location.hash.slice(1));
+const API_KEY = hash.get("k") || localStorage.getItem("vllm.key") || "";
+const API_URL = hash.get("u") || localStorage.getItem("vllm.url") || "http://127.0.0.1:8000/v1";
+const MODEL   = hash.get("m") || localStorage.getItem("vllm.model") || "qwen3-4b";
+if (hash.get("k")) localStorage.setItem("vllm.key", hash.get("k"));
+if (hash.get("u")) localStorage.setItem("vllm.url", hash.get("u"));
+if (hash.get("m")) localStorage.setItem("vllm.model", hash.get("m"));
+
+const $ = (id) => document.getElementById(id);
+const nf = new Intl.NumberFormat("pt-BR");
+const nfF = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
+
+function badge(id, estado, texto) {
+  const b = $(id);
+  b.className = "badge " + estado;
+  b.lastElementChild.textContent = texto;
+}
+
+async function sondarModelo() {
+  try {
+    const r = await fetch(API_URL + "/models", { headers: { "Authorization": "Bearer " + API_KEY } });
+    const s = classificarModelo(r.status, Boolean(API_KEY), MODEL);
+    badge("b-modelo", s.classe, s.texto);
+  } catch {
+    const s = classificarModelo(null, Boolean(API_KEY), MODEL);
+    badge("b-modelo", s.classe, s.texto);
+  }
+}
+
+// ── estado ────────────────────────────────────────────────────────────────
+let es = null;                 // EventSource corrente
+let fonteAtual = "";
+let ultimos = [];              // espelho do feed (mais antigo → mais novo)
+const FEED_MAX = 300;
+
+function aplicarSnapshot(snap) {
+  if (!snap.exists) {
+    badge("b-exec", "warn", "execução: ledger ainda não existe");
+    $("c-joules").textContent = "—"; $("c-eventos").textContent = "0";
+    $("c-tick").textContent = "—"; $("c-atua").textContent = "—";
+    ultimos = [];
+    renderKinds({}); renderSensores({}); renderAtores({}); renderFeed(); desenhar();
+    return;
+  }
+  badge("b-exec", snap.completo ? "ok" : "warn",
+        snap.completo ? "execução: concluída" : "execução: em andamento");
+  $("c-joules").innerHTML = nfF.format(snap.joules) + " <small>J</small>";
+  $("c-joules").dataset.bruto = String(snap.joules);
+  $("c-eventos").textContent = nf.format(snap.eventos);
+  $("c-tick").textContent = snap.eventos ? nf.format(snap.tick_max) : "—";
+  $("c-atua").textContent = `${snap.atuacoes.ok}/${snap.atuacoes.total}`;
+  $("f-src").textContent = snap.src;
+  ultimos = snap.ultimos || [];
+  renderKinds(snap.por_kind || {});
+  renderSensores(snap.sensores || {});
+  renderAtores(snap.atores || {});
+  renderFeed();
+  atualizarFiltro();
+  desenhar();
+}
+
+function aplicarEv(ev) {
+  // espelho incremental (mesma semântica do aggregate() da ponte)
+  const k = ev.kind || "INFO";
+  ultimos.push(ev);
+  if (ultimos.length > FEED_MAX * 2) ultimos = ultimos.slice(-FEED_MAX);
+  renderFeed();
+  // contagem de kinds: recontar da janela é caro; incremental simples:
+  const chip = document.querySelector(`#kinds .chip[data-kind="${CSS.escape(k)}"] b`);
+  if (chip) chip.textContent = nf.format(parseInt(chip.textContent.replace(/\./g, ""), 10) + 1);
+  if (k === "LEAK") {
+    const j = parseFloat($("c-joules").dataset.bruto || "0") + (parseFloat(ev.joules) || 0);
+    $("c-joules").dataset.bruto = String(j);
+    $("c-joules").innerHTML = nfF.format(j) + " <small>J</small>";
+  }
+  if (k === "ACTUATION") {
+    const partes = $("c-atua").textContent.split("/").map((x) => parseInt(x, 10) || 0);
+    $("c-atua").textContent = `${partes[0] + (ev.sucesso === true ? 1 : 0)}/${partes[1] + 1}`;
+    if (ev.ator) renderAtores({ [ev.ator]: { valor: ev.aplicado ?? ev.valor, sucesso: ev.sucesso === true, tick: ev.tick } }, true);
+  }
+  if (k === "SENSOR_READ" && ev.sensor) {
+    renderSensores({ [ev.sensor]: { valor: ev.valor, tick: ev.tick } }, true);
+  }
+  if (typeof ev.tick === "number") $("c-tick").textContent = nf.format(ev.tick);
+  atualizarFiltro();
+  desenhar();
+}
+
+// ── renderização (textContent sempre — seguro por construção) ────────────
+function limpar(el) { el.replaceChildren(); }
+
+function renderKinds(porKind) {
+  const nomes = Object.keys(porKind).sort();
+  const alvo = $("kinds");
+  if (!nomes.length) { alvo.replaceChildren(); return; }
+  alvo.replaceChildren(...nomes.map((k) => {
+    const c = document.createElement("span");
+    c.className = "chip"; c.dataset.kind = k;
+    const b = document.createElement("b"); b.textContent = nf.format(porKind[k]);
+    c.append(b, " " + k);
+    return c;
+  }));
+}
+
+function item(nome, dadoHtml, falha) {
+  const d = document.createElement("div");
+  d.className = "item" + (falha ? " falha" : "");
+  const n = document.createElement("div"); n.className = "nome"; n.textContent = nome;
+  const v = document.createElement("div"); v.className = "dado";
+  v.append(...dadoHtml);
+  d.append(n, v);
+  return d;
+}
+
+function renderSensores(sensores, merge) {
+  const alvo = $("sensores");
+  if (merge && alvo.querySelector(".vazio")) limpar(alvo);
+  if (!merge) limpar(alvo);
+  const nomes = Object.keys(sensores);
+  if (!nomes.length && !alvo.children.length) {
+    alvo.replaceChildren(Object.assign(document.createElement("span"), { className: "vazio", textContent: "sem leituras" }));
+    return;
+  }
+  for (const nome of nomes) {
+    const s = sensores[nome];
+    alvo.prepend(item(nome, [
+      document.createTextNode(String(s.valor)),
+      Object.assign(document.createElement("small"), { textContent: `  · tick ${s.tick}` }),
+    ]));
+  }
+}
+
+function renderAtores(atores, merge) {
+  const alvo = $("atores");
+  if (merge && alvo.querySelector(".vazio")) limpar(alvo);
+  if (!merge) limpar(alvo);
+  const nomes = Object.keys(atores);
+  if (!nomes.length && !alvo.children.length) {
+    alvo.replaceChildren(Object.assign(document.createElement("span"), { className: "vazio", textContent: "sem atuações" }));
+    return;
+  }
+  for (const nome of nomes) {
+    const a = atores[nome];
+    alvo.prepend(item(nome, [
+      document.createTextNode(String(a.valor)),
+      Object.assign(document.createElement("small"), {
+        textContent: `  · ${a.sucesso ? "ok" : "falhou"} · tick ${a.tick}` }),
+    ], !a.sucesso));
+  }
+}
+
+function renderFeed() {
+  const filtro = $("filtro").value;
+  const alvo = $("feed");
+  const visiveis = ultimos.filter((e) => !filtro || e.kind === filtro).slice(-FEED_MAX);
+  alvo.replaceChildren(...visiveis.map((e) => {
+    const d = document.createElement("div");
+    d.className = "ev k-" + (e.kind || "INFO");
+    const seq = document.createElement("span"); seq.className = "seq"; seq.textContent = String(e.seq ?? "?");
+    const kind = document.createElement("span"); kind.className = "kind"; kind.textContent = e.kind || "INFO";
+    kind.title = "kind " + (e.kind || "INFO");
+    const msg = document.createElement("span"); msg.className = "msg"; msg.textContent = e.msg || "";
+    d.append(seq, kind, msg);
+    if (typeof e.tick === "number") {
+      const tk = document.createElement("span"); tk.className = "tick"; tk.textContent = `t${e.tick}`;
+      tk.title = "tick";
+      d.append(tk);
+    }
+    return d;
+  }));
+  if (!visiveis.length && ultimos.length && filtro) {
+    alvo.replaceChildren(Object.assign(document.createElement("span"),
+      { className: "vazio", textContent: `nenhum evento do kind ${filtro} na janela` }));
+  }
+  alvo.scrollTop = alvo.scrollHeight;
+}
+
+function atualizarFiltro() {
+  const sel = $("filtro");
+  const atual = sel.value;
+  const kinds = [...new Set(ultimos.map((e) => e.kind).filter(Boolean))].sort();
+  if (sel.dataset.kinds === kinds.join(",")) return;
+  sel.dataset.kinds = kinds.join(",");
+  sel.replaceChildren(
+    Object.assign(document.createElement("option"), { value: "", textContent: "todos os kinds" }),
+    ...kinds.map((k) => Object.assign(document.createElement("option"), { value: k, textContent: k })),
+  );
+  sel.value = atual;
+}
+
+// ── gráfico: Joules acumulados por tick (janela do feed) ─────────────────
+function desenhar() {
+  const cv = $("grafico");
+  const ctx = cv.getContext("2d");
+  const temas = getComputedStyle(document.documentElement);
+  const cor = (v) => temas.getPropertyValue(v).trim() || "#888";
+  ctx.clearRect(0, 0, cv.width, cv.height);
+
+  const porTick = new Map();
+  let acc = 0;
+  for (const e of ultimos) {
+    if (e.kind === "LEAK") acc += parseFloat(e.joules) || 0;
+    if (typeof e.tick === "number" && !porTick.has(e.tick)) porTick.set(e.tick, acc);
+  }
+  const pontos = [...porTick.entries()].sort((a, b) => a[0] - b[0]);
+  if (pontos.length < 2) {
+    ctx.fillStyle = cor("--dim");
+    ctx.font = "13px Iosevka, monospace";
+    ctx.fillText("energia por tick — aguardando vazamentos na janela…", 16, 28);
+    return;
+  }
+  const maxJ = pontos[pontos.length - 1][1] || 1;
+  const minT = pontos[0][0], maxT = pontos[pontos.length - 1][0];
+  const px = (t) => 16 + (cv.width - 32) * ((t - minT) / Math.max(1, maxT - minT));
+  const py = (j) => cv.height - 20 - (cv.height - 44) * (j / maxJ);
+
+  ctx.strokeStyle = cor("--warn"); ctx.lineWidth = 2; ctx.beginPath();
+  for (let i = 0; i < pontos.length; i++) {
+    const x = px(pontos[i][0]), y = py(pontos[i][1]);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.stroke();
+  ctx.lineTo(px(maxT), cv.height - 20); ctx.lineTo(px(minT), cv.height - 20); ctx.closePath();
+  ctx.fillStyle = cor("--warn") + "22"; ctx.fill();
+
+  ctx.fillStyle = cor("--dim"); ctx.font = "11px Iosevka, monospace";
+  ctx.fillText(`${nfF.format(maxJ)} J · ticks ${minT}–${maxT} · ${pontos.length} pts`, 16, cv.height - 5);
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────────
+function conectar() {
+  if (es) es.close();
+  if (!fonteAtual) return;
+  badge("b-sse", "warn", "SSE: conectando…");
+  es = new EventSource("/api/events?src=" + encodeURIComponent(fonteAtual));
+  es.addEventListener("snapshot", (m) => {
+    badge("b-sse", "ok", "SSE: ao vivo");
+    aplicarSnapshot(JSON.parse(m.data));
+  });
+  es.addEventListener("ev", (m) => {
+    badge("b-sse", "ok", "SSE: ao vivo");
+    try { aplicarEv(JSON.parse(m.data)); } catch { /* frame inválido: ignora */ }
+  });
+  es.onerror = () => badge("b-sse", "err", "SSE: reconectando…");
+}
+
+async function carregarFontes() {
+  try {
+    const r = await fetch("/api/sources");
+    const { fontes } = await r.json();
+    const sel = $("fonte");
+    sel.replaceChildren(...fontes.map((f) => {
+      const o = document.createElement("option");
+      o.value = f.caminho;
+      o.textContent = `${f.caminho}  (${nf.format(f.tamanho)} B)`;
+      return o;
+    }));
+    if (!fontes.length) {
+      sel.replaceChildren(Object.assign(document.createElement("option"),
+        { textContent: "nenhum ledger encontrado (rode vbl run --ledger …)" }));
+      return;
+    }
+    if (fonteAtual) sel.value = fonteAtual;
+    if (sel.selectedIndex < 0) sel.selectedIndex = 0;
+    fonteAtual = sel.value;
+    conectar();
+  } catch {
+    badge("b-sse", "err", "SSE: ponte inacessível");
+  }
+}
+
+$("fonte").addEventListener("change", () => { fonteAtual = $("fonte").value; conectar(); });
+$("filtro").addEventListener("change", renderFeed);
+$("reconectar").addEventListener("click", () => { conectar(); });
+
+sondarModelo();
+setInterval(sondarModelo, 15000);
+carregarFontes();
+</script>
+</body>
+</html>

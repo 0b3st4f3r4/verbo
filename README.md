@@ -162,9 +162,11 @@ embeddings com o chat desligado ou em outra máquina.
 | [`docs/CHEATSHEET-PROMPTS.yaml`](docs/CHEATSHEET-PROMPTS.yaml) | Banco fixo de 20 prompts para validação do cheat sheet (PLAN §7) |
 | [`docs/CHEATSHEET-VALIDATION.md`](docs/CHEATSHEET-VALIDATION.md) | Resultados versionados da validação do cheat sheet |
 | [`scripts/validate_cheatsheet.py`](scripts/validate_cheatsheet.py) | Executa o banco de prompts contra o LLM local e avalia com o vlcheck |
-| [`scripts/serve-local-llm.sh`](scripts/serve-local-llm.sh) | Sobe o modelo local Qwen3-4B-Instruct-2507-FP8 via vLLM (e abre a UI de consulta) |
-| [`scripts/verbo-chat/chat.html`](scripts/verbo-chat/chat.html) | UI de consulta: chat single-file, streaming SSE, medidor de contexto, alternância puro ↔ +VerboLang |
-| [`scripts/verbo-chat/verbolog.svg`](scripts/verbo-chat/verbolog.svg) | Marca do projeto (logo e favicon da UI de consulta) |
+| [`scripts/serve-local-llm.sh`](scripts/serve-local-llm.sh) | Sobe o modelo local Qwen3-4B-Instruct-2507-FP8 via vLLM (e abre o dashboard) |
+| [`web/`](web/README.md) | Dashboard do runtime: entrada ([`index.html`](web/index.html)), **chat** single-file ([`chat.html`](web/chat.html): streaming SSE, medidor de contexto, alternância puro ↔ +VerboLang) e **métricas em tempo real** do Caderno ([`metrics.html`](web/metrics.html)) |
+| [`scripts/webui.py`](scripts/webui.py) | Ponte do dashboard: estático na raiz do repo + métricas SSE do Caderno (`.vcad`/JSONL) — só stdlib |
+| [`web/verbolog.svg`](web/verbolog.svg) | Marca do projeto (logo e favicon da UI) |
+| [`docs/verbolog-triangle.svg`](docs/verbolog-triangle.svg) | Emblema mestre da marca: triângulo invertido de gradientes azul-verde-vermelho, três pássaros alinhados no horizonte (gerador em [`design/`](design/)) |
 | [`docs/VBL-CHEATSHEET.md`](docs/VBL-CHEATSHEET.md) | VerboLang em uma página — cheat sheet canônico injetável como prompt de sistema |
 | [`LICENSE`](LICENSE) | Licença GPL-3.0 (copyleft) |
 
@@ -231,10 +233,13 @@ Configuração completa em [`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md).
 > próprio prompt. Demanda e caminhos (cheat sheet, RAG, fine-tune) em
 > [`docs/PLAN.md` §7](docs/PLAN.md).
 
-Para consulta direta ao modelo local, `bash scripts/serve-local-llm.sh` abre
-automaticamente a **UI de chat** ([`scripts/verbo-chat/chat.html`](scripts/verbo-chat/chat.html))
-quando o modelo termina de carregar — streaming, medidor de contexto e a
-alternância puro ↔ +VerboLang.
+`bash scripts/serve-local-llm.sh` sobe **primeiro o dashboard**
+([`web/`](web/index.html) — independentemente do modelo) e depois o modelo:
+o badge mostra o estado real do LLM (ativo, carregando, sem chave no
+navegador — 401 — ou desligado). O **chat** ([`web/chat.html`](web/chat.html) —
+streaming, medidor de contexto e a alternância puro ↔ +VerboLang) precisa do
+modelo; as **métricas em tempo real** ([`web/metrics.html`](web/metrics.html),
+alimentadas pelo Caderno) não. Sem GPU, `make web` sobe só o dashboard.
 
 ## Licença
 

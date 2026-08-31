@@ -3,7 +3,7 @@
 > Artefato canônico da demanda do [`PLAN.md`](PLAN.md) §7 (caminho "a" — modelo
 > local com conhecimento da linguagem). Mantido junto da spec: qualquer mudança
 > relevante na [`FORMAL.md`](FORMAL.md) deve refletir aqui. A UI de consulta
-> local ([`scripts/verbo-chat/chat.html`](../scripts/verbo-chat/chat.html)) injeta este
+> local ([`web/chat.html`](../web/chat.html)) injeta este
 > arquivo no modo **"+ VerboLang"**; sem ele, o modelo local não conhece a
 > linguagem. Alvo de tamanho: ≤ ~1.200 tokens.
 

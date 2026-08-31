@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VerboLang · dashboard</title>
+<link rel="icon" type="image/svg+xml" href="verbolog.svg">
+<!--
+  index.html — entrada do dashboard do runtime VerboLang (pasta web/).
+  Cartões para o Chat (chat.html) e Métricas em tempo real (metrics.html);
+  badge honesto do modelo local via web/badge.js (401 de navegador sem
+  chave ≠ modelo inativo). Repassa o fragmento #k=… do serve-local-llm.sh
+  ao chat. Zero dependências. Tema compartilhado com o chat (localStorage
+  "vllm.theme"). Parte do projeto VerboLang — GNU GPL-3.0 (ver LICENSE).
+-->
+<style>
+  /* ── fontes auto-hospedadas (mesmas da UI de chat) ── */
+  @font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url("fonts/inter-latin-400.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap;
+    src: url("fonts/inter-latin-600.woff2") format("woff2"); }
+  @font-face { font-family: "Iosevka"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url("fonts/iosevka-latin-400.woff2") format("woff2"); }
+
+  /* ── paletas (iguais às do chat.html) ── */
+  :root, html[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e1319; --bg-glow: #16202b; --panel: #171d24; --panel-2: #1b232c;
+    --border: #29323e; --border-soft: #212a34; --text: #dde6f0; --dim: #8fa1b5;
+    --accent: #46aeb7; --ok: #3fb96f; --warn: #e0a83a; --bad: #e05c5c;
+    --code-bg: #0d1116; --code-border: #212a34; --shadow: 0 4px 14px rgba(0,0,0,.35);
+  }
+  html[data-theme="metal"] {
+    color-scheme: dark;
+    --bg: #24292f; --bg-glow: #2e353d; --panel: #333941; --panel-2: #3d4450;
+    --border: #4a525d; --border-soft: #3f4750; --text: #e6eaee; --dim: #9aa6b2;
+    --accent: #52b1bb; --ok: #4cba7f; --warn: #d8a944; --bad: #e06565;
+    --code-bg: #272d34; --code-border: #3f4750; --shadow: 0 4px 14px rgba(0,0,0,.3);
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f2f5f8; --bg-glow: #e7edf4; --panel: #ffffff; --panel-2: #eaeef3;
+    --border: #cfd7e0; --border-soft: #dde3ea; --text: #1b2530; --dim: #5a6a7b;
+    --accent: #106c80; --ok: #23804d; --warn: #a06f12; --bad: #c04343;
+    --code-bg: #eef2f6; --code-border: #dfe5ec; --shadow: 0 4px 12px rgba(27,37,48,.12);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; font: 16px/1.5 "Inter", system-ui, sans-serif;
+    color: var(--text); background: radial-gradient(80rem 40rem at 50% -10%, var(--bg-glow), var(--bg));
+    display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem;
+  }
+  header { display: flex; align-items: center; gap: .8rem; margin-bottom: 2.2rem; }
+  header img { width: 44px; height: 44px; }
+  h1 { font-size: 1.35rem; font-weight: 600; margin: 0; letter-spacing: .01em; }
+  h1 small { display: block; font-weight: 400; color: var(--dim); font-size: .85rem; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: .45rem;
+    font: 400 .8rem/1 "Iosevka", ui-monospace, monospace; color: var(--dim);
+    border: 1px solid var(--border); border-radius: 999px; padding: .45rem .8rem;
+    background: var(--panel);
+  }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+  .badge.ok .dot { background: var(--ok); }
+  .badge.err .dot { background: var(--bad); }
+
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.2rem; width: 100%; max-width: 46rem; }
+  a.card {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 1.4rem 1.5rem; box-shadow: var(--shadow);
+    transition: transform .12s ease, border-color .12s ease;
+  }
+  a.card:hover, a.card:focus-visible { transform: translateY(-2px); border-color: var(--accent); outline: none; }
+  .card h2 { margin: 0 0 .35rem; font-size: 1.05rem; font-weight: 600; color: var(--accent); }
+  .card p { margin: 0; color: var(--dim); font-size: .9rem; }
+  .card .ico { font-size: 1.5rem; display: block; margin-bottom: .6rem; }
+
+  footer { margin-top: 2.4rem; color: var(--dim); font-size: .78rem; text-align: center; max-width: 46rem; }
+  footer code { font-family: "Iosevka", ui-monospace, monospace; background: var(--code-bg);
+    border: 1px solid var(--code-border); border-radius: 5px; padding: .05rem .3rem; }
+</style>
+</head>
+<body>
+<header>
+  <img src="verbolog.svg" alt="VerboLang">
+  <h1>VerboLang <small>dashboard do runtime</small></h1>
+  <span id="modelo" class="badge" title="estado do modelo local (LLM)"><span class="dot"></span><span id="modelo-txt">verificando modelo…</span></span>
+</header>
+
+<main>
+  <a class="card" href="metrics.html">
+    <span class="ico">📈</span>
+    <h2>Métricas em tempo real</h2>
+    <p>Caderno de produção ao vivo: energia dissipada, sensores, atuações, subversões — SSE sobre o <code>.vcad</code> em crescimento.</p>
+  </a>
+  <a class="card" href="chat.html">
+    <span class="ico">💬</span>
+    <h2>Chat (modelo local)</h2>
+    <p>Consulta direta ao LLM (vLLM :8000), com alternância "modelo puro ↔ + VerboLang" e medidor de contexto. Requer o modelo ativo.</p>
+  </a>
+</main>
+
+<footer>
+  <p>O runtime VerboLang é o <b>motor de ticks</b> (<code>vbl run</code>) — o LLM é opcional aqui:
+  com o modelo inativo, as métricas continuam no ar e o estado aparece no badge acima.</p>
+</footer>
+
+<script src="badge.js"></script>
+<script>
+"use strict";
+// ── tema compartilhado com o chat ─────────────────────────────────────────
+const THEME_ORDER = ["light", "metal", "dark"];
+const tema = localStorage.getItem("vllm.theme");
+document.documentElement.dataset.theme = THEME_ORDER.includes(tema) ? tema : "dark";
+
+// ── fragmento do serve-local-llm.sh (#k=…) vai direto ao chat ─────────────
+const hash = new URLSearchParams(location.hash.slice(1));
+if (hash.has("k")) location.replace("chat.html" + location.hash);
+
+// ── badge do modelo: sonda /v1/models e classifica via web/badge.js ───────
+// (401 com navegador sem chave ≠ modelo inativo — o servidor está no ar)
+const API_KEY  = hash.get("k") || localStorage.getItem("vllm.key") || "";
+const API_URL  = hash.get("u") || localStorage.getItem("vllm.url") || "http://127.0.0.1:8000/v1";
+const MODEL    = hash.get("m") || localStorage.getItem("vllm.model") || "qwen3-4b";
+const $modelo  = document.getElementById("modelo");
+const $txt     = document.getElementById("modelo-txt");
+
+function setModelo(classe, texto) {
+  $modelo.className = "badge " + classe;
+  $txt.textContent = texto;
+}
+
+async function sondarModelo() {
+  try {
+    const r = await fetch(API_URL + "/models", { headers: { "Authorization": "Bearer " + API_KEY } });
+    const s = classificarModelo(r.status, Boolean(API_KEY), MODEL);
+    setModelo(s.classe, s.texto);
+  } catch {
+    const s = classificarModelo(null, Boolean(API_KEY), MODEL);
+    setModelo(s.classe, s.texto);
+  }
+}
+sondarModelo();
+setInterval(sondarModelo, 15000);
+</script>
+</body>
+</html>

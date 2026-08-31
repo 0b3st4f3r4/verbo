@@ -159,6 +159,8 @@ flowchart TB
 
 A interação entre os agentes segue um fluxo de desenvolvimento orientado a entregáveis mensuráveis. Cada etapa do PLAN.md tem critérios de aceite objetivos, verificáveis automaticamente.
 
+> **Regra de ouro — a ordem de desenvolvimento começa sempre pelos testes.** Nenhum componente (Rust, Python, JS da UI) entra na base antes de seus testes: primeiro escreve-se o teste que define o comportamento esperado, depois o código que o satisfaz. É assim que asseguramos que a forma está condizente com a revisão — e a tendência é que os códigos seguintes saiam muito mais limpos.
+
 ### 2.1 Fluxo de Trabalho
 
 1. **Definição de Requisitos (AD + GQT)**  
@@ -237,10 +239,14 @@ impede carregá-la inteira. Regras para a equipe de agentes:
 - **Nunca presuma** que sintaxe ou semântica produzidas pelo modelo local estão
   corretas: toda saída usada como artefato passa pela validação do GQT contra a
   `FORMAL.md`.
-- Consulta direta: `bash scripts/serve-local-llm.sh` sobe o modelo e abre a UI
-  de chat (`scripts/verbo-chat/chat.html`), que tem a alternância
-  "Modelo puro ↔ + VerboLang" (injeta o cheat sheet e conta seu custo no
-  medidor de contexto).
+- Consulta direta: `bash scripts/serve-local-llm.sh` sobe **primeiro o
+  dashboard** (`web/` — independente do modelo: sobrevive ao vLLM e funciona
+  sem chave/GPU) e depois o modelo. A UI de chat (`web/chat.html`) tem a
+  alternância "Modelo puro ↔ + VerboLang" (injeta o cheat sheet e conta seu
+  custo no medidor de contexto); `web/metrics.html` mostra as métricas em
+  tempo real do runtime (Caderno) e não depende do modelo — o badge
+  (`web/badge.js`, matriz testada em `tests/unit/web/badge.test.js`)
+  distingue "modelo no ar sem chave no navegador (401)" de "modelo fora".
 
 ## 6. Economia de contexto para agentes (rtk)
 
