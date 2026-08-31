@@ -3,21 +3,21 @@
 
 O Caderno do protótipo é uma classe com estado de classe (`_events`); os
 testes precisam isolar cenários (`Caderno.reset()`) e consultar eventos por
-`kind` e campos extras. `ConsultaCaderno` encapsula essas consultas sem
+`kind` e campos extras. `LedgerQuery` encapsula essas consultas sem
 poluir o protótipo com API de teste.
 """
 
 from __future__ import annotations
 
 
-class ConsultaCaderno:
+class LedgerQuery:
     """Visão consultável dos eventos do Caderno."""
 
-    def __init__(self, caderno_cls):
-        self._cls = caderno_cls
+    def __init__(self, ledger_cls):
+        self._cls = ledger_cls
 
     @property
-    def eventos(self) -> list[dict]:
+    def events(self) -> list[dict]:
         return list(self._cls._events)
 
     def event(self, kind: str, msg: str, **extra) -> dict:
@@ -30,22 +30,22 @@ class ConsultaCaderno:
     def kinds(self) -> list[str]:
         return [e["kind"] for e in self._cls._events]
 
-    def buscar(self, kind: str | None = None, **extras) -> list[dict]:
+    def find(self, kind: str | None = None, **extras) -> list[dict]:
         """Eventos que casam kind (exato) e todos os extras informados."""
-        achados = []
+        found = []
         for e in self._cls._events:
             if kind is not None and e["kind"] != kind:
                 continue
-            if any(e.get(chave) != valor for chave, valor in extras.items()):
+            if any(e.get(key) != value for key, value in extras.items()):
                 continue
-            achados.append(e)
-        return achados
+            found.append(e)
+        return found
 
-    def tem(self, kind: str | None = None, **extras) -> bool:
-        return bool(self.buscar(kind, **extras))
+    def has(self, kind: str | None = None, **extras) -> bool:
+        return bool(self.find(kind, **extras))
 
-    def contem_msg(self, trecho: str) -> bool:
-        return any(trecho in e["msg"] for e in self._cls._events)
+    def contains_message(self, fragment: str) -> bool:
+        return any(fragment in e["msg"] for e in self._cls._events)
 
     def chain_head(self) -> str:
         return self._cls.chain_head()

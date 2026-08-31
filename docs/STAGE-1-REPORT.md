@@ -11,7 +11,7 @@
 
 | Item | Entrega |
 |---|---|
-| §1.1 BDD | 3 cenários canônicos em `tests/features/*.feature` (`# language: pt`), com mocks via **behave**: 17 steps passando |
+| §1.1 BDD | 3 cenários canônicos em `tests/features/*.feature` (`# language: en`), com mocks via **behave**: 17 steps passando |
 | §1.2 TDD | 63 testes pytest em `tests/unit/`: finitude, falha controlada de sensores, comandos a atores, ordem do tick, integridade do Caderno, validador de superfície |
 | §1.3 b — fronteira mock × simulador | `tests/fxp_sim/mocks.py` (**MockFXP**, dicionários em processo) × `tests/fxp_sim/simulator.py` (**FXPSimulator** — séries roteirizadas, injeção de falhas, fallback no registro, efeitos físicos determinísticos). Schema binário v1 → Etapa 3 |
 | §1.3 c — banco de 20 prompts | `docs/CHEATSHEET-PROMPTS.yaml` (S01–S10 sintaxe, M01–M10 semântica) + `scripts/validate_cheatsheet.py` (3 execuções/prompt, verificador `tests/vlcheck.py`, relatório em `docs/CHEATSHEET-VALIDATION.md`, limiar ≥ 90 %) |

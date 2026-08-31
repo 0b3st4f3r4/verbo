@@ -12,36 +12,36 @@ from pathlib import Path
 
 import pytest
 
-RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "tests"))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tests"))
 
 from fxp_sim import blueprint  # noqa: E402
-from fxp_sim.support import ConsultaCaderno  # noqa: E402
+from fxp_sim.support import LedgerQuery  # noqa: E402
 from fxp_sim.simulator import FXPSimulator  # noqa: E402
 
 
 @pytest.fixture(scope="session")
 def vbl():
     """Módulo do protótipo de referência (SUT da Etapa 1)."""
-    return blueprint.carregar()
+    return blueprint.load()
 
 
 @pytest.fixture()
-def cad(vbl):
+def ledger(vbl):
     """Caderno zerado + visão consultável."""
     vbl.Caderno.reset()
-    return ConsultaCaderno(vbl.Caderno)
+    return LedgerQuery(vbl.Caderno)
 
 
 @pytest.fixture()
 def sim(vbl):
     """Simulador FXP determinístico (registro mínimo da FORMAL §6)."""
-    return FXPSimulator(caderno=vbl.Caderno)
+    return FXPSimulator(ledger=vbl.Caderno)
 
 
 @pytest.fixture()
 def engine(vbl, sim, tmp_path):
     """Runtime com FXP injetado e persistência em diretório temporário."""
     return vbl.VerboLangEngine(
-        fxp=sim, persistence_dir=str(tmp_path / "persistencia")
+        fxp=sim, persistence_dir=str(tmp_path / "persistence")
     )

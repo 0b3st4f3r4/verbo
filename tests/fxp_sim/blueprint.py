@@ -12,19 +12,19 @@ import importlib.util
 import pathlib
 import sys
 
-RAIZ = pathlib.Path(__file__).resolve().parents[2]
-PROTOTIPO = RAIZ / "prototype" / "verbolang-complete-blueprint.py"
-_NOME_MODULO = "verbolang_blueprint"
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+PROTOTYPE = ROOT / "prototype" / "verbolang-complete-blueprint.py"
+_MODULE_NAME = "verbolang_blueprint"
 
 
-def carregar():
+def load():
     """Importa o blueprint do protótipo (uma única vez por processo)."""
-    if _NOME_MODULO in sys.modules:
-        return sys.modules[_NOME_MODULO]
-    spec = importlib.util.spec_from_file_location(_NOME_MODULO, PROTOTIPO)
+    if _MODULE_NAME in sys.modules:
+        return sys.modules[_MODULE_NAME]
+    spec = importlib.util.spec_from_file_location(_MODULE_NAME, PROTOTYPE)
     if spec is None or spec.loader is None:  # pragma: no cover - defesa
-        raise ImportError(f"não foi possível carregar {PROTOTIPO}")
-    modulo = importlib.util.module_from_spec(spec)
-    sys.modules[_NOME_MODULO] = modulo
-    spec.loader.exec_module(modulo)
-    return modulo
+        raise ImportError(f"não foi possível carregar {PROTOTYPE}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[_MODULE_NAME] = module
+    spec.loader.exec_module(module)
+    return module

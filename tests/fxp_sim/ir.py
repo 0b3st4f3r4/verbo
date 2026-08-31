@@ -7,16 +7,16 @@ estrutura e o `loader` carrega no runtime. Quando o parser real existir
 mudam de shape, apenas de origem.
 
 Formas:
-  {"tipo": "forma", "conjugacao": "nonequilibrium", "nome": "PensarLivre",
-   "atributos": {"value": ..., "horizon": "60s", ...}}   # ordem preservada
+  {"type": "form", "conjugation": "nonequilibrium", "name": "PensarLivre",
+   "attributes": {"value": ..., "horizon": "60s", ...}}   # ordem preservada
 Reviews:
-  {"tipo": "review", "forma": "PensarLivre", "regras": [...]}
-  regra = {"sensor": str, "op": str, "limiar": float, "unidade": str|None,
-           "acoes": [{"action": ...}, ...]}
+  {"type": "review", "form": "PensarLivre", "rules": [...]}
+  rule = {"sensor": str, "op": str, "threshold": float, "unit": str|None,
+          "actions": [{"action": ...}, ...]}
 Main:
-  {"tipo": "main", "statements": [...]}
+  {"type": "main", "statements": [...]}
 Programa:
-  {"declaracoes": [...], "main": bloco|None}
+  {"declarations": [...], "main": bloco|None}
 """
 
 from __future__ import annotations
@@ -24,78 +24,78 @@ from __future__ import annotations
 import re
 
 # duração "NUM[unit]" — decimais válidas (FORMAL §3): 2.5s, 500ms, 3s ...
-_DURACAO = re.compile(r"^(?P<num>\d+(?:\.\d+)?)(?P<unit>s|ms|us|ns)$")
+_DURATION = re.compile(r"^(?P<num>\d+(?:\.\d+)?)(?P<unit>s|ms|us|ns)$")
 
-CONJUGACOES = ("event", "equilibrium", "nonequilibrium")
-OPERADORES = ("<", ">", "<=", ">=", "==", "!=")
-ACOES = ("dissolve", "subvert", "reclassify_as_equilibrium",
-         "reclassify_as_nonequilibrium", "notify_shutdown", "act")
-UNIDADE_POR_GRANDEZA = {
-    "temperatura": "°C",
-    "potencia": "W",
-    "atencao": "%",
+CONJUGATIONS = ("event", "equilibrium", "nonequilibrium")
+OPERATORS = ("<", ">", "<=", ">=", "==", "!=")
+ACTIONS = ("dissolve", "subvert", "reclassify_as_equilibrium",
+           "reclassify_as_nonequilibrium", "notify_shutdown", "act")
+UNIT_BY_QUANTITY = {
+    "temperature": "°C",
+    "power": "W",
+    "attention": "%",
 }
 
 
-def duracao(texto: str) -> float:
+def duration(text: str) -> float:
     """Converte '3s'/'2.5s'/'500ms'/'200us'/'100ns' para segundos (float)."""
-    m = _DURACAO.match(texto) if isinstance(texto, str) else None
+    m = _DURATION.match(text) if isinstance(text, str) else None
     if m is None:
-        raise ValueError(f"duração inválida: {texto!r} (esperado NUM[s|ms|us|ns])")
-    fator = {"s": 1.0, "ms": 1e-3, "us": 1e-6, "ns": 1e-9}[m.group("unit")]
-    return float(m.group("num")) * fator
+        raise ValueError(f"duração inválida: {text!r} (esperado NUM[s|ms|us|ns])")
+    factor = {"s": 1.0, "ms": 1e-3, "us": 1e-6, "ns": 1e-9}[m.group("unit")]
+    return float(m.group("num")) * factor
 
 
 # ----------------------------------------------------------------------
 # Builders
 # ----------------------------------------------------------------------
-def forma(nome: str, conjugacao: str, valor="conteudo", horizon: str = "3s",
-          **opcionais) -> dict:
+def form(name: str, conjugation: str, value="conteudo", horizon: str = "3s",
+         **optional) -> dict:
     """Forma canônica: `value` primeiro, `horizon` depois (FORMAL §3)."""
-    atributos: dict = {"value": valor, "horizon": horizon}
-    atributos.update(opcionais)
-    return {"tipo": "forma", "conjugacao": conjugacao, "nome": nome,
-            "atributos": atributos}
+    attributes: dict = {"value": value, "horizon": horizon}
+    attributes.update(optional)
+    return {"type": "form", "conjugation": conjugation, "name": name,
+            "attributes": attributes}
 
 
-def acao(nome: str, **args) -> dict:
-    if nome not in ACOES:
-        raise ValueError(f"ação desconhecida: {nome}")
-    return {"action": nome, **args}
+def action(name: str, **args) -> dict:
+    if name not in ACTIONS:
+        raise ValueError(f"ação desconhecida: {name}")
+    return {"action": name, **args}
 
 
-def act_(ator: str, valor) -> dict:
-    return acao("act", ator=ator, valor=valor)
+def act_(actor: str, value) -> dict:
+    return action("act", actor=actor, value=value)
 
 
-def regra(sensor: str, op: str, limiar, unidade: str | None = None,
-          *acoes) -> dict:
-    if op not in OPERADORES:
+def rule(sensor: str, op: str, threshold, unit: str | None = None,
+         *actions) -> dict:
+    if op not in OPERATORS:
         raise ValueError(f"operador inválido: {op}")
-    return {"sensor": sensor, "op": op, "limiar": float(limiar),
-            "unidade": unidade, "acoes": list(acoes)}
+    return {"sensor": sensor, "op": op, "threshold": float(threshold),
+            "unit": unit, "actions": list(actions)}
 
 
-def review(nome_forma: str, *regras) -> dict:
-    return {"tipo": "review", "forma": nome_forma, "regras": list(regras)}
+def review(form_name: str, *rules) -> dict:
+    return {"type": "review", "form": form_name, "rules": list(rules)}
 
 
 # -- statements do bloco main (FORMAL §3) --------------------------------
-def keep_(forma_nome: str) -> dict:
-    return {"statement": "keep", "forma": forma_nome}
+def keep_(form_name: str) -> dict:
+    return {"statement": "keep", "form": form_name}
 
 
-def act_main(ator: str, valor) -> dict:
-    return {"statement": "act", "ator": ator, "valor": valor}
+def act_main(actor: str, value) -> dict:
+    return {"statement": "act", "actor": actor, "value": value}
 
 
-def every(periodo: str, *statements) -> dict:
-    return {"statement": "every", "periodo": periodo, "statements": list(statements)}
+def every(period: str, *statements) -> dict:
+    return {"statement": "every", "period": period, "statements": list(statements)}
 
 
-def main_bloco(*statements) -> dict:
-    return {"tipo": "main", "statements": list(statements)}
+def main_block(*statements) -> dict:
+    return {"type": "main", "statements": list(statements)}
 
 
-def programa(*declaracoes, main: dict | None = None) -> dict:
-    return {"declaracoes": list(declaracoes), "main": main}
+def program(*declarations, main: dict | None = None) -> dict:
+    return {"declarations": list(declarations), "main": main}

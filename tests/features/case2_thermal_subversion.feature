@@ -1,10 +1,10 @@
-# language: pt
+# language: en
 # Cenário BDD Caso 2 — docs/PLAN.md §1.1
-Funcionalidade: Sabotagem de Processamento Predatório
-  Cenário: Sobrecarga térmica em loop de trading especulativo
-    Dado que a tarefa "TradingEspeculativo" está rodando em alta frequência
-    Quando o sensor "cpu_temp" atinge 86.5°C (limite de 85.0°C) via FXP
-    Então o runtime deve invocar o operador "subvert()"
-    E a ação "act(CpuPowerCap, 50)" deve ser enviada ao ator correspondente via FXP
-    E o valor lógico de trading deve ser substituído pelo valor poético canônico "poesia_gerada_pelo_calor_do_silicio_e_resfriamento_da_mente"
-    E o processamento da forma subvertida deve cessar no mesmo tick (dissolução em ≤ 1 tick virtual)
+Feature: Sabotage of Predatory Processing
+  Scenario: Thermal overload in a speculative trading loop
+    Given the task "TradingEspeculativo" is running at high frequency
+    When the "cpu_temp" sensor reaches 86.5°C (limit of 85.0°C) via FXP
+    Then the runtime must invoke the "subvert()" operator
+    And the action "act(CpuPowerCap, 50)" must be sent to the corresponding actor via FXP
+    And the trading logical value must be replaced by the canonical poetic value "poesia_gerada_pelo_calor_do_silicio_e_resfriamento_da_mente"
+    And the subverted form processing must cease in the same tick (dissolution within ≤ 1 virtual tick)

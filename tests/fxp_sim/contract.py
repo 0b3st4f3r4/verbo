@@ -21,214 +21,214 @@ from dataclasses import dataclass, field
 
 from . import ir
 
-ATRIBUTO_POR_CONJUGACAO = {
+ATTRIBUTE_BY_CONJUGATION = {
     "maintenance_deadline": {"nonequilibrium"},
     "exchange_mode": {"nonequilibrium"},
     "cost_bytes": {"equilibrium"},
 }
-ORDEM_OBRIGATORIA = ("value", "horizon")
+REQUIRED_ORDER = ("value", "horizon")
 
 
 @dataclass
-class Diagnostico:
-    codigo: str
-    mensagem: str
-    contexto: str = ""
+class Diagnosis:
+    code: str
+    message: str
+    context: str = ""
     extra: dict = field(default_factory=dict)
 
     def __str__(self):  # legibilidade nos asserts
-        local = f" [{self.contexto}]" if self.contexto else ""
-        return f"{self.codigo}{local}: {self.mensagem}"
+        local = f" [{self.context}]" if self.context else ""
+        return f"{self.code}{local}: {self.message}"
 
 
-def validar_programa(programa: dict, sensores: dict | None = None,
-                     atores: dict | None = None) -> list[Diagnostico]:
+def validate_program(program: dict, sensors: dict | None = None,
+                     actors: dict | None = None) -> list[Diagnosis]:
     """Valida o programa inteiro; devolve TODOS os diagnósticos encontrados.
 
-    `sensores`/`atores`: mapas nome -> descrição (ex.: grandeza/unidade do
+    `sensors`/`actors`: mapas nome -> descrição (ex.: grandeza/unidade do
     sensor) copiados do registro mínimo da FORMAL §6; quando None, as
     verificações de registro são puladas.
     """
-    diagnosticos: list[Diagnostico] = []
-    formas_vistas: set[str] = set()
-    reviews_vistas: dict[str, int] = {}
-    formas: dict[str, dict] = {}
+    diagnoses: list[Diagnosis] = []
+    forms_seen: set[str] = set()
+    reviews_seen: dict[str, int] = {}
+    forms: dict[str, dict] = {}
 
-    for declaracao in programa["declaracoes"]:
-        if declaracao["tipo"] == "forma":
-            diagnosticos.extend(
-                _validar_forma(declaracao, formas_vistas, sensores)
+    for declaration in program["declarations"]:
+        if declaration["type"] == "form":
+            diagnoses.extend(
+                _validate_form(declaration, forms_seen, sensors)
             )
-            formas[declaracao["nome"]] = declaracao
-        elif declaracao["tipo"] == "review":
-            diagnosticos.extend(
-                _validar_review(declaracao, formas_vistas, reviews_vistas,
-                                sensores, atores)
+            forms[declaration["name"]] = declaration
+        elif declaration["type"] == "review":
+            diagnoses.extend(
+                _validate_review(declaration, forms_seen, reviews_seen,
+                                 sensors, actors)
             )
         else:
-            diagnosticos.append(Diagnostico("declaracao_desconhecida",
-                                            f"tipo {declaracao['tipo']!r}"))
+            diagnoses.append(Diagnosis("declaracao_desconhecida",
+                                       f"tipo {declaration['type']!r}"))
 
-    if programa.get("main") is not None:
-        diagnosticos.extend(
-            _validar_main(programa["main"], formas_vistas, atores)
+    if program.get("main") is not None:
+        diagnoses.extend(
+            _validate_main(program["main"], forms_seen, actors)
         )
-    return diagnosticos
+    return diagnoses
 
 
 # ----------------------------------------------------------------------
-def _validar_forma(decl: dict, vistas: set[str], sensores) -> list[Diagnostico]:
-    diags: list[Diagnostico] = []
-    nome = decl["nome"]
-    ctx = f"forma {nome}"
-    if decl["conjugacao"] not in ir.CONJUGACOES:
-        diags.append(Diagnostico("conjugacao_desconhecida",
-                                 f"conjugação {decl['conjugacao']!r} inválida", ctx))
-    atributos = decl["atributos"]
+def _validate_form(decl: dict, seen: set[str], sensors) -> list[Diagnosis]:
+    diags: list[Diagnosis] = []
+    name = decl["name"]
+    ctx = f"forma {name}"
+    if decl["conjugation"] not in ir.CONJUGATIONS:
+        diags.append(Diagnosis("conjugacao_desconhecida",
+                               f"conjugação {decl['conjugation']!r} inválida", ctx))
+    attributes = decl["attributes"]
 
     # value/horizon obrigatórios e nesta ordem (FORMAL §3, Lei 1 do MANIFESTO)
-    for obrigatorio in ORDEM_OBRIGATORIA:
-        if obrigatorio not in atributos:
-            diags.append(Diagnostico(
+    for required in REQUIRED_ORDER:
+        if required not in attributes:
+            diags.append(Diagnosis(
                 "atributo_obrigatorio_ausente",
-                f"'{obrigatorio}' é obrigatório em toda forma (Lei 1)", ctx))
-    chaves = list(atributos.keys())
-    presentes = [a for a in ORDEM_OBRIGATORIA if a in chaves]
-    if presentes != [a for a in chaves if a in ORDEM_OBRIGATORIA] or (
-        len(presentes) == 2 and chaves.index("value") > chaves.index("horizon")
+                f"'{required}' é obrigatório em toda forma (Lei 1)", ctx))
+    keys = list(attributes.keys())
+    present = [a for a in REQUIRED_ORDER if a in keys]
+    if present != [a for a in keys if a in REQUIRED_ORDER] or (
+        len(present) == 2 and keys.index("value") > keys.index("horizon")
     ):
-        diags.append(Diagnostico(
+        diags.append(Diagnosis(
             "ordem_obrigatoria",
             "'value' deve preceder 'horizon' (EBNF: primeiros atributos)", ctx))
 
     # aplicabilidade por conjugação
-    for atributo, permitidas in ATRIBUTO_POR_CONJUGACAO.items():
-        if atributo in atributos and decl["conjugacao"] not in permitidas:
-            diags.append(Diagnostico(
+    for attribute, allowed in ATTRIBUTE_BY_CONJUGATION.items():
+        if attribute in attributes and decl["conjugation"] not in allowed:
+            diags.append(Diagnosis(
                 "atributo_nao_aplicavel",
-                f"'{atributo}' só se aplica a {sorted(permitidas)}", ctx))
-    if decl["conjugacao"] == "nonequilibrium" and "maintenance_deadline" not in atributos:
-        diags.append(Diagnostico(
+                f"'{attribute}' só se aplica a {sorted(allowed)}", ctx))
+    if decl["conjugation"] == "nonequilibrium" and "maintenance_deadline" not in attributes:
+        diags.append(Diagnosis(
             "maintenance_deadline_ausente",
             "nonequilibrium exige maintenance_deadline — sem ele a forma "
             "jamais colapsaria (FORMAL §3)", ctx))
 
     # durações bem formadas
-    for atributo in ("horizon", "maintenance_deadline"):
-        if atributo in atributos:
+    for attribute in ("horizon", "maintenance_deadline"):
+        if attribute in attributes:
             try:
-                ir.duracao(atributos[atributo])
+                ir.duration(attributes[attribute])
             except ValueError:
-                diags.append(Diagnostico("duracao_invalida",
-                                         f"{atributo}={atributos[atributo]!r}", ctx))
+                diags.append(Diagnosis("duracao_invalida",
+                                       f"{attribute}={attributes[attribute]!r}", ctx))
 
     # source_path é nome EXCLUSIVAMENTE simbólico (FORMAL §3, nota)
-    source_path = atributos.get("source_path")
+    source_path = attributes.get("source_path")
     if source_path is not None:
         if not isinstance(source_path, str) or ("/" in source_path or
                                                 source_path.startswith(".")):
-            diags.append(Diagnostico(
+            diags.append(Diagnosis(
                 "source_path_nao_simbolico",
                 f"source_path {source_path!r} não é nome simbólico de sensor FXP",
                 ctx))
-        elif sensores is not None and source_path not in sensores:
-            diags.append(Diagnostico("sensor_nao_registrado",
-                                     f"sensor {source_path!r} fora do registro",
-                                     ctx))
+        elif sensors is not None and source_path not in sensors:
+            diags.append(Diagnosis("sensor_nao_registrado",
+                                   f"sensor {source_path!r} fora do registro",
+                                   ctx))
 
-    if nome in vistas:
-        diags.append(Diagnostico("forma_duplicada",
-                                 f"forma {nome!r} declarada duas vezes", ctx))
-    vistas.add(nome)
+    if name in seen:
+        diags.append(Diagnosis("forma_duplicada",
+                               f"forma {name!r} declarada duas vezes", ctx))
+    seen.add(name)
     return diags
 
 
-def _validar_review(decl: dict, formas_vistas: set[str],
-                    reviews_vistas: dict[str, int], sensores,
-                    atores) -> list[Diagnostico]:
-    diags: list[Diagnostico] = []
-    nome = decl["forma"]
-    ctx = f"review {nome}"
+def _validate_review(decl: dict, forms_seen: set[str],
+                     reviews_seen: dict[str, int], sensors,
+                     actors) -> list[Diagnosis]:
+    diags: list[Diagnosis] = []
+    name = decl["form"]
+    ctx = f"review {name}"
 
     # review órfã e review duplicada são ERROS DE COMPILAÇÃO (FORMAL §3)
-    if nome not in formas_vistas:
-        diags.append(Diagnostico(
+    if name not in forms_seen:
+        diags.append(Diagnosis(
             "review_orfa",
-            f"review para forma inexistente: {nome!r} (regras não são "
+            f"review para forma inexistente: {name!r} (regras não são "
             f"adicionadas a formas fantasma)", ctx))
-    reviews_vistas[nome] = reviews_vistas.get(nome, 0) + 1
-    if reviews_vistas[nome] > 1:
-        diags.append(Diagnostico(
+    reviews_seen[name] = reviews_seen.get(name, 0) + 1
+    if reviews_seen[name] > 1:
+        diags.append(Diagnosis(
             "review_duplicada",
-            f"segunda review para {nome!r} — regras não são mescladas "
+            f"segunda review para {name!r} — regras não são mescladas "
             f"(FORMAL §3)", ctx))
 
-    for i, regra in enumerate(decl["regras"]):
+    for i, rule in enumerate(decl["rules"]):
         rctx = f"{ctx} regra#{i}"
-        if regra["op"] not in ir.OPERADORES:
-            diags.append(Diagnostico("operador_invalido",
-                                     f"op {regra['op']!r}", rctx))
-        unidade = regra.get("unidade")
-        if unidade is not None and unidade not in ("°C", "W", "%"):
-            diags.append(Diagnostico("unidade_desconhecida",
-                                     f"unidade {unidade!r}", rctx))
-        if sensores is not None:
-            sensor = sensores.get(regra["sensor"])
+        if rule["op"] not in ir.OPERATORS:
+            diags.append(Diagnosis("operador_invalido",
+                                   f"op {rule['op']!r}", rctx))
+        unit = rule.get("unit")
+        if unit is not None and unit not in ("°C", "W", "%"):
+            diags.append(Diagnosis("unidade_desconhecida",
+                                   f"unidade {unit!r}", rctx))
+        if sensors is not None:
+            sensor = sensors.get(rule["sensor"])
             if sensor is None:
-                diags.append(Diagnostico("sensor_nao_registrado",
-                                         f"sensor {regra['sensor']!r} fora do "
-                                         f"registro", rctx))
-            elif unidade is not None:
-                esperada = ir.UNIDADE_POR_GRANDEZA.get(sensor.get("grandeza", ""))
-                if esperada is not None and unidade != esperada:
-                    diags.append(Diagnostico(
+                diags.append(Diagnosis("sensor_nao_registrado",
+                                       f"sensor {rule['sensor']!r} fora do "
+                                       f"registro", rctx))
+            elif unit is not None:
+                expected = ir.UNIT_BY_QUANTITY.get(sensor.get("quantity", ""))
+                if expected is not None and unit != expected:
+                    diags.append(Diagnosis(
                         "unidade_incompativel",
-                        f"unidade {unidade!r} incompatível com a grandeza "
-                        f"{sensor.get('grandeza')!r} do sensor "
-                        f"{regra['sensor']!r} (esperado {esperada!r})", rctx))
-        for acao in regra["acoes"]:
-            if acao["action"] not in ir.ACOES:
-                diags.append(Diagnostico("acao_desconhecida",
-                                         f"ação {acao['action']!r}", rctx))
-            if acao["action"] == "act" and atores is not None:
-                if acao.get("ator") not in atores:
-                    diags.append(Diagnostico(
+                        f"unidade {unit!r} incompatível com a grandeza "
+                        f"{sensor.get('quantity')!r} do sensor "
+                        f"{rule['sensor']!r} (esperado {expected!r})", rctx))
+        for action in rule["actions"]:
+            if action["action"] not in ir.ACTIONS:
+                diags.append(Diagnosis("acao_desconhecida",
+                                       f"ação {action['action']!r}", rctx))
+            if action["action"] == "act" and actors is not None:
+                if action.get("actor") not in actors:
+                    diags.append(Diagnosis(
                         "ator_nao_registrado",
-                        f"ator {acao.get('ator')!r} fora do registro FXP", rctx))
+                        f"ator {action.get('actor')!r} fora do registro FXP", rctx))
     return diags
 
 
-def _validar_main(bloco: dict, formas_vistas: set[str], atores
-                  ) -> list[Diagnostico]:
-    diags: list[Diagnostico] = []
+def _validate_main(block: dict, forms_seen: set[str], actors
+                   ) -> list[Diagnosis]:
+    diags: list[Diagnosis] = []
 
-    def passe(statements, profundeza=0):
-        if profundeza > 8:  # defesa contra aninhamento infinito
+    def walk(statements, depth=0):
+        if depth > 8:  # defesa contra aninhamento infinito
             return
         for stmt in statements:
-            tipo = stmt["statement"]
-            if tipo == "keep":
+            kind = stmt["statement"]
+            if kind == "keep":
                 # `keep` de forma inexistente — cláusula de erro (AGENTS.md Done)
-                if stmt["forma"] not in formas_vistas:
-                    diags.append(Diagnostico(
+                if stmt["form"] not in forms_seen:
+                    diags.append(Diagnosis(
                         "keep_forma_inexistente",
-                        f"keep('{stmt['forma']}') não aponta para forma "
+                        f"keep('{stmt['form']}') não aponta para forma "
                         f"declarada", "main"))
-            elif tipo == "act":
-                if atores is not None and stmt["ator"] not in atores:
-                    diags.append(Diagnostico(
+            elif kind == "act":
+                if actors is not None and stmt["actor"] not in actors:
+                    diags.append(Diagnosis(
                         "ator_nao_registrado",
-                        f"ator {stmt['ator']!r} fora do registro FXP", "main"))
-            elif tipo == "every":
+                        f"ator {stmt['actor']!r} fora do registro FXP", "main"))
+            elif kind == "every":
                 try:
-                    ir.duracao(stmt["periodo"])
+                    ir.duration(stmt["period"])
                 except ValueError:
-                    diags.append(Diagnostico("duracao_invalida",
-                                             f"every {stmt['periodo']!r}", "main"))
-                passe(stmt["statements"], profundeza + 1)
+                    diags.append(Diagnosis("duracao_invalida",
+                                           f"every {stmt['period']!r}", "main"))
+                walk(stmt["statements"], depth + 1)
             else:
-                diags.append(Diagnostico("statement_desconhecido",
-                                         f"{tipo!r}", "main"))
+                diags.append(Diagnosis("statement_desconhecido",
+                                       f"{kind!r}", "main"))
 
-    passe(bloco["statements"])
+    walk(block["statements"])
     return diags

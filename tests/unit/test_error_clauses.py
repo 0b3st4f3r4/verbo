@@ -16,223 +16,223 @@ from __future__ import annotations
 from fxp_sim import contract, ir
 import vlcheck  # tests/vlcheck.py (validador de superfície .vl)
 
-REGISTRO_SENSORES = {
-    "cpu_temp": {"grandeza": "temperatura", "unidade": "°C"},
-    "cpu_power": {"grandeza": "potencia", "unidade": "W"},
-    "attention": {"grandeza": "atencao", "unidade": "%"},
+SENSOR_REGISTRY = {
+    "cpu_temp": {"quantity": "temperature", "unit": "°C"},
+    "cpu_power": {"quantity": "power", "unit": "W"},
+    "attention": {"quantity": "attention", "unit": "%"},
 }
-REGISTRO_ATORES = {"CpuPowerCap": {}, "Ventoinha": {}, "LedIndicador": {}}
+ACTOR_REGISTRY = {"CpuPowerCap": {}, "Ventoinha": {}, "LedIndicador": {}}
 
 
-def _codigos(diagnosticos):
-    return {d.codigo for d in diagnosticos}
+def _codes(diagnoses):
+    return {d.code for d in diagnoses}
 
 
 # ----------------------------------------------------------------------
 # Forma sem `value` / `horizon` (FORMAL §3; Lei 1 do MANIFESTO)
 # ----------------------------------------------------------------------
-def test_forma_sem_value_rejeitada_no_texto():
-    texto = 'event X { horizon: 3s }'
-    erros = vlcheck.validar(texto)
-    assert "value_obrigatorio" in {e.codigo for e in erros}
+def test_form_without_value_rejected_in_text():
+    text = 'event X { horizon: 3s }'
+    errors = vlcheck.validate(text)
+    assert "value_obrigatorio" in {e.code for e in errors}
 
 
-def test_forma_sem_horizon_rejeitada_no_texto():
-    texto = 'event X { value: "v" }'
-    erros = vlcheck.validar(texto)
-    assert "horizon_obrigatorio" in {e.codigo for e in erros}
+def test_form_without_horizon_rejected_in_text():
+    text = 'event X { value: "v" }'
+    errors = vlcheck.validate(text)
+    assert "horizon_obrigatorio" in {e.code for e in errors}
 
 
-def test_value_antes_de_horizon_e_exigido_no_texto():
-    texto = 'event X { horizon: 3s, value: "v" }'
-    erros = vlcheck.validar(texto)
-    assert "ordem_value_horizon" in {e.codigo for e in erros}
+def test_value_before_horizon_required_in_text():
+    text = 'event X { horizon: 3s, value: "v" }'
+    errors = vlcheck.validate(text)
+    assert "ordem_value_horizon" in {e.code for e in errors}
 
 
-def test_forma_sem_value_ou_horizon_rejeitada_no_ir():
-    forma = {"tipo": "forma", "conjugacao": "event", "nome": "X",
-             "atributos": {"horizon": "3s"}}
-    assert "atributo_obrigatorio_ausente" in _codigos(
-        contract.validar_programa(ir.programa(forma)))
+def test_form_without_value_or_horizon_rejected_in_ir():
+    form = {"type": "form", "conjugation": "event", "name": "X",
+            "attributes": {"horizon": "3s"}}
+    assert "atributo_obrigatorio_ausente" in _codes(
+        contract.validate_program(ir.program(form)))
 
 
 # ----------------------------------------------------------------------
 # Atributos por conjugação (FORMAL §3)
 # ----------------------------------------------------------------------
-def test_nonequilibrium_sem_maintenance_deadline_rejeitado():
-    forma = ir.forma("X", "nonequilibrium", "v", "3s")  # sem deadline
-    codigos = _codigos(contract.validar_programa(ir.programa(forma)))
-    assert {"maintenance_deadline_ausente"} & codigos
+def test_nonequilibrium_without_maintenance_deadline_rejected():
+    form = ir.form("X", "nonequilibrium", "v", "3s")  # sem deadline
+    codes = _codes(contract.validate_program(ir.program(form)))
+    assert {"maintenance_deadline_ausente"} & codes
 
 
-def test_cost_bytes_fora_de_equilibrium_rejeitado():
-    forma = ir.forma("X", "event", "v", "3s", cost_bytes=16)
-    codigos = _codigos(contract.validar_programa(ir.programa(forma)))
-    assert "atributo_nao_aplicavel" in codigos
-    erros = vlcheck.validar('event X { value: "v", horizon: 3s, cost_bytes: 16 }')
-    assert "atributo_nao_aplicavel" in {e.codigo for e in erros}
+def test_cost_bytes_outside_equilibrium_rejected():
+    form = ir.form("X", "event", "v", "3s", cost_bytes=16)
+    codes = _codes(contract.validate_program(ir.program(form)))
+    assert "atributo_nao_aplicavel" in codes
+    errors = vlcheck.validate('event X { value: "v", horizon: 3s, cost_bytes: 16 }')
+    assert "atributo_nao_aplicavel" in {e.code for e in errors}
 
 
-def test_exchange_mode_fora_de_nonequilibrium_rejeitado():
-    forma = ir.forma("X", "equilibrium", "v", "3s", exchange_mode="cooperation")
-    codigos = _codigos(contract.validar_programa(ir.programa(forma)))
-    assert "atributo_nao_aplicavel" in codigos
+def test_exchange_mode_outside_nonequilibrium_rejected():
+    form = ir.form("X", "equilibrium", "v", "3s", exchange_mode="cooperation")
+    codes = _codes(contract.validate_program(ir.program(form)))
+    assert "atributo_nao_aplicavel" in codes
 
 
 # ----------------------------------------------------------------------
 # Review órfã / duplicada (FORMAL §3: erros de compilação)
 # ----------------------------------------------------------------------
-def test_review_orfa_rejeitada_no_texto():
-    texto = '''
+def test_orphan_review_rejected_in_text():
+    text = '''
     event X { value: "v", horizon: 3s }
     review Y { when cpu_temp > 90°C -> dissolve }
     '''
-    erros = vlcheck.validar(texto)
-    assert "review_orfa" in {e.codigo for e in erros}
+    errors = vlcheck.validate(text)
+    assert "review_orfa" in {e.code for e in errors}
 
 
-def test_review_duplicada_rejeitada_no_texto():
-    texto = '''
+def test_duplicate_review_rejected_in_text():
+    text = '''
     event X { value: "v", horizon: 3s }
     review X { when cpu_temp > 90°C -> dissolve }
     review X { when cpu_temp < 10°C -> dissolve }
     '''
-    erros = vlcheck.validar(texto)
-    assert "review_duplicada" in {e.codigo for e in erros}
+    errors = vlcheck.validate(text)
+    assert "review_duplicada" in {e.code for e in errors}
 
 
-def test_review_orfa_rejeitada_no_ir():
-    review = ir.review("Fantasma", ir.regra("cpu_temp", ">", 90, "°C",
-                                            ir.acao("dissolve")))
-    forma = ir.forma("X", "event", "v", "3s")
-    codigos = _codigos(contract.validar_programa(ir.programa(forma, review)))
-    assert "review_orfa" in codigos
+def test_orphan_review_rejected_in_ir():
+    review = ir.review("Fantasma", ir.rule("cpu_temp", ">", 90, "°C",
+                                           ir.action("dissolve")))
+    form = ir.form("X", "event", "v", "3s")
+    codes = _codes(contract.validate_program(ir.program(form, review)))
+    assert "review_orfa" in codes
 
 
-def test_review_duplicada_rejeitada_no_ir():
-    forma = ir.forma("X", "event", "v", "3s")
-    r1 = ir.review("X", ir.regra("cpu_temp", ">", 90, "°C", ir.acao("dissolve")))
-    r2 = ir.review("X", ir.regra("cpu_temp", "<", 10, "°C", ir.acao("dissolve")))
-    codigos = _codigos(contract.validar_programa(ir.programa(forma, r1, r2)))
-    assert "review_duplicada" in codigos
+def test_duplicate_review_rejected_in_ir():
+    form = ir.form("X", "event", "v", "3s")
+    r1 = ir.review("X", ir.rule("cpu_temp", ">", 90, "°C", ir.action("dissolve")))
+    r2 = ir.review("X", ir.rule("cpu_temp", "<", 10, "°C", ir.action("dissolve")))
+    codes = _codes(contract.validate_program(ir.program(form, r1, r2)))
+    assert "review_duplicada" in codes
 
 
 # ----------------------------------------------------------------------
 # `keep` de forma inexistente (cláusula de erro — AGENTS.md)
 # ----------------------------------------------------------------------
-def test_keep_de_forma_inexistente_rejeitado_no_texto():
-    texto = '''
+def test_keep_of_nonexistent_form_rejected_in_text():
+    text = '''
     event X { value: "v", horizon: 3s }
     main { every 1s { keep(Inexistente) } }
     '''
-    erros = vlcheck.validar(texto)
-    assert "keep_forma_inexistente" in {e.codigo for e in erros}
+    errors = vlcheck.validate(text)
+    assert "keep_forma_inexistente" in {e.code for e in errors}
 
 
-def test_keep_de_forma_inexistente_rejeitado_no_ir():
-    forma = ir.forma("X", "nonequilibrium", "v", "30s",
-                     source_path="cpu_power", maintenance_deadline="2s")
-    main = ir.main_bloco(ir.every("1s", ir.keep_("Outra")))
-    codigos = _codigos(contract.validar_programa(ir.programa(forma, main=main)))
-    assert "keep_forma_inexistente" in codigos
+def test_keep_of_nonexistent_form_rejected_in_ir():
+    form = ir.form("X", "nonequilibrium", "v", "30s",
+                   source_path="cpu_power", maintenance_deadline="2s")
+    main = ir.main_block(ir.every("1s", ir.keep_("Outra")))
+    codes = _codes(contract.validate_program(ir.program(form, main=main)))
+    assert "keep_forma_inexistente" in codes
 
 
-def test_keep_de_forma_dissolvida_registrado_em_runtime(engine, cad):
+def test_keep_of_dissolved_form_recorded_at_runtime(engine, ledger):
     """Em runtime, keep para forma já dissolvida é registrado e não quebra."""
-    interpretador = _carregar_com_main(engine)
+    interpreter = _load_with_main(engine)
     engine.tick()  # t=1: vence o primeiro `every 1s`
     engine.dissolve_form("Solo", fim="collapse_maintenance")
-    interpretador.run_due()
-    assert cad.tem("keep_forma_inexistente", forma="Solo")
+    interpreter.run_due()
+    assert ledger.has("keep_forma_inexistente", forma="Solo")
 
 
-def _carregar_com_main(engine):
+def _load_with_main(engine):
     from fxp_sim import loader
-    programa = ir.programa(
-        ir.forma("Solo", "nonequilibrium", "v", "30s",
-                 source_path="cpu_power", maintenance_deadline="2s"),
-        main=ir.main_bloco(ir.every("1s", ir.keep_("Solo"))),
+    program = ir.program(
+        ir.form("Solo", "nonequilibrium", "v", "30s",
+                source_path="cpu_power", maintenance_deadline="2s"),
+        main=ir.main_block(ir.every("1s", ir.keep_("Solo"))),
     )
-    return loader.carregar(engine, programa)
+    return loader.load(engine, program)
 
 
 # ----------------------------------------------------------------------
 # Sensor ausente (§4.7 — coberto em runtime; unidade/registro no IR)
 # ----------------------------------------------------------------------
-def test_sensor_nao_registrado_detectado_no_ir():
-    forma = ir.forma("X", "nonequilibrium", "v", "3s",
-                     source_path="solar_flare", maintenance_deadline="2s")
-    codigos = _codigos(contract.validar_programa(
-        ir.programa(forma), sensores=REGISTRO_SENSORES))
-    assert "sensor_nao_registrado" in codigos
+def test_unregistered_sensor_detected_in_ir():
+    form = ir.form("X", "nonequilibrium", "v", "3s",
+                   source_path="solar_flare", maintenance_deadline="2s")
+    codes = _codes(contract.validate_program(
+        ir.program(form), sensors=SENSOR_REGISTRY))
+    assert "sensor_nao_registrado" in codes
 
 
-def test_source_path_com_caminho_de_so_rejeitado():
-    forma = ir.forma("X", "nonequilibrium", "v", "3s",
-                     source_path="/sys/class/thermal/thermal_zone0/temp",
-                     maintenance_deadline="2s")
-    codigos = _codigos(contract.validar_programa(ir.programa(forma)))
-    assert "source_path_nao_simbolico" in codigos
-    erros = vlcheck.validar(
+def test_source_path_with_os_path_rejected():
+    form = ir.form("X", "nonequilibrium", "v", "3s",
+                   source_path="/sys/class/thermal/thermal_zone0/temp",
+                   maintenance_deadline="2s")
+    codes = _codes(contract.validate_program(ir.program(form)))
+    assert "source_path_nao_simbolico" in codes
+    errors = vlcheck.validate(
         'nonequilibrium X { value: "v", horizon: 3s, '
         'source_path: "/sys/class/thermal/temp", maintenance_deadline: 2s }')
-    assert "source_path_nao_simbolico" in {e.codigo for e in erros}
+    assert "source_path_nao_simbolico" in {e.code for e in errors}
 
 
-def test_unidade_incompativel_com_grandeza_rejeitada():
-    forma = ir.forma("X", "event", "v", "3s")
-    review = ir.review("X", ir.regra("cpu_temp", ">", 90, "W",
-                                     ir.acao("dissolve")))
-    codigos = _codigos(contract.validar_programa(
-        ir.programa(forma, review), sensores=REGISTRO_SENSORES))
-    assert "unidade_incompativel" in codigos
+def test_unit_incompatible_with_quantity_rejected():
+    form = ir.form("X", "event", "v", "3s")
+    review = ir.review("X", ir.rule("cpu_temp", ">", 90, "W",
+                                    ir.action("dissolve")))
+    codes = _codes(contract.validate_program(
+        ir.program(form, review), sensors=SENSOR_REGISTRY))
+    assert "unidade_incompativel" in codes
 
 
 # ----------------------------------------------------------------------
 # Ator inexistente / valor fora de limite (contract e runtime)
 # ----------------------------------------------------------------------
-def test_ator_nao_registrado_detectado_no_ir():
-    forma = ir.forma("X", "event", "v", "3s")
-    review = ir.review("X", ir.regra("cpu_temp", ">", 90, "°C",
-                                     ir.act_("AtorFantasma", 5)))
-    codigos = _codigos(contract.validar_programa(
-        ir.programa(forma, review), sensores=REGISTRO_SENSORES,
-        atores=REGISTRO_ATORES))
-    assert "ator_nao_registrado" in codigos
+def test_unregistered_actor_detected_in_ir():
+    form = ir.form("X", "event", "v", "3s")
+    review = ir.review("X", ir.rule("cpu_temp", ">", 90, "°C",
+                                    ir.act_("AtorFantasma", 5)))
+    codes = _codes(contract.validate_program(
+        ir.program(form, review), sensors=SENSOR_REGISTRY,
+        actors=ACTOR_REGISTRY))
+    assert "ator_nao_registrado" in codes
 
 
-def test_reclassify_para_nonequilibrium_sem_deadline_declarado(engine, cad):
+def test_reclassify_to_nonequilibrium_without_declared_deadline(engine, ledger):
     """FORMAL §3: é erro de RUNTIME registrado no Caderno; a forma permanece
     como estava (equilibrium nunca declarou deadline)."""
-    programa = ir.programa(
-        ir.forma("Doc", "equilibrium", "v", "60s"),
-        ir.review("Doc", ir.regra("cpu_temp", ">", 90, "°C",
-                                  ir.acao("reclassify_as_nonequilibrium"))),
+    program = ir.program(
+        ir.form("Doc", "equilibrium", "v", "60s"),
+        ir.review("Doc", ir.rule("cpu_temp", ">", 90, "°C",
+                                 ir.action("reclassify_as_nonequilibrium"))),
     )
     from fxp_sim import loader
-    loader.carregar(engine, programa)
+    loader.load(engine, program)
     engine.fxp.set_sensor("cpu_temp", 95.0)
     engine.tick()
-    assert cad.tem("reclassify_sem_deadline", forma="Doc")
+    assert ledger.has("reclassify_sem_deadline", forma="Doc")
     assert engine.forms["Doc"].conjugation == "equilibrium"  # permaneceu
 
 
-def test_reclassify_para_nonequilibrium_com_deadline_declarado(engine, cad):
+def test_reclassify_to_nonequilibrium_with_declared_deadline(engine, ledger):
     """NEQ -> EQ -> NEQ é legal: o deadline declarado sobrevive."""
-    programa = ir.programa(
-        ir.forma("P", "nonequilibrium", "v", "60s", source_path="attention",
-                 maintenance_deadline="3s", exchange_mode="extraction"),
-        ir.review("P", ir.regra("attention", "<", 30, "%",
-                                ir.acao("reclassify_as_equilibrium")),
-                      ir.regra("attention", ">", 80, "%",
-                               ir.acao("reclassify_as_nonequilibrium"))),
+    program = ir.program(
+        ir.form("P", "nonequilibrium", "v", "60s", source_path="attention",
+                maintenance_deadline="3s", exchange_mode="extraction"),
+        ir.review("P", ir.rule("attention", "<", 30, "%",
+                               ir.action("reclassify_as_equilibrium")),
+                      ir.rule("attention", ">", 80, "%",
+                              ir.action("reclassify_as_nonequilibrium"))),
     )
     from fxp_sim import loader
-    loader.carregar(engine, programa)
+    loader.load(engine, program)
     engine.fxp.set_sensor("attention", 15.0)
     engine.tick()  # NEQ -> EQ
     engine.fxp.set_sensor("attention", 90.0)
     engine.tick()  # EQ -> NEQ (deadline 3s declarado preservado)
-    assert cad.tem("transicao", forma="P", para="nonequilibrium")
+    assert ledger.has("transicao", forma="P", para="nonequilibrium")
     assert engine.forms["P"].conjugation == "nonequilibrium"
     assert engine.forms["P"].maintenance_deadline == 3.0

@@ -11,91 +11,91 @@ from __future__ import annotations
 from fxp_sim import ir, loader
 
 
-def _carregar(engine, *declaracoes):
-    return loader.carregar(engine, ir.programa(*declaracoes))
+def _load(engine, *declarations):
+    return loader.load(engine, ir.program(*declarations))
 
 
-def _forma_atencao():
+def _attention_form():
     return (
-        ir.forma("Sentinela", "nonequilibrium", "vigia", "30s",
-                 source_path="attention", maintenance_deadline="3s"),
+        ir.form("Sentinela", "nonequilibrium", "vigia", "30s",
+                source_path="attention", maintenance_deadline="3s"),
         ir.review("Sentinela",
-                  ir.regra("attention", "<", 30, "%",
-                           ir.acao("reclassify_as_equilibrium"))),
+                  ir.rule("attention", "<", 30, "%",
+                          ir.action("reclassify_as_equilibrium"))),
     )
 
 
-def test_leitura_zero_e_valida_e_dispara_regras(engine, cad, sim):
+def test_zero_reading_is_valid_and_fires_rules(engine, ledger, sim):
     """0.0 é leitura física legítima: a regra `attention < 30%` DEVE disparar."""
-    _carregar(engine, *_forma_atencao())
+    _load(engine, *_attention_form())
     sim.set_sensor("attention", 0.0)
     engine.tick()
-    assert cad.tem("transicao", forma="Sentinela", para="equilibrium")
-    leituras = [e for e in cad.buscar("LEITURA", sensor="attention")]
-    assert leituras and leituras[-1]["valor"] == 0.0
+    assert ledger.has("transicao", forma="Sentinela", para="equilibrium")
+    readings = [e for e in ledger.find("LEITURA", sensor="attention")]
+    assert readings and readings[-1]["valor"] == 0.0
     # zero NÃO é falha de I/O: nenhum alerta de sensor
-    assert not cad.tem("ALERTA", motivo="sensor_nao_registrado")
-    assert not cad.tem("ALERTA", motivo="sensor_inacessivel")
+    assert not ledger.has("ALERTA", motivo="sensor_nao_registrado")
+    assert not ledger.has("ALERTA", motivo="sensor_inacessivel")
 
 
-def test_leitura_zero_nunca_e_falha_de_io(engine, cad, sim):
+def test_zero_reading_is_never_an_io_failure(engine, ledger, sim):
     sim.set_sensor("cpu_temp", 0.0)
     assert sim.read_sensor("cpu_temp") == 0.0  # valor, não None
-    assert not cad.tem("ALERTA")
+    assert not ledger.has("ALERTA")
 
 
-def test_sensor_ausente_nao_avalia_condicao_nem_dispara(engine, cad, sim):
+def test_missing_sensor_evaluates_no_condition_nor_fires(engine, ledger, sim):
     """FORMAL §4.7: sensor fora do registro é falha de I/O — a condição não
     é avaliada naquele tick e não há disparo falso (o valor NÃO é 0.0)."""
-    _carregar(
+    _load(
         engine,
-        ir.forma("Fantasma", "nonequilibrium", "obs", "30s",
-                 source_path="sensor_inexistente", maintenance_deadline="3s"),
+        ir.form("Fantasma", "nonequilibrium", "obs", "30s",
+                source_path="sensor_inexistente", maintenance_deadline="3s"),
         ir.review("Fantasma",
-                  ir.regra("sensor_inexistente", "<", 30, "%",
-                           ir.acao("reclassify_as_equilibrium"))),
+                  ir.rule("sensor_inexistente", "<", 30, "%",
+                          ir.action("reclassify_as_equilibrium"))),
     )
     for _ in range(4):
         engine.tick()
     # a regra jamais avaliou: forma permanece nonequilibrium
     assert engine.forms["Fantasma"].conjugation == "nonequilibrium"
-    assert not cad.tem("transicao")
+    assert not ledger.has("transicao")
     # alerta registrado a cada tick de leitura
-    alertas = cad.buscar("ALERTA", motivo="sensor_nao_registrado",
+    alerts = ledger.find("ALERTA", motivo="sensor_nao_registrado",
                          sensor="sensor_inexistente")
-    assert len(alertas) >= 1
+    assert len(alerts) >= 1
 
 
-def test_sensor_ausente_nao_e_tratado_como_zero(engine, cad, sim):
+def test_missing_sensor_is_not_treated_as_zero(engine, ledger, sim):
     """Se sensor ausente valesse 0.0, a regra `attention < 30%` dispararia
     falsamente — é exatamente o que a FORMAL §4.7 proíbe."""
-    _carregar(engine, *_forma_atencao())
-    sim.desregistrar_sensor("attention")
+    _load(engine, *_attention_form())
+    sim.unregister_sensor("attention")
     for _ in range(3):
         engine.tick()
-    assert not cad.tem("transicao")  # nenhum disparo falso
+    assert not ledger.has("transicao")  # nenhum disparo falso
     assert engine.forms["Sentinela"].conjugation == "nonequilibrium"
 
 
-def test_sensor_registrado_inacessivel_segue_a_mesma_regra(engine, cad, sim):
+def test_registered_but_inaccessible_sensor_follows_same_rule(engine, ledger, sim):
     """FORMAL §4.7: registrado porém inacessível (falha de leitura em modo
     real) segue a mesma regra — condição não avaliada + alerta."""
-    _carregar(engine, *_forma_atencao())
-    sim.falhar_sensor("attention")
+    _load(engine, *_attention_form())
+    sim.fail_sensor("attention")
     engine.tick()
-    assert not cad.tem("transicao")
-    assert cad.tem("ALERTA", motivo="sensor_inacessivel", sensor="attention")
+    assert not ledger.has("transicao")
+    assert ledger.has("ALERTA", motivo="sensor_inacessivel", sensor="attention")
     # recupera a acessibilidade e a regra volta a avaliar
-    sim.sensores["attention"].acessivel = True
+    sim.sensors["attention"].accessible = True
     sim.set_sensor("attention", 15.0)
     engine.tick()
-    assert cad.tem("transicao", forma="Sentinela", para="equilibrium")
+    assert ledger.has("transicao", forma="Sentinela", para="equilibrium")
 
 
-def test_forma_sem_source_path_nao_gera_leitura_nem_falha(engine, cad):
+def test_form_without_source_path_generates_no_reading_nor_failure(engine, ledger):
     """Exemplos 5/6 da FORMAL: formas podem não declarar source_path."""
-    _carregar(engine,
-              ir.forma("Piscada", "event", "impulso_curto", "2s"))
+    _load(engine,
+          ir.form("Piscada", "event", "impulso_curto", "2s"))
     engine.tick()
     assert "Piscada" in engine.forms  # sem crash, sem leitura
-    assert not cad.tem("ALERTA", motivo="sensor_nao_registrado")
+    assert not ledger.has("ALERTA", motivo="sensor_nao_registrado")

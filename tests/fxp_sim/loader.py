@@ -10,119 +10,115 @@ validação estrutural fica no `contract.py` — carregar um programa inválido
 from __future__ import annotations
 
 from . import ir
-from .blueprint import carregar as _carregar_prototipo
+from .blueprint import load as _load_prototype
 
 
 def _vbl():
-    return _carregar_prototipo()
+    return _load_prototype()
 
 
-def carregar(engine, programa: dict):
+def load(engine, program: dict):
     """Carrega formas, reviews e o bloco main no engine.
 
     Retorna o `MainInterpreter` (ou None se o programa não tiver main).
     """
-    for declaracao in programa["declaracoes"]:
-        if declaracao["tipo"] == "forma":
-            _carregar_forma(engine, declaracao)
-        elif declaracao["tipo"] == "review":
-            _carregar_review(engine, declaracao)
+    for declaration in program["declarations"]:
+        if declaration["type"] == "form":
+            _load_form(engine, declaration)
+        elif declaration["type"] == "review":
+            _load_review(engine, declaration)
         else:
-            raise ValueError(f"declaração desconhecida: {declaracao['tipo']}")
+            raise ValueError(f"declaração desconhecida: {declaration['type']}")
 
-    bloco = programa.get("main")
-    if bloco is None:
+    block = program.get("main")
+    if block is None:
         return None
-    return _carregar_main(engine, bloco)
+    return _load_main(engine, block)
 
 
 # ----------------------------------------------------------------------
-def _carregar_forma(engine, decl: dict):
-    atributos = decl["atributos"]
-    valor = atributos["value"]
-    horizon = ir.duracao(atributos["horizon"])
-    source_path = atributos.get("source_path")
-    agora = engine.sim_time
-    nome = decl["nome"]
+def _load_form(engine, decl: dict):
+    attributes = decl["attributes"]
+    value = attributes["value"]
+    horizon = ir.duration(attributes["horizon"])
+    source_path = attributes.get("source_path")
+    now = engine.sim_time
+    name = decl["name"]
 
-    if decl["conjugacao"] == "event":
-        forma_obj = _vbl().EventForm(nome, valor, horizon, source_path, agora)
-    elif decl["conjugacao"] == "equilibrium":
-        forma_obj = _vbl().EquilibriumForm(
-            nome, valor, horizon, source_path, atributos.get("cost_bytes"), agora
+    if decl["conjugation"] == "event":
+        form_obj = _vbl().EventForm(name, value, horizon, source_path, now)
+    elif decl["conjugation"] == "equilibrium":
+        form_obj = _vbl().EquilibriumForm(
+            name, value, horizon, source_path, attributes.get("cost_bytes"), now
         )
-    elif decl["conjugacao"] == "nonequilibrium":
-        if "maintenance_deadline" not in atributos:
+    elif decl["conjugation"] == "nonequilibrium":
+        if "maintenance_deadline" not in attributes:
             raise ValueError(
-                f"forma '{nome}': nonequilibrium exige maintenance_deadline "
+                f"forma '{name}': nonequilibrium exige maintenance_deadline "
                 f"(validação estrutural fica no contract.py)"
             )
-        forma_obj = _vbl().NonequilibriumForm(
-            nome, valor, horizon, source_path,
-            ir.duracao(atributos["maintenance_deadline"]),
-            atributos.get("exchange_mode", "cooperation"), agora,
+        form_obj = _vbl().NonequilibriumForm(
+            name, value, horizon, source_path,
+            ir.duration(attributes["maintenance_deadline"]),
+            attributes.get("exchange_mode", "cooperation"), now,
         )
     else:
-        raise ValueError(f"conjugação desconhecida: {decl['conjugacao']}")
+        raise ValueError(f"conjugação desconhecida: {decl['conjugation']}")
 
     # opcionais comuns (sobrepõem o padrão da conjugação)
-    if "currency" in atributos:
-        forma_obj.currency = atributos["currency"]
-    if "classification" in atributos:
-        forma_obj.classification_currency = atributos["classification"]
+    if "currency" in attributes:
+        form_obj.currency = attributes["currency"]
+    if "classification" in attributes:
+        form_obj.classification_currency = attributes["classification"]
 
-    engine.register_form(forma_obj)
-    return forma_obj
+    engine.register_form(form_obj)
+    return form_obj
 
 
-def _carregar_review(engine, decl: dict):
-    forma_obj = engine.forms.get(decl["forma"])
-    if forma_obj is None:
-        raise ValueError(f"review para forma inexistente: {decl['forma']}")
-    for regra in decl["regras"]:
-        threshold = regra["limiar"]  # unidade vira número puro (FORMAL §3)
-        forma_obj.add_review_condition(
-            regra["sensor"], regra["op"], threshold,
-            [_traduzir_acao(a) for a in regra["acoes"]],
+def _load_review(engine, decl: dict):
+    form_obj = engine.forms.get(decl["form"])
+    if form_obj is None:
+        raise ValueError(f"review para forma inexistente: {decl['form']}")
+    for rule in decl["rules"]:
+        threshold = rule["threshold"]  # unidade vira número puro (FORMAL §3)
+        form_obj.add_review_condition(
+            rule["sensor"], rule["op"], threshold,
+            [_translate_action(a) for a in rule["actions"]],
         )
-    return forma_obj
+    return form_obj
 
 
-def _traduzir_acao(acao: dict) -> dict:
-    """IR em português -> estrutura esperada pelo protótipo (actor/value)."""
-    traduzida = dict(acao)
-    if traduzida["action"] == "act":
-        traduzida["actor"] = traduzida.pop("ator")
-        traduzida["value"] = traduzida.pop("valor")
-    return traduzida
+def _translate_action(action: dict) -> dict:
+    """IR -> estrutura esperada pelo protótipo (actor/value)."""
+    return dict(action)
 
 
-def _carregar_main(engine, bloco: dict):
+def _load_main(engine, block: dict):
     """Traduz statements do IR para a estrutura esperada pelo MainInterpreter."""
-    interpretador = _vbl().MainInterpreter(engine)
-    periodicos: list[tuple[float, list[dict]]] = []
+    interpreter = _vbl().MainInterpreter(engine)
+    periodic: list[tuple[float, list[dict]]] = []
 
-    def traduzir(stmt: dict) -> dict:
-        tipo = stmt["statement"]
-        if tipo == "keep":
-            return {"statement": "keep", "form": stmt["forma"]}
-        if tipo == "act":
-            return {"statement": "act", "actor": stmt["ator"], "value": stmt["valor"]}
-        if tipo == "every":
-            periodicos.append(
-                (ir.duracao(stmt["periodo"]), [traduzir(s) for s in stmt["statements"]])
+    def translate(stmt: dict) -> dict:
+        kind = stmt["statement"]
+        if kind == "keep":
+            return {"statement": "keep", "form": stmt["form"]}
+        if kind == "act":
+            return {"statement": "act", "actor": stmt["actor"], "value": stmt["value"]}
+        if kind == "every":
+            periodic.append(
+                (ir.duration(stmt["period"]), [translate(s) for s in stmt["statements"]])
             )
             return {}
-        raise ValueError(f"statement desconhecido: {tipo}")
+        raise ValueError(f"statement desconhecido: {kind}")
 
-    diretos = []
-    for stmt in bloco["statements"]:
-        traduzido = traduzir(stmt)
-        if traduzido:
-            diretos.append(traduzido)
-    if diretos:
+    direct = []
+    for stmt in block["statements"]:
+        translated = translate(stmt)
+        if translated:
+            direct.append(translated)
+    if direct:
         # statements de topo do main rodam como um bloco `every` de período 1 tick
-        periodicos.insert(0, (engine.tick_seconds, diretos))
-    for periodo, statements in periodicos:
-        interpretador.add_every(periodo, statements)
-    return interpretador
+        periodic.insert(0, (engine.tick_seconds, direct))
+    for period, statements in periodic:
+        interpreter.add_every(period, statements)
+    return interpreter

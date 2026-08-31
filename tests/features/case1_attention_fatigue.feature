@@ -1,11 +1,11 @@
-# language: pt
+# language: en
 # Cenário BDD Caso 1 — docs/PLAN.md §1.1
-Funcionalidade: Salvaguarda de Atenção Cognitiva
-  Cenário: Mudança de estado devido ao esgotamento da atenção do usuário
-    Dado que a forma laborativa "PensarLivre" está ativa com um deadline de 3s
-    Quando a leitura do sensor "attention" via FXP cai abaixo de 30% (ex: 15.0%)
-    Então o runtime deve disparar uma transição "reclassify_as_equilibrium"
-    E o estado da ideia deve ser gravado como ".vl" canônico no diretório de persistência
-    E o Caderno registra o evento de persistência com o SHA-256 do arquivo gravado
-    E após a reclassificação a forma deixa de receber ticks de manutenção
-    E 0 bytes permanecem retidos em heap para a forma (verificado com contadores do runtime)
+Feature: Cognitive Attention Safeguard
+  Scenario: State change due to the user's attention running out
+    Given the laborative form "PensarLivre" is active with a deadline of 3s
+    When the "attention" sensor reading via FXP drops below 30% (e.g. 15.0%)
+    Then the runtime must fire a "reclassify_as_equilibrium" transition
+    And the idea state must be saved as canonical ".vl" in the persistence directory
+    And the Ledger records the persistence event with the SHA-256 of the written file
+    And after the reclassification the form no longer receives maintenance ticks
+    And 0 bytes remain retained on the heap for the form (verified with runtime counters)

@@ -12,7 +12,7 @@ from __future__ import annotations
 import vlcheck
 
 # Exemplos canônicos — docs/FORMAL.md §5
-EXEMPLO_1 = '''
+EXAMPLE_1 = '''
 nonequilibrium PensarLivre {
     value: "consciencia_anteneoliberal_ativa",
     horizon: 60s,
@@ -26,7 +26,7 @@ review PensarLivre {
 }
 '''
 
-EXEMPLO_2 = '''
+EXAMPLE_2 = '''
 nonequilibrium TradingEspeculativo {
     value: "lucro_arbitragem_alta_frequencia",
     horizon: 7s,
@@ -41,7 +41,7 @@ review TradingEspeculativo {
 }
 '''
 
-EXEMPLO_3 = '''
+EXAMPLE_3 = '''
 nonequilibrium ServidorCritico {
     value: "processamento_contínuo",
     horizon: 3600s,
@@ -55,7 +55,7 @@ review ServidorCritico {
 }
 '''
 
-EXEMPLO_4 = '''
+EXAMPLE_4 = '''
 nonequilibrium TarefaImportante {
     value: "dados_sensiveis",
     horizon: 30s,
@@ -70,7 +70,7 @@ main {
 }
 '''
 
-EXEMPLO_5 = '''
+EXAMPLE_5 = '''
 event Piscada {
     value: "impulso_curto",
     horizon: 2s
@@ -81,7 +81,7 @@ review Piscada {
 }
 '''
 
-EXEMPLO_6 = '''
+EXAMPLE_6 = '''
 equilibrium Registro {
     value: "documento_persistente",
     horizon: 86400s,
@@ -90,73 +90,73 @@ equilibrium Registro {
 '''
 
 
-def _codigos(texto):
-    return {e.codigo for e in vlcheck.validar(texto)}
+def _codes(text):
+    return {e.code for e in vlcheck.validate(text)}
 
 
-def test_exemplos_canonicos_da_formal_validam_sem_erros():
-    for i, exemplo in enumerate([EXEMPLO_1, EXEMPLO_2, EXEMPLO_3,
-                                 EXEMPLO_4, EXEMPLO_5, EXEMPLO_6], 1):
-        erros = vlcheck.validar(exemplo)
-        assert erros == [], f"Exemplo {i} da FORMAL §5 rejeitado: {erros}"
+def test_canonical_formal_examples_validate_without_errors():
+    for i, example in enumerate([EXAMPLE_1, EXAMPLE_2, EXAMPLE_3,
+                                 EXAMPLE_4, EXAMPLE_5, EXAMPLE_6], 1):
+        errors = vlcheck.validate(example)
+        assert errors == [], f"Exemplo {i} da FORMAL §5 rejeitado: {errors}"
 
 
-def test_comentarios_de_bloco_e_linha_sao_ignorados():
-    texto = '''
+def test_block_and_line_comments_are_ignored():
+    text = '''
     /* comentário
        de bloco */
     event X { value: "v", horizon: 3s } // comentário de linha
     '''
-    assert vlcheck.validar(texto) == []
+    assert vlcheck.validate(text) == []
 
 
-def test_virgula_final_e_rejeitada():
-    texto = 'event X { value: "v", horizon: 3s, }'
-    assert "virgula_final" in _codigos(texto)
+def test_trailing_comma_is_rejected():
+    text = 'event X { value: "v", horizon: 3s, }'
+    assert "virgula_final" in _codes(text)
 
 
-def test_duracao_sem_unidade_e_rejeitada():
-    texto = 'event X { value: "v", horizon: 3 }'
-    assert "duracao_invalida" in _codigos(texto)
+def test_duration_without_unit_is_rejected():
+    text = 'event X { value: "v", horizon: 3 }'
+    assert "duracao_invalida" in _codes(text)
 
 
-def test_string_acima_de_256_bytes_e_rejeitada():
-    texto = f'event X {{ value: "{"a" * 300}", horizon: 3s }}'
-    assert "string_muito_longa" in _codigos(texto)
+def test_string_above_256_bytes_is_rejected():
+    text = f'event X {{ value: "{"a" * 300}", horizon: 3s }}'
+    assert "string_muito_longa" in _codes(text)
 
 
-def test_acao_desconhecida_e_rejeitada():
-    texto = '''
+def test_unknown_action_is_rejected():
+    text = '''
     event X { value: "v", horizon: 3s }
     review X { when cpu_temp > 90°C -> explodir }
     '''
-    assert "acao_desconhecida" in _codigos(texto)
+    assert "acao_desconhecida" in _codes(text)
 
 
-def test_operador_invalido_e_rejeitado():
-    texto = '''
+def test_invalid_operator_is_rejected():
+    text = '''
     event X { value: "v", horizon: 3s }
     review X { when cpu_temp !== 90°C -> dissolve }
     '''
-    assert {"operador_invalido", "lexema_invalido"} & _codigos(texto)
+    assert {"operador_invalido", "lexema_invalido"} & _codes(text)
 
 
-def test_atributo_desconhecido_e_rejeitado():
-    texto = 'event X { value: "v", horizon: 3s, magia: "negra" }'
-    assert "atributo_desconhecido" in _codigos(texto)
+def test_unknown_attribute_is_rejected():
+    text = 'event X { value: "v", horizon: 3s, magia: "negra" }'
+    assert "atributo_desconhecido" in _codes(text)
 
 
-def test_programa_persistido_pelo_runtime_valida(engine, sim, tmp_path):
+def test_program_persisted_by_runtime_validates(engine, sim, tmp_path):
     """O `.vl` gravado pela persistência (FORMAL §4.1) é reparseável."""
     from fxp_sim import ir, loader
-    loader.carregar(engine, ir.programa(
-        ir.forma("Doc", "nonequilibrium", "estado_importante", "60s",
-                 source_path="attention", maintenance_deadline="3s"),
-        ir.review("Doc", ir.regra("attention", "<", 30, "%",
-                                  ir.acao("reclassify_as_equilibrium"))),
+    loader.load(engine, ir.program(
+        ir.form("Doc", "nonequilibrium", "estado_importante", "60s",
+                source_path="attention", maintenance_deadline="3s"),
+        ir.review("Doc", ir.rule("attention", "<", 30, "%",
+                                 ir.action("reclassify_as_equilibrium"))),
     ))
     sim.set_sensor("attention", 10.0)
     engine.tick()  # persiste como equilibrium
-    caminho = tmp_path / "persistencia" / "Doc.vl"
-    erros = vlcheck.validar(caminho.read_text(encoding="utf-8"))
-    assert erros == []
+    path = tmp_path / "persistence" / "Doc.vl"
+    errors = vlcheck.validate(path.read_text(encoding="utf-8"))
+    assert errors == []

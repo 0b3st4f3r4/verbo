@@ -14,70 +14,70 @@ from __future__ import annotations
 class MockFXP:
     """FXP falso, em processo, para testes unitários focados."""
 
-    def __init__(self, caderno=None):
-        self.caderno = caderno  # classe Caderno do protótipo ou None
-        self.sensores: dict[str, float] = {}
-        self.atores: dict[str, dict] = {}   # nome -> {min,max,safety,atual}
+    def __init__(self, ledger=None):
+        self.ledger = ledger  # classe Caderno do protótipo ou None
+        self.sensors: dict[str, float] = {}
+        self.actors: dict[str, dict] = {}   # nome -> {min,max,safety,current}
         self.outbox: list[dict] = []        # mensagens serializadas
-        self.entregues: list[dict] = []     # comandos aplicados
+        self.delivered: list[dict] = []     # comandos aplicados
         self._seq = 0
         self.cpu_power = 0.0
         self.disk_bytes_used = 0
 
     # -- registro -------------------------------------------------------
-    def registrar_sensor(self, nome: str, valor: float = 0.0):
-        self.sensores[nome] = float(valor)
+    def register_sensor(self, name: str, value: float = 0.0):
+        self.sensors[name] = float(value)
 
-    def registrar_ator(self, nome: str, minimo=None, maximo=None, safety=None):
-        self.atores[nome] = {"min": minimo, "max": maximo,
-                             "safety": safety, "atual": None}
+    def register_actor(self, name: str, min_value=None, max_value=None, safety=None):
+        self.actors[name] = {"min": min_value, "max": max_value,
+                             "safety": safety, "current": None}
 
     # -- interface do runtime -------------------------------------------
     def read_sensor(self, name: str, timeout_s: float = 0.001) -> float | None:
-        if name not in self.sensores:
-            if self.caderno is not None:
-                self.caderno.alert(
+        if name not in self.sensors:
+            if self.ledger is not None:
+                self.ledger.alert(
                     f"Sensor '{name}' não registrado no FXP (falha de I/O).",
                     motivo="sensor_nao_registrado", sensor=name,
                 )
             return None  # nunca 0.0 — zero é leitura válida (FORMAL §4.7)
-        return self.sensores[name]
+        return self.sensors[name]
 
     def act(self, actor_name: str, value) -> bool:
         self._seq += 1
-        mensagem = {"seq": self._seq, "op": "act", "ator": actor_name,
-                    "valor": value}
-        self.outbox.append(mensagem)
-        ator = self.atores.get(actor_name)
-        if ator is None:
-            if self.caderno is not None:
-                self.caderno.event("ator_inexistente",
-                                   f"Ator '{actor_name}' não registrado no FXP.",
-                                   ator=actor_name)
+        message = {"seq": self._seq, "op": "act", "actor": actor_name,
+                   "value": value}
+        self.outbox.append(message)
+        actor = self.actors.get(actor_name)
+        if actor is None:
+            if self.ledger is not None:
+                self.ledger.event("ator_inexistente",
+                                  f"Ator '{actor_name}' não registrado no FXP.",
+                                  ator=actor_name)
             return False
-        if ator["min"] is not None and value < ator["min"]:
-            if self.caderno is not None:
-                self.caderno.event("actor_rejected_value",
-                                   f"Comando a '{actor_name}' rejeitado (min).",
-                                   ator=actor_name, valor=value,
-                                   limite="min", limite_valor=ator["min"])
+        if actor["min"] is not None and value < actor["min"]:
+            if self.ledger is not None:
+                self.ledger.event("actor_rejected_value",
+                                  f"Comando a '{actor_name}' rejeitado (min).",
+                                  ator=actor_name, valor=value,
+                                  limite="min", limite_valor=actor["min"])
             return False
-        if ator["max"] is not None and value > ator["max"]:
-            if self.caderno is not None:
-                self.caderno.event("actor_rejected_value",
-                                   f"Comando a '{actor_name}' rejeitado (max).",
-                                   ator=actor_name, valor=value,
-                                   limite="max", limite_valor=ator["max"])
+        if actor["max"] is not None and value > actor["max"]:
+            if self.ledger is not None:
+                self.ledger.event("actor_rejected_value",
+                                  f"Comando a '{actor_name}' rejeitado (max).",
+                                  ator=actor_name, valor=value,
+                                  limite="max", limite_valor=actor["max"])
             return False
-        if ator["safety"] is not None and value > ator["safety"]:
-            if self.caderno is not None:
-                self.caderno.event("actor_rejected_value",
-                                   f"Comando a '{actor_name}' rejeitado (safety).",
-                                   ator=actor_name, valor=value,
-                                   limite="safety_limit", limite_valor=ator["safety"])
+        if actor["safety"] is not None and value > actor["safety"]:
+            if self.ledger is not None:
+                self.ledger.event("actor_rejected_value",
+                                  f"Comando a '{actor_name}' rejeitado (safety).",
+                                  ator=actor_name, valor=value,
+                                  limite="safety_limit", limite_valor=actor["safety"])
             return False
-        ator["atual"] = value
-        self.entregues.append({**mensagem, "evento": "entrega"})
+        actor["current"] = value
+        self.delivered.append({**message, "event": "delivery"})
         return True
 
     def update_hardware_state(self):
