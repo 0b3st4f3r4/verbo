@@ -10,6 +10,7 @@ persistencia*/
 caderno*.jsonl
 tmp-logs/
 core/tmp-e2e/
+.bkp/
 # logs de referência da Etapa 4: o JSONL irmão dos .vcad é versionado
 !logs/**/*.jsonl
 
