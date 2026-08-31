@@ -35,7 +35,7 @@ assert.strictEqual(esc("a & b < c > d"), "a &amp; b &lt; c &gt; d");
 {
   const html = md("| a | `b c` |\n|---|---|\n| 1 | **2** |");
   assert.ok(html.includes("<table>") && html.includes("<thead>") && html.includes("<tbody>"));
-  assert.ok(html.includes("<th>a</th>") && html.includes("<th><code>b c</code></th>"));
+  assert.ok(html.includes('<th>a</th>') && html.includes('<th><code translate="no">b c</code></th>'));
   assert.ok(html.includes("<td><strong>2</strong></td>"));
 }
 
@@ -69,7 +69,7 @@ assert.strictEqual(esc("a & b < c > d"), "a &amp; b &lt; c &gt; d");
 // ── inline: código protege a marcação; links http vs internos .md ──────────
 {
   const s = inline("`**não** é forte` e **isto é**");
-  assert.ok(s.includes("<code>**não** é forte</code>"), "código protege ** **");
+  assert.ok(s.includes('<code translate="no">**não** é forte</code>'), "código protege ** **");
   assert.ok(s.includes("<strong>isto é</strong>"));
 }
 {
@@ -85,6 +85,16 @@ assert.strictEqual(esc("a & b < c > d"), "a &amp; b &lt; c &gt; d");
 {
   const s = inline("[x](javascript:alert(1))");
   assert.ok(!s.includes("<a "), "esquema não-http não vira link");
+}
+
+// ── plugins de tradução: código/diagrama/TeX carregam translate="no" ───────
+{
+  const html = md('```verbolang\nevent A { horizon: 1s }\n```\n\n```mermaid\nA-->B\n```\n\n```\ncru\n```\n\ncmd `pwd` $$E=m c^2$$');
+  assert.ok(html.includes('<pre class="vl" translate="no">'), "bloco verbolang fora do alcance dos plugins");
+  assert.ok(html.includes('<pre class="mermaid-src" translate="no">'), "mermaid fora do alcance");
+  assert.ok(html.includes('<pre translate="no">'), "cerca simples fora do alcance");
+  assert.ok(html.includes('<code translate="no">pwd</code>'), "código inline fora do alcance");
+  assert.ok(html.includes('class="katex-src mdisp" translate="no"'), "TeX fora do alcance");
 }
 
 // ── LaTeX protegido (KaTeX depois; fallback TeX cru) ───────────────────────

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-theme="dark">
+<html lang="pt-BR" data-theme="metal">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -85,8 +85,14 @@
   .badge.ok .dot { background: var(--ok); box-shadow: 0 0 6px color-mix(in srgb, var(--ok) 70%, transparent); }
   .badge.warn .dot { background: var(--warn); box-shadow: 0 0 6px color-mix(in srgb, var(--warn) 70%, transparent); }
   .badge.err .dot { background: var(--bad); box-shadow: 0 0 6px color-mix(in srgb, var(--bad) 70%, transparent); }
-  .badge a { color: inherit; text-decoration: none; }
-  .badge a:hover { color: var(--accent); }
+  .icon-btn {
+    width: 34px; height: 34px; padding: 0;
+    display: inline-grid; place-items: center;
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer;
+  }
+  .icon-btn svg { display: block; }
+  a.icon-btn { text-decoration: none; }
 
   /* linha do horizonte da marca: divisória tracejada onde as leituras pousam */
   .horizon {
@@ -190,7 +196,7 @@
   <span id="b-modelo" class="badge" title="modelo local (LLM)"><span class="dot"></span><span id="b-modelo-txt">modelo: …</span></span>
   <span id="b-sse" class="badge" title="conexão com a ponte (webui.py)"><span class="dot"></span><span id="b-sse-txt">SSE: …</span></span>
   <span id="b-exec" class="badge" title="estado da execução no ledger"><span class="dot"></span><span id="b-exec-txt">execução: …</span></span>
-  <span class="badge"><a id="link-home" href="index.html">← dashboard</a></span>
+  <a id="link-home" class="icon-btn" href="index.html" title=""><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></a>
 </header>
 <div class="horizon" aria-hidden="true"></div>
 
@@ -248,7 +254,7 @@
 // ── tema compartilhado com o chat ─────────────────────────────────────────
 const THEME_ORDER = ["light", "metal", "dark"];
 const tema = localStorage.getItem("vllm.theme");
-document.documentElement.dataset.theme = THEME_ORDER.includes(tema) ? tema : "dark";
+document.documentElement.dataset.theme = THEME_ORDER.includes(tema) ? tema : "metal";
 
 // ── i18n: as mesmas 7 línguas da família (o seletor vive na home) ─────────
 const I18N = {
@@ -431,7 +437,8 @@ function aplicarIdioma() {
   $("b-modelo").title = t("bModeloTitle");
   $("b-sse").title = t("bSseTitle");
   $("b-exec").title = t("bExecTitle");
-  $("link-home").textContent = t("backHome");
+  $("link-home").title = t("backHome");
+  $("link-home").setAttribute("aria-label", t("backHome"));
   $("b-modelo-txt").textContent = t("modeloInicial");
   $("b-sse-txt").textContent = t("sseInicial");
   $("b-exec-txt").textContent = t("execInicial");

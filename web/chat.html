@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="metal">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -142,6 +142,7 @@
     display: inline-grid; place-items: center;
   }
   .icon-btn svg { display: block; }
+  a.icon-btn { text-decoration: none; }
   select {
     background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
     border-radius: 8px; padding: 6px 8px; font-size: 12.5px; cursor: pointer;
@@ -402,6 +403,7 @@
     <div class="lbl" id="meter-lbl">—</div>
   </div>
   <div class="actions">
+    <a id="home" class="icon-btn" href="index.html"></a>
     <button id="rollback" class="icon-btn" title=""></button>
     <button id="prune" class="icon-btn" title=""></button>
     <button id="clear" class="icon-btn" title=""></button>
@@ -461,7 +463,7 @@ const I18N = {
       meterReal: "contexto ≈ {est} / {ctx} tokens · uso real do último turno",
       welcome: "Teto de contexto: {ctx} tokens (prompt + resposta). O medidor mostra onde você está.",
       btnPrune: "✂ Podar", btnPruneTitle: "Remove o par (pergunta, resposta) mais antigo da conversa",
-      btnClear: "Nova", btnClearTitle: "Nova conversa (zera o contexto)",
+      btnClear: "Nova", btnClearTitle: "Nova conversa (zera o contexto)", homeTitle: "voltar ao dashboard",
       btnSend: "Enviar", btnStop: "Parar",
       promptPlaceholder: "Escreva sua pergunta…  (Enter envia · Shift+Enter quebra linha · Esc para)",
       sysDefault: "Você é um assistente objetivo. Responda em português do Brasil.",
@@ -518,7 +520,7 @@ const I18N = {
       meterReal: "context ≈ {est} / {ctx} tokens · real usage from last turn",
       welcome: "Context ceiling: {ctx} tokens (prompt + reply). The meter shows where you stand.",
       btnPrune: "✂ Prune", btnPruneTitle: "Removes the oldest (question, answer) pair from the conversation",
-      btnClear: "New", btnClearTitle: "New conversation (resets the context)",
+      btnClear: "New", btnClearTitle: "New conversation (resets the context)", homeTitle: "back to the dashboard",
       btnSend: "Send", btnStop: "Stop",
       promptPlaceholder: "Type your question…  (Enter sends · Shift+Enter newline · Esc stops)",
       sysDefault: "You are an objective assistant. Answer in English.",
@@ -575,7 +577,7 @@ const I18N = {
       meterReal: "上下文 ≈ {est} / {ctx} tokens · 上一轮实际用量",
       welcome: "上下文上限：{ctx} 个 tokens（提示 + 回复）。顶部进度条显示当前用量。",
       btnPrune: "✂ 修剪", btnPruneTitle: "移除对话中最早的一组（提问，回答）",
-      btnClear: "新对话", btnClearTitle: "开始新对话（清空上下文）",
+      btnClear: "新对话", btnClearTitle: "开始新对话（清空上下文）", homeTitle: "返回仪表板",
       btnSend: "发送", btnStop: "停止",
       promptPlaceholder: "输入你的问题…（Enter 发送 · Shift+Enter 换行 · Esc 停止）",
       sysDefault: "你是一个客观的助手。用中文回答。",
@@ -631,7 +633,7 @@ const I18N = {
       meterReal: "контекст ≈ {est} / {ctx} токенов · факт по последнему ходу",
       welcome: "Потолок контекста: {ctx} токенов (запрос + ответ). Индикатор показывает, где вы.",
       btnPrune: "✂ Обрезать", btnPruneTitle: "Удаляет самую старую пару (вопрос, ответ) из диалога",
-      btnClear: "Новый", btnClearTitle: "Новый диалог (сбрасывает контекст)",
+      btnClear: "Новый", btnClearTitle: "Новый диалог (сбрасывает контекст)", homeTitle: "вернуться на панель",
       btnSend: "Отправить", btnStop: "Стоп",
       promptPlaceholder: "Введите вопрос… (Enter — отправить · Shift+Enter — новая строка · Esc — стоп)",
       sysDefault: "Вы объективный ассистент. Отвечайте по-русски.",
@@ -687,7 +689,7 @@ const I18N = {
       meterReal: "संदर्भ ≈ {est} / {ctx} टोकन · पिछले चरण की वास्तविक खपत",
       welcome: "संदर्भ सीमा: {ctx} टोकन (प्रॉम्प्ट + उत्तर)। मीटर दिखाता है कि आप कहाँ हैं।",
       btnPrune: "✂ छाँटें", btnPruneTitle: "बातचीत की सबसे पुरानी जोड़ी (प्रश्न, उत्तर) हटाता है",
-      btnClear: "नई", btnClearTitle: "नई बातचीत (संदर्भ रीसेट)",
+      btnClear: "नई", btnClearTitle: "नई बातचीत (संदर्भ रीसेट)", homeTitle: "डैशबोर्ड पर वापस जाएँ",
       btnSend: "भेजें", btnStop: "रोकें",
       promptPlaceholder: "अपना प्रश्न लिखें… (Enter भेजें · Shift+Enter नई पंक्ति · Esc रोकें)",
       sysDefault: "आप एक वस्तुनिष्ठ सहायक हैं। हिन्दी में उत्तर दें।",
@@ -743,7 +745,7 @@ const I18N = {
       meterReal: "konteks ≈ {est} / {ctx} tokens · werklike gebruik laaste beurt",
       welcome: "Konteksplafon: {ctx} tokens (prompt + antwoord). Die meter wys waar jy is.",
       btnPrune: "✂ Snoei", btnPruneTitle: "Verwyder die oudste (vraag, antwoord)-paar uit die gesprek",
-      btnClear: "Nuut", btnClearTitle: "Nuwe gesprek (stel konteks terug)",
+      btnClear: "Nuut", btnClearTitle: "Nuwe gesprek (stel konteks terug)", homeTitle: "terug na die paneel",
       btnSend: "Stuur", btnStop: "Stop",
       promptPlaceholder: "Tik jou vraag… (Enter stuur · Shift+Enter nuwe reël · Esc stop)",
       sysDefault: "Jy is 'n objektiewe assistent. Antwoord in Afrikaans.",
@@ -799,7 +801,7 @@ const I18N = {
       meterReal: "السياق ≈ {est} / {ctx} توكن · الاستخدام الفعلي للدور الأخير",
       welcome: "سقف السياق: {ctx} توكن (الطلب + الرد). يوضّح المؤشر أين أنت.",
       btnPrune: "✂ تقليم", btnPruneTitle: "يزيل أقدم زوج (سؤال، جواب) من المحادثة",
-      btnClear: "جديد", btnClearTitle: "محادثة جديدة (تصفير السياق)",
+      btnClear: "جديد", btnClearTitle: "محادثة جديدة (تصفير السياق)", homeTitle: "العودة إلى لوحة القيادة",
       btnSend: "إرسال", btnStop: "إيقاف",
       promptPlaceholder: "اكتب سؤالك… (Enter للإرسال · Shift+Enter سطر جديد · Esc للإيقاف)",
       sysDefault: "أنت مساعد موضوعي. أجب بالعربية.",
@@ -852,7 +854,7 @@ const langDetect = () => (navigator.language || "pt-BR").slice(0, 2).toLowerCase
 let lang = localStorage.getItem("vllm.lang");
 if (!I18N[lang]) lang = I18N[langDetect()] ? langDetect() : "pt";
 let theme = localStorage.getItem("vllm.theme");
-if (!["light", "metal", "dark"].includes(theme)) theme = "dark";
+if (!["light", "metal", "dark"].includes(theme)) theme = "metal";
 
 const L = () => I18N[lang];
 const t = (key, params) => {
@@ -886,6 +888,9 @@ function applyLang() {
   $("clear").innerHTML = ICON_PLUS;
   $("clear").title = t("btnClearTitle");
   $("clear").setAttribute("aria-label", t("btnClearTitle"));
+  $("home").innerHTML = ICON_HOME;
+  $("home").title = t("homeTitle");
+  $("home").setAttribute("aria-label", t("homeTitle"));
   updateSendButton();
   $("prompt").placeholder = t("promptPlaceholder");
   $("prompt").ariaLabel = t("promptAria");
@@ -915,7 +920,7 @@ function applyLang() {
 let inFlight = null;         // AbortController da geração corrente (global)
 let genSession = null;       // sessão dona da geração corrente
 let vblMode = localStorage.getItem("vllm.vbl") === "1"; // + VerboLang?
-let sheetText = "";          // cheat sheet da linguagem (docs/VBL-CHEATSHEET-AGENTES.md, denso)
+let sheetText = "";          // cheat sheet da linguagem (docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md, denso)
 let lastQuery = "";          // última pergunta enviada (para retry)
 const sessions = [];         // sessões abertas (abas)
 let S = null;                // sessão ativa
@@ -1537,6 +1542,9 @@ const ICON_PRUNE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" 
 const ICON_PLUS = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+const ICON_HOME = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
 const ICON_CPU = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>' +
@@ -1647,14 +1655,14 @@ async function loadSheet() {
   // Preferência: versão densa para agentes (cabe na janela de 4096 ao lado
   // da conversa); o cheat sheet completo é o fallback (referência humana).
   const candidates = [
-    "/docs/VBL-CHEATSHEET-AGENTES.md",        // absoluto: raiz do servidor = raiz do repo
-    "../docs/VBL-CHEATSHEET-AGENTES.md",      // página em web/
-    "../../docs/VBL-CHEATSHEET-AGENTES.md",   // página aninhada um nível abaixo da raiz
-    "docs/VBL-CHEATSHEET-AGENTES.md",         // página na raiz do repositório
-    "/docs/VBL-CHEATSHEET.md",                // fallback: versão completa
-    "../docs/VBL-CHEATSHEET.md",
-    "../../docs/VBL-CHEATSHEET.md",
-    "docs/VBL-CHEATSHEET.md",
+    "/docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md",        // absoluto: raiz do servidor = raiz do repo
+    "../docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md",      // página em web/
+    "../../docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md",   // página aninhada um nível abaixo da raiz
+    "docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md",         // página na raiz do repositório
+    "/docs/cheatsheet/VBL-CHEATSHEET.md",                // fallback: versão completa
+    "../docs/cheatsheet/VBL-CHEATSHEET.md",
+    "../../docs/cheatsheet/VBL-CHEATSHEET.md",
+    "docs/cheatsheet/VBL-CHEATSHEET.md",
   ];
   for (const path of candidates) {
     try {

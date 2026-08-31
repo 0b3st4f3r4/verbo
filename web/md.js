@@ -10,6 +10,10 @@
  * HTML do source nunca vira marcação viva; links só http(s) (ou reescrita
  * explícita via opts.internal). O mesmo arquivo roda em node (module.exports)
  * para os testes (tests/unit/web/md.test.js).
+ *
+ * Plugins de tradução (Google/DeepL/Edge): código inline, cercas e TeX saem
+ * com translate="no" — o plugin traduz a prosa e não corrompe EBNF, comandos
+ * nem diagramas (o lang="pt-BR" do conteúdo fica no docs.html).
  * Parte do projeto VerboLang — GNU GPL-3.0 (ver LICENSE).
  */
 (function (raiz) {
@@ -45,9 +49,9 @@
         return destino ? '<a href="' + destino + '">' + txt + "</a>" : m0;
       });
     }
-    s = s.replace(/\x00(\d+)\x00/g, (_, i) => "<code>" + codes[+i] + "</code>");
+    s = s.replace(/\x00(\d+)\x00/g, (_, i) => '<code translate="no">' + codes[+i] + "</code>");
     return s.replace(/\x04(\d+)\x04/g, (_, i) =>      // placeholder → KaTeX
-      '<span class="katex-src' + (maths[+i].disp ? " mdisp" : "") + '">' +
+      '<span class="katex-src' + (maths[+i].disp ? " mdisp" : "") + '" translate="no">' +
       maths[+i].tex + "</span>");
   }
 
@@ -114,11 +118,11 @@
         i++;
         const code = buf.join("\n");
         if (lang === "verbolang" || lang === "vl") {
-          out.push('<pre class="vl"><code>' + hlVerbolang(code) + "</code></pre>");
+          out.push('<pre class="vl" translate="no"><code>' + hlVerbolang(code) + "</code></pre>");
         } else if (lang === "mermaid") {
-          out.push('<pre class="mermaid-src">' + esc(code) + "</pre>");
+          out.push('<pre class="mermaid-src" translate="no">' + esc(code) + "</pre>");
         } else {
-          out.push("<pre><code>" + esc(code) + "</code></pre>");
+          out.push('<pre translate="no"><code>' + esc(code) + "</code></pre>");
         }
         continue;
       }

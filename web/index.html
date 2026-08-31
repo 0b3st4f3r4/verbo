@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-theme="dark">
+<html lang="pt-BR" data-theme="metal">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -96,6 +96,17 @@
   .badge.err .dot { background: var(--bad); box-shadow: 0 0 6px color-mix(in srgb, var(--bad) 70%, transparent); }
 
   main { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.2rem; width: 100%; max-width: 46rem; }
+  /* opções em número ímpar: o cartão sem par na última linha centraliza com a
+     largura exata de uma coluna (metade da linha menos metade do gap de
+     1.2rem) — o meta (o vértice do triângulo) pousa centrado entre os dois
+     lados, como na logo. O media query delimita onde 2 colunas cabem
+     garantidamente (2×260px + gap ≈ 540px de main); abaixo disso o auto-fit
+     empilha e o cartão já ocupa a linha inteira sozinho. */
+  @media (min-width: 600px) {
+    main > .card:last-child:nth-child(odd) {
+      grid-column: 1 / -1; justify-self: center; width: calc(50% - .6rem);
+    }
+  }
   a.card {
     display: block; text-decoration: none; color: inherit; position: relative; overflow: hidden;
     background: color-mix(in srgb, var(--panel) 76%, transparent);
@@ -150,7 +161,7 @@
   <a class="card espectro-frio" href="docs.html">
     <span class="ico">📜</span>
     <h2 id="c-docs-h">Documentação do Verbo</h2>
-    <p id="c-docs-p">A razão do projeto, renderizada: FORMAL, Manifesto, cheat sheets e planos — os .md do repo com índice ancorado e verbolang destacado.</p>
+    <p id="c-docs-p">A razão do projeto, renderizada: FORMAL, Manifesto, cheat sheets e planos — os .md do repo com índice ancorado e verbolang destacado. <em>Conteúdo apenas em pt-BR — use o tradutor do navegador.</em></p>
   </a>
   <a class="card espectro-calor" href="metrics.html">
     <span class="ico">📈</span>
@@ -202,7 +213,7 @@ const HOME_I18N = {
     themeLight: "tema claro", themeMetal: "tema metal", themeDark: "tema escuro", langAria: "idioma",
     badgeChecking: "verificando modelo…", badgeTitle: "estado do modelo local (LLM)",
     docsH: "Documentação do Verbo",
-    docsP: 'A razão do projeto, renderizada: FORMAL, Manifesto, cheat sheets e planos — os .md do repo com índice ancorado e verbolang destacado.',
+    docsP: 'A razão do projeto, renderizada: FORMAL, Manifesto, cheat sheets e planos — os .md do repo com índice ancorado e verbolang destacado. <em>Conteúdo apenas em pt-BR — use o tradutor do navegador.</em>',
         dir: "ltr",
   },
   en: {
@@ -215,7 +226,7 @@ const HOME_I18N = {
     themeLight: "light theme", themeMetal: "metal theme", themeDark: "dark theme", langAria: "language",
     badgeChecking: "checking model…", badgeTitle: "local model (LLM) state",
     docsH: "Documentation of the Verb",
-    docsP: "The reason of the project, rendered: FORMAL, Manifesto, cheat sheets and plans — repo .md files with anchored index and highlighted verbolang.",
+    docsP: "The reason of the project, rendered: FORMAL, Manifesto, cheat sheets and plans — repo .md files with anchored index and highlighted verbolang. <em>Content in pt-BR only — use your browser's translator.</em>",
         dir: "ltr",
   },
   zh: {
@@ -228,7 +239,7 @@ const HOME_I18N = {
     themeLight: "浅色主题", themeMetal: "金属主题", themeDark: "深色主题", langAria: "语言",
     badgeChecking: "正在检查模型…", badgeTitle: "本地模型（LLM）状态",
     docsH: "动词之文档",
-    docsP: "项目理念的呈现：FORMAL、宣言、速查表与计划 — 仓库中的 .md 文件，带锚点目录和 verbolang 高亮。",
+    docsP: "项目理念的呈现：FORMAL、宣言、速查表与计划 — 仓库中的 .md 文件，带锚点目录和 verbolang 高亮。<em>内容仅提供 pt-BR —— 请使用浏览器翻译。</em>",
         dir: "ltr",
   },
   ru: {
@@ -241,7 +252,7 @@ const HOME_I18N = {
     themeLight: "светлая тема", themeMetal: "тема металла", themeDark: "тёмная тема", langAria: "язык",
     badgeChecking: "проверяем модель…", badgeTitle: "состояние локальной модели (LLM)",
     docsH: "Документация Глагола",
-    docsP: "Разум проекта в рендере: FORMAL, Манифест, шпаргалки и планы — .md файлы репозитория с якорным оглавлением и подсветкой verbolang.",
+    docsP: "Разум проекта в рендере: FORMAL, Манифест, шпаргалки и планы — .md файлы репозитория с якорным оглавлением и подсветкой verbolang. <em>Содержание только на pt-BR — воспользуйтесь переводчиком браузера.</em>",
         dir: "ltr",
   },
   hi: {
@@ -254,7 +265,7 @@ const HOME_I18N = {
     themeLight: "हल्की थीम", themeMetal: "धातु थीम", themeDark: "गहरी थीम", langAria: "भाषा",
     badgeChecking: "मॉडल की जाँच हो रही है…", badgeTitle: "स्थानीय मॉडल (LLM) की स्थिति",
     docsH: "क्रिया का दस्तावेज़ीकरण",
-    docsP: "परियोजना का तर्क रेंडर हुआ: FORMAL, मेनिफेस्टो, चीटशीट और योजनाएँ — रिपो की .md फ़ाइलें, एंकर सूची और verbolang हाइलाइट के साथ।",
+    docsP: "परियोजना का तर्क रेंडर हुआ: FORMAL, मेनिफेस्टो, चीटशीट और योजनाएँ — रिपो की .md फ़ाइलें, एंकर सूची और verbolang हाइलाइट के साथ। <em>सामग्री केवल pt-BR में है — ब्राउज़र के अनुवादक का प्रयोग करें।</em>",
         dir: "ltr",
   },
   af: {
@@ -267,7 +278,7 @@ const HOME_I18N = {
     themeLight: "ligtema", themeMetal: "metaaltema", themeDark: "donker tema", langAria: "taal",
     badgeChecking: "model word gekontroleer…", badgeTitle: "toestand van die plaaslike model (LLM)",
     docsH: "Dokumentasie van die Werkwoord",
-    docsP: "Die rede van die projek, weergegee: FORMAL, Manifes, spiekbriefe en planne — die repo se .md-lêers met geankerde indeks en uitgeligte verbolang.",
+    docsP: "Die rede van die projek, weergegee: FORMAL, Manifes, spiekbriefe en planne — die repo se .md-lêers met geankerde indeks en uitgeligte verbolang. <em>Inhoud net in pt-BR — gebruik jou blaaier se vertaler.</em>",
         dir: "ltr",
   },
   ar: {
@@ -280,7 +291,7 @@ const HOME_I18N = {
     themeLight: "سمة فاتحة", themeMetal: "سمة معدنية", themeDark: "سمة داكنة", langAria: "اللغة",
     badgeChecking: "جارٍ فحص النموذج…", badgeTitle: "حالة النموذج المحلي (LLM)",
     docsH: "توثيق الفعل",
-    docsP: "منطق المشروع معروضًا: FORMAL والبيان وأوراق المراجعة والخطط — ملفات .md من المستودع بفهرس مثبّت وverbolang ملوّن.",
+    docsP: "منطق المشروع معروضًا: FORMAL والبيان وأوراق المراجعة والخطط — ملفات .md من المستودع بفهرس مثبّت وverbolang ملوّن. <em>المحتوى بالبرتغالية (pt-BR) فقط — استخدم مترجم المتصفح.</em>",
         dir: "rtl",
   },
 };
@@ -329,16 +340,16 @@ function applyLang() {
   const sel = document.getElementById("lang");
   sel.value = lang;
   sel.title = d.langAria; sel.setAttribute("aria-label", d.langAria);
-  applyTheme(document.documentElement.dataset.theme || "dark");
+  applyTheme(document.documentElement.dataset.theme || "metal");
 }
 document.getElementById("theme-btn").addEventListener("click", () => {
-  const cur = document.documentElement.dataset.theme || "dark";
+  const cur = document.documentElement.dataset.theme || "metal";
   applyTheme(THEME_ORDER[(THEME_ORDER.indexOf(cur) + 1) % THEME_ORDER.length]);
 });
 document.getElementById("lang").addEventListener("change", () => { lang = document.getElementById("lang").value; applyLang(); });
 // tema vem primeiro: applyLang→applyTheme regrava o storage com o valor atual
 const tema0 = localStorage.getItem("vllm.theme");
-document.documentElement.dataset.theme = THEME_ORDER.includes(tema0) ? tema0 : "dark";
+document.documentElement.dataset.theme = THEME_ORDER.includes(tema0) ? tema0 : "metal";
 applyLang();
 buildLangSelect();
 
