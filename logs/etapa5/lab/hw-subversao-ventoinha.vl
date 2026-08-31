@@ -1,0 +1,13 @@
+// Exemplo 2 da FORMAL (§5) — subversão poética por sobrecarga térmica (BDD Caso 2)
+nonequilibrium TradingEspeculativo {
+    value: "lucro_arbitragem_alta_frequencia",
+    horizon: 7s,
+    source_path: "cpu_temp",
+    maintenance_deadline: 2s,
+    exchange_mode: "extraction"
+}
+
+review TradingEspeculativo {
+    when cpu_temp > 85°C -> subvert,
+                            act(Ventoinha, 200)
+}

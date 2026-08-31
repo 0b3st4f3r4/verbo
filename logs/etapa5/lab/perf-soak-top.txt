@@ -1,0 +1,18 @@
+    28.45%  vbl-soak  libc.so.6           [.] __memcmp_avx2_movbe
+             --4.00%--__memcmp_avx2_movbe
+     5.85%  vbl-soak  libc.so.6           [.] __memmove_avx_unaligned_erms
+             --0.67%--__memmove_avx_unaligned_erms
+     2.14%  vbl-soak  vbl-soak (deleted)  [.] 0x00000000000314b8
+     1.96%  vbl-soak  libc.so.6           [.] _int_malloc
+     1.90%  vbl-soak  vbl-soak (deleted)  [.] 0x00000000000314be
+     1.70%  vbl-soak  vbl-soak (deleted)  [.] 0x00000000000314b5
+     1.70%  vbl-soak  vbl-soak (deleted)  [.] 0x000000000003147b
+     1.51%  vbl-soak  vbl-soak (deleted)  [.] 0x0000000000054926
+     1.31%  vbl-soak  vbl-soak (deleted)  [.] 0x000000000003149a
+     1.05%  vbl-soak  libc.so.6           [.] _int_free_merge_chunk
+     0.85%  vbl-soak  vbl-soak (deleted)  [.] 0x000000000005491a
+     0.78%  vbl-soak  vbl-soak (deleted)  [.] 0x00000000000549d1
+     0.71%  vbl-soak  vbl-soak (deleted)  [.] 0x00000000000549aa
+     0.71%  vbl-soak  vbl-soak (deleted)  [.] 0x00000000000549d6
+     0.68%  vbl-soak  vbl-soak (deleted)  [.] 0x000000000005495c
+     0.68%  vbl-soak  vbl-soak (deleted)  [.] 0x00000000000548ad

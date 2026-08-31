@@ -547,7 +547,7 @@ fn disponibilidade_ator(endpoint: &Endpoint) -> String {
         | Endpoint::LedClass { dir } => {
             if dir.exists() { "✓ endpoint presente".into() } else { "✗ endpoint ausente".into() }
         }
-        Endpoint::RaplConstraint { file } | Endpoint::HwmonPwm { file } => {
+        Endpoint::RaplConstraint { file } | Endpoint::HwmonPwm { file } | Endpoint::HwmonTemp { file } => {
             if file.exists() { "✓ endpoint presente".into() } else { "✗ endpoint ausente".into() }
         }
         Endpoint::Remote { addr } => match addr {

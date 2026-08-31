@@ -97,6 +97,32 @@ impl SensorDriver for ThermalZoneSensor {
     }
 }
 
+/// `cpu_temp` (e afins) via hwmon — arquivo `tempN_input` (mili°C), ex.:
+/// `/sys/class/hwmon/hwmon4/temp1_input` (k10temp, temperatura real da CPU).
+#[derive(Debug, Clone)]
+pub struct HwmonTempSensor {
+    file: PathBuf,
+}
+
+impl HwmonTempSensor {
+    pub fn novo(file: impl Into<PathBuf>) -> Self {
+        Self { file: file.into() }
+    }
+}
+
+impl SensorDriver for HwmonTempSensor {
+    fn read(&mut self) -> Result<f64, FalhaSensor> {
+        let bruto =
+            std::fs::read_to_string(&self.file).map_err(|_| FalhaSensor::Inacessivel)?;
+        let mili: f64 = bruto.trim().parse().map_err(|_| FalhaSensor::Inacessivel)?;
+        Ok(mili / 1000.0)
+    }
+
+    fn descricao(&self) -> String {
+        format!("hwmon_temp:{}", self.file.display())
+    }
+}
+
 /// Fonte de atenção humana — interface abstrata (PLAN §3.2, `AttentionSource`).
 /// O backend **simulado é obrigatório** como fallback em CI; EEG/eye tracking
 /// são extensões opcionais que plugam nesta mesma trait.
@@ -120,7 +146,11 @@ impl AttentionSource for SimulatedAttention {
 pub type Clock = Box<dyn Fn() -> f64 + Send>;
 
 pub fn relogio_parede() -> Clock {
-    Box::new(|| std::time::Instant::now().elapsed().as_secs_f64())
+    // Base capturada UMA vez: `Instant::now().elapsed()` sobre um instante
+    // recém-criado mediria ~0 ns em toda chamada (bug latente que produzia
+    // W absurdos — ΔE/Δt com Δt nanosegundos). elapsed() é monotônico.
+    let inicio = std::time::Instant::now();
+    Box::new(move || inicio.elapsed().as_secs_f64())
 }
 
 /// `cpu_power` — RAPL (`energy_uj` em µJ) via diferença finita entre amostras:
@@ -149,6 +179,12 @@ impl RaplEnergySensor {
     }
 }
 
+/// Janela mínima entre amostras (s): o contador do RAPL avança em quanta
+/// (~ms) — um par com Δt menor não mede potência. Re-leituras do mesmo tick
+/// (auditoria × avaliação) são **degeneradas**: sem informação, não devem
+/// sobrescrever a última média válida nem fabricar W absurdos (§4.7).
+const MIN_DT_S: f64 = 1e-3;
+
 impl SensorDriver for RaplEnergySensor {
     fn read(&mut self) -> Result<f64, FalhaSensor> {
         let energia = self.ler_uj("energy_uj")?;
@@ -157,6 +193,12 @@ impl SensorDriver for RaplEnergySensor {
             self.anterior = Some((t, energia));
             return Err(FalhaSensor::Inacessivel); // amostra de aquecimento
         };
+        let dt = t - t0;
+        if dt < MIN_DT_S {
+            // Par degenerado: mantém `anterior` — a próxima amostra válida
+            // cobre a janela inteira (sem update, sem invenção de potência).
+            return Err(FalhaSensor::Inacessivel);
+        }
         let delta_e = if energia >= e0 {
             energia - e0
         } else {
@@ -168,10 +210,6 @@ impl SensorDriver for RaplEnergySensor {
             range - e0 + energia
         };
         self.anterior = Some((t, energia));
-        let dt = t - t0;
-        if dt <= 0.0 {
-            return Err(FalhaSensor::Inacessivel); // relógio não avançou
-        }
         Ok(delta_e as f64 / 1e6 / dt)
     }
 
@@ -426,6 +464,7 @@ pub fn sensor_de(
     use crate::registry::Endpoint;
     match endpoint {
         Endpoint::ThermalZone { dir } => Some(Box::new(ThermalZoneSensor::novo(dir.clone()))),
+        Endpoint::HwmonTemp { file } => Some(Box::new(HwmonTempSensor::novo(file.clone()))),
         Endpoint::RaplEnergy { dir } => Some(Box::new(RaplEnergySensor::novo(dir.clone()))),
         _ => None,
     }

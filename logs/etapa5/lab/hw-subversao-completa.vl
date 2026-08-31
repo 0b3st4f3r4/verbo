@@ -1,0 +1,14 @@
+// Laboratório: energia real (cpu_power via RAPL) + subversão por atenção
+// simulada (roteirizada --at) + ator simulado acessível — tudo num só log.
+nonequilibrium CargaTermica {
+    value: "carga_submetida_a_subversao",
+    horizon: 100s,
+    source_path: "attention",
+    maintenance_deadline: 5s,
+    exchange_mode: "cooperation"
+}
+
+review CargaTermica {
+    when attention < 30% -> subvert,
+                            act(Ventoinha, 200)
+}

@@ -1,0 +1,9 @@
+// Carga de referência para o experimento de precisão energética (laboratório):
+// 1 forma event de vida longa — a partilha do tick atribui a ela a potência
+// integral lida do RAPL; E_caderno(Σ VAZAMENTO) compara com ΔE do package-0.
+event Carga {
+    value: "carga_referencia_energetica",
+    horizon: 3600s,
+    source_path: "cpu_power",
+    currency: "CpuCycles"
+}

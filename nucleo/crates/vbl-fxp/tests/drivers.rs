@@ -46,6 +46,31 @@ fn thermal_zone_converte_milicelsius_para_celsius() {
     assert_eq!(s.read(), Err(FalhaSensor::Inacessivel));
 }
 
+/// `hwmon_temp` sintético: `tempN_input` em mili°C (ex.: k10temp).
+#[test]
+fn hwmon_temp_converte_milicelsius_para_celsius() {
+    let dir = tmpdir("hwmon_temp");
+    let file = dir.join("temp1_input");
+    fs::write(&file, "62500").unwrap();
+
+    let mut s = sensor_de(&Endpoint::HwmonTemp { file: file.clone() })
+        .expect("hwmon_temp deve fabricar sensor");
+    assert_eq!(s.read().unwrap(), 62.5);
+    assert_eq!(s.descricao(), format!("hwmon_temp:{}", file.display()));
+
+    // Inacessível e não numérico — nunca 0.0 (§4.7).
+    fs::remove_file(&file).unwrap();
+    assert_eq!(s.read(), Err(FalhaSensor::Inacessivel));
+    fs::write(&file, "n/d").unwrap();
+    assert_eq!(s.read(), Err(FalhaSensor::Inacessivel));
+
+    // Parse do endpoint no registro.
+    assert_eq!(
+        Endpoint::parse(&format!("hwmon_temp:{}", file.display())).unwrap(),
+        Endpoint::HwmonTemp { file }
+    );
+}
+
 /// RAPL consumo: série determinística com relógio injetado — primeira amostra
 /// aquece; W = ΔE/Δt; wrap tratado com `max_energy_range_uj`.
 #[test]
@@ -78,6 +103,51 @@ fn rapl_energy_serie_deterministica_com_wrap() {
     fs::write(dir.join("energy_uj"), "500000").unwrap();
     let w = s.read().unwrap();
     assert!((w - 0.75).abs() < 1e-9, "esperado 0.75 W no wrap, obtido {w}");
+}
+
+/// Re-leitura degenerada (Δt < 1 ms, auditoria × avaliação no mesmo tick):
+/// sem informação de potência — não sobrescreve a média válida anterior e
+/// não fabrica W absurdos; a amostra válida seguinte cobre a janela inteira.
+#[test]
+fn rapl_energy_par_degenerado_nao_corrompe_potencia() {
+    let dir = tmpdir("rapl3");
+    let fila: Vec<(f64, u64)> = vec![
+        (0.0, 1_000_000),        // aquecimento
+        (0.000_001, 1_000_500),  // Δt = 1 µs — degenerado (ΔE = 500 µJ aqui NÃO vira W)
+        (1.0, 1_020_000),        // par válido: Δt = 1 s desde a AQUECIMENTO, ΔE = 20 000 µJ
+    ];
+    let resto = fila.clone();
+    let idx = AtomicUsize::new(0);
+    let mut s = RaplEnergySensor::com_relogio(
+        &dir,
+        Box::new(move || {
+            let i = idx.fetch_add(1, Ordering::Relaxed).min(resto.len() - 1);
+            resto[i].0
+        }),
+    );
+    fs::write(dir.join("energy_uj"), "1000000").unwrap();
+
+    assert_eq!(s.read(), Err(FalhaSensor::Inacessivel)); // aquecimento
+
+    fs::write(dir.join("energy_uj"), "1000500").unwrap();
+    assert_eq!(s.read(), Err(FalhaSensor::Inacessivel)); // degenerado: sem W
+
+    fs::write(dir.join("energy_uj"), "1020000").unwrap();
+    let w = s.read().unwrap();
+    assert!((w - 0.02).abs() < 1e-9, "esperado 0.02 W (janela inteira), obtido {w}");
+}
+
+/// Relógio de parede: monotônico com resolução útil (regressão do bug do
+/// `Instant::now()` fresco — Δt sempre ~0).
+#[test]
+fn relogio_parede_avanca() {
+    use vbl_fxp::drivers::relogio_parede;
+    let mut clock = relogio_parede();
+    let t0 = clock();
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let t1 = clock();
+    assert!(t1 > t0, "relógio deve avançar ({t0} → {t1})");
+    assert!(t1 - t0 >= 0.004, "avanço deve refletir a parede: {}", t1 - t0);
 }
 
 /// CpuPowerCap: comando em W → µW no sysfs.

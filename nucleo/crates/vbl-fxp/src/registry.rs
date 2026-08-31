@@ -113,6 +113,8 @@ pub enum Endpoint {
     Auto,
     /// thermal_zone: diretório com `temp` (mili°C) e `type`.
     ThermalZone { dir: PathBuf },
+    /// hwmon temperatura: arquivo `tempN_input` (mili°C) — ex.: k10temp.
+    HwmonTemp { file: PathBuf },
     /// RAPL consumo: diretório com `energy_uj` (+ `max_energy_range_uj` p/ wrap).
     RaplEnergy { dir: PathBuf },
     /// RAPL power cap: arquivo `constraint_0_power_limit_uw` (µW).
@@ -127,8 +129,9 @@ pub enum Endpoint {
 
 impl Endpoint {
     /// Formato textual do config: `simulado` | `auto` |
-    /// `thermal_zone:<dir>` | `rapl_energy:<dir>` | `rapl_constraint:<arq>` |
-    /// `hwmon_pwm:<arq>` | `led:<dir>` | `unix:<caminho>` | `tcp:<host>:<porta>`.
+    /// `thermal_zone:<dir>` | `hwmon_temp:<arq>` | `rapl_energy:<dir>` |
+    /// `rapl_constraint:<arq>` | `hwmon_pwm:<arq>` | `led:<dir>` |
+    /// `unix:<caminho>` | `tcp:<host>:<porta>`.
     pub fn parse(s: &str) -> Result<Self, ErroRegistro> {
         // Esquemas sem caminho.
         match s {
@@ -142,6 +145,7 @@ impl Endpoint {
         let path = |v: &str| PathBuf::from(v);
         match esquema {
             "thermal_zone" => Ok(Endpoint::ThermalZone { dir: path(resto) }),
+            "hwmon_temp" => Ok(Endpoint::HwmonTemp { file: path(resto) }),
             "rapl_energy" => Ok(Endpoint::RaplEnergy { dir: path(resto) }),
             "rapl_constraint" => Ok(Endpoint::RaplConstraint { file: path(resto) }),
             "hwmon_pwm" => Ok(Endpoint::HwmonPwm { file: path(resto) }),
@@ -167,6 +171,7 @@ impl Endpoint {
             Endpoint::Simulado => "simulado".into(),
             Endpoint::Auto => "auto".into(),
             Endpoint::ThermalZone { dir } => format!("thermal_zone:{}", dir.display()),
+            Endpoint::HwmonTemp { file } => format!("hwmon_temp:{}", file.display()),
             Endpoint::RaplEnergy { dir } => format!("rapl_energy:{}", dir.display()),
             Endpoint::RaplConstraint { file } => format!("rapl_constraint:{}", file.display()),
             Endpoint::HwmonPwm { file } => format!("hwmon_pwm:{}", file.display()),

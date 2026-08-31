@@ -1,0 +1,12 @@
+# janela de repouso (60 s) — fundo: soak 24h + desktop
+repouso: 36.03 W média
+# carga 1 (92 ticks × 1 s de parede)
+  cadeia SHA-256 ÍNTEGRA: 185 evento(s) no arquivo; atuações 0/0 ok; divergências (alertas): 92
+RESULTADO 1: ecad=3260.70 erapl_uj=3261176899 parede=92 tick(s) em 91.0s
+# carga 2 (92 ticks × 1 s de parede)
+  cadeia SHA-256 ÍNTEGRA: 185 evento(s) no arquivo; atuações 0/0 ok; divergências (alertas): 92
+RESULTADO 2: ecad=3264.52 erapl_uj=3265128920 parede=92 tick(s) em 91.0s
+# carga 3 (92 ticks × 1 s de parede)
+  cadeia SHA-256 ÍNTEGRA: 185 evento(s) no arquivo; atuações 0/0 ok; divergências (alertas): 92
+RESULTADO 3: ecad=3239.80 erapl_uj=3240276171 parede=92 tick(s) em 91.0s
+# fim
