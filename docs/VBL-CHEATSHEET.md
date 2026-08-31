@@ -60,8 +60,19 @@ duration    = número ( 's' | 'ms' | 'us' | 'ns' ) ;   (* decimais válidos: 2.5
 expression  = string | número | identificador ;        (* value é opaco ao runtime *)
 ```
 
-Comentários: `//` de linha e `/* ... */` de bloco. Strings: `"..."` com escapes
-`\"`, `\\`, `\n`, `\t` (≤ 256 bytes). Identificadores: `[a-zA-Z_][a-zA-Z0-9_]*`.
+Comentários: `//` de linha e `/* ... */` de bloco (podem ficar fora dos
+blocos, acima da declaração). Strings: `"..."` com escapes `\"`, `\\`, `\n`,
+`\t` (≤ 256 bytes). Identificadores: `[a-zA-Z_][a-zA-Z0-9_]*`.
+
+Erros de compilação que o parser rejeita: atributo **repetido** na mesma forma
+(cada atributo aparece **no máximo uma vez**); **vírgula após o último
+atributo**, antes de `}`; `keep` fora do `main` — as ações de `review` são
+apenas `dissolve`, `subvert`, `reclassify_as_equilibrium`,
+`reclassify_as_nonequilibrium`, `notify_shutdown` e `act`;
+**identificadores sem acento nem ç** (`SensorAtencaoAlta`, nunca
+`SensorAtençãoAlta`; já **strings** podem ter acentos); e atributo na
+conjugação errada — `cost_bytes` só em `equilibrium`;
+`maintenance_deadline` e `exchange_mode` só em `nonequilibrium`.
 
 ## Semântica essencial
 
@@ -97,10 +108,13 @@ Comentários: `//` de linha e `/* ... */` de bloco. Strings: `"..."` com escapes
   fallback do runtime.
 - **Falha de sensor**: a condição **não é avaliada** naquele tick e o Caderno
   registra o alerta de falha de I/O — um sensor ausente nunca é tratado como
-  leitura `0.0` (zero é leitura física válida).
+  leitura `0.0` (zero é leitura física válida; tratá-lo como zero dispararia
+  condições falsas).
 - **Nomes simbólicos**: `source_path` e atores são símbolos do FXP
   (ex.: `"cpu_temp"`, `CpuPowerCap`, `Ventoinha`) — **nunca** caminhos de
   sistema (`/sys/...`, `/dev/...`); o mapeamento físico é do registro do FXP.
+  Sensores canônicos do registro mínimo (FORMAL §6): `"attention"` (%),
+  `"cpu_temp"` (°C), `"cpu_power"` (W).
 - **Unidades**: tempo `s`/`ms`/`us`/`ns`; físicas `W` e `°C`; porcentagem `%`.
   O threshold com unidade é convertido para número puro antes da comparação.
 
@@ -118,6 +132,32 @@ nonequilibrium TradingEspeculativo {
 review TradingEspeculativo {
     when cpu_temp > 85°C -> subvert,
                              act(CpuPowerCap, 50)
+}
+```
+
+Programa completo com `main` (renovação e atuação periódicas):
+
+```verbolang
+// Renova a tarefa a cada 4s e acende o LED a cada 10s (main roda a cada tick).
+nonequilibrium TarefaImportante {
+    value: "tarefa_critica",
+    horizon: 30s,
+    maintenance_deadline: 5s
+}
+
+main {
+    every 4s { keep(TarefaImportante) }
+    every 10s { act(LedIndicador, "verde") }
+}
+```
+
+Forma com duração decimal e comentário de linha:
+
+```verbolang
+// Monitora a intensidade da luz no solo.
+event SensorLuz {
+    value: "luz_do_solo",
+    horizon: 2.5s
 }
 ```
 

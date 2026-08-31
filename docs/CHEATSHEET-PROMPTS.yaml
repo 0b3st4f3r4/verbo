@@ -10,7 +10,17 @@
 # Rubrica: lista de itens; cada item deve aparecer na resposta (case-insensitive).
 # Um item pode ser uma lista => qualquer alternativa satisfaz (any-of).
 
-versao: 3
+versao: 4
+# v4: iteração pós-rodada reprovada de 30/08 (73,3%) — cheat sheet ganhou exemplos
+#     de programa completo e de duração decimal + comentário, nomes canônicos de
+#     sensores, a regra "atributo único / sem vírgula final / keep só no main" e a
+#     consequência "condições falsas" da falha de sensor; rubricas S01/M03/M08
+#     ganharam alternativas semanticamente equivalentes (nenhum requisito removido);
+#     enunciado S10 passou a especificar o programa (nomes, conjugações, um
+#     sensor por forma e ações sem act): identificadores inventados saíam
+#     acentuados (são ASCII; strings podem ter acentos) e o enunciado antigo
+#     induzia source_path duplicado — mantido o objeto do teste (duas formas
+#     + duas reviews).
 execucoes_por_prompt: 3
 limiar_aceitacao: 0.90
 # v1 (auditoria da Etapa 1): 45% — falhas triadas em docs/ETAPA-1-RELATORIO.md §10
@@ -33,7 +43,7 @@ prompts:
     rubrica:
       - "nonequilibrium PensarLivre"
       - "maintenance_deadline"
-      - "attention < 30"
+      - [ "attention < 30", "attention_level < 30", "atencao < 30" ]
       - "reclassify_as_equilibrium"
 
   - id: S02
@@ -126,9 +136,11 @@ prompts:
   - id: S10
     tipo: sintaxe
     enunciado: >
-      Escreva um programa com duas formas de conjugações diferentes (declare
-      ambas) e uma review para cada uma delas; as regras podem usar os
-      sensores cpu_temp e attention.
+      Escreva um programa com duas formas de conjugações diferentes e uma
+      review para cada uma delas: a forma event MonitorAmbiente (source_path
+      "attention") e a forma nonequilibrium AjusteCritico. Nas regras, use o
+      sensor cpu_temp e apenas ações de reclassificação ou notify_shutdown
+      (sem act).
     rubrica:
       - "review "
 
@@ -161,7 +173,7 @@ prompts:
     rubrica:
       - [ "não", "nunca" ]
       - [ "leitura física válida", "zero é uma leitura válida", "0.0 é válido" ]
-      - [ "falsa", "falso disparo", "disparo falso", "disparos falsos", "falsamente" ]
+      - [ "falsa", "falso", "falso disparo", "disparo falso", "disparos falsos", "falsamente", "condições falsas", "suposição falsa", "falso positivo", "disparos indevidos" ]
 
   - id: M04
     tipo: semantica
@@ -208,7 +220,7 @@ prompts:
       mesma forma?
     rubrica:
       - [ "erro de compilação", "erro", "rejeitado" ]
-      - [ "não são mescladas", "não mescla" ]
+      - [ "não são mescladas", "não mescla", "não se mesclam", "não podem ser mescladas", "não são combinadas", "não pode ter duas", "não pode declarar duas", "definição múltipla", "múltiplas reviews", "múltiplas revisões", "mais de uma review", "no máximo uma review", "apenas uma review", "uma única review", "exclusiva" ]
 
   - id: M09
     tipo: semantica
