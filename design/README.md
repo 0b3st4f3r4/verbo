@@ -55,8 +55,8 @@ mantendo os lados em degradê sobre a placa.
 | Arquivo | Papel |
 |---|---|
 | `../web/verbolog.svg` | Ícone 64×64 oficial (logo e favicon da UI) |
-| `../docs/verbolog-triangle.svg` | Emblema 512×512 oficial (marca mestre) |
-| `../docs/verbolog-banner.svg` | Banner 880×200 oficial (emblema + wordmark + traço espectral no horizonte) |
+| `../docs/brand/verbolog-triangle.svg` | Emblema 512×512 oficial (marca mestre) |
+| `../docs/brand/verbolog-banner.svg` | Banner 880×200 oficial (emblema + wordmark + traço espectral no horizonte) |
 | `preview-*.png` | Renderizações de verificação |
 
 Aprovada em agosto/2026 — estes são os arquivos oficiais consumidos pelo

@@ -36,7 +36,7 @@ BDD) segue verde, clippy `-D warnings` limpo, ASan/LSan limpo, e o formato
 ## 3. Otimizações medidas (antes × depois — criterion, mesma máquina)
 
 Baselines salvos (`--save-baseline antes`) e comparados (`--baseline antes`);
-saída completa em [`logs/stage5/bench-after-vs-before.txt`](../logs/stage5/bench-after-vs-before.txt).
+saída completa em [`logs/stage5/bench-after-vs-before.txt`](../../logs/stage5/bench-after-vs-before.txt).
 
 | Bench (antes → depois) | Δ | Otimização |
 |---|---|---|
@@ -100,14 +100,14 @@ syscalls nem dependências.
 Os orçamentos provisórios do AGENTS (256 B/1 KB/512 B) são **menores que o
 nó de `BTreeMap` + chaves + entrada do escalonador** de qualquer forma em
 Rust padrão — foram reancorados formalmente em
-[`docs/STAGE-5-GOALS-REVIEW.md`](STAGE-5-GOALS-REVIEW.md) (AGENTS §4), com
+[`docs/reports/STAGE-5-GOALS-REVIEW.md`](STAGE-5-GOALS-REVIEW.md) (AGENTS §4), com
 os proxies da ADR-001 preservados como **piso do payload** próprio da forma.
 
 ## 5. Execução longa e gargalos
 
 - **Soak de 15 min (~240 mil ticks, 666 formas vivas renovadas a cada 3
   ticks):** RSS em platenga (3 276 → 3 316 KiB), fila de prazos constante,
-  `SOAK OK`. Log completo: [`logs/stage5/soak-15min.txt`](../logs/stage5/soak-15min.txt).
+  `SOAK OK`. Log completo: [`logs/stage5/soak-15min.txt`](../../logs/stage5/soak-15min.txt).
 - **Rota das 24 h:** `make rust-soak` (padrão `VIVAS=1000`,
   `SEGUNDOS=86400`) — validação laboratorial formal pendente, agora com
   comando único e veredito automático (exit 1 se o RSS crescer além de
@@ -144,7 +144,7 @@ o simulador determinístico (modo explícito, FORMAL §4.7).
 | Pendência "atribuição causal em Watts (laboratório)" | ⏳ mantida — exige RAPL root (§6) |
 | Pendência "validação em hardware real (híbrido)" | ⏳ mantida — rota pronta (`--fxp-config`), laboratório |
 
-## 8. Logs e artefatos ([`logs/stage5/`](../logs/stage5/))
+## 8. Logs e artefatos ([`logs/stage5/`](../../logs/stage5/))
 
 | Arquivo | Conteúdo |
 |---|---|

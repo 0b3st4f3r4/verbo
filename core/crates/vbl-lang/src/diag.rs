@@ -3,7 +3,7 @@
 //! Os códigos reancoram a suíte da Etapa 1 (`tests/vlcheck.py` e
 //! `tests/fxp_sim/contract.py`): cada cláusula de erro da FORMAL tem um
 //! código estável que a matriz de rastreabilidade da Etapa 2 referencia
-//! (`docs/STAGE-2-TRACEABILITY-MATRIX.md`).
+//! (`docs/reports/STAGE-2-TRACEABILITY-MATRIX.md`).
 
 /// Posição no fonte (linha e coluna, ambas 1-based, contadas em caracteres).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

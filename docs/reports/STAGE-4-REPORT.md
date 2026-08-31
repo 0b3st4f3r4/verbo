@@ -6,12 +6,12 @@ A Etapa 4 transforma o Caderno de log em memória (Etapas 1–2) no **Auditor
 termodinâmico de produção** (PLAN §4.1): gravação **assíncrona em buffer**
 (thread dedicada — o logger não distorce a medição que audita), **formato
 binário compacto `.vcad` v1** com cadeia SHA-256 incremental
-([`docs/NOTEBOOK-FORMAT-v1.md`](NOTEBOOK-FORMAT-v1.md)), **timestamp do
+([`docs/NOTEBOOK-FORMAT-v1.md`](../NOTEBOOK-FORMAT-v1.md)), **timestamp do
 relógio virtual em todo evento**, **atuações com trilha completa** (valor
 solicitado/aplicado, latência do ack, custo energético estimado),
 **verificação externa** via `vbl ledger-verify` e a **suíte E2E completa**
 (PLAN §4.2) executando o interpretador integrado nos cenários da Etapa 1.
-Logs reais exportados em [`logs/stage4/`](../logs/stage4/) (PLAN §4.3).
+Logs reais exportados em [`logs/stage4/`](../../logs/stage4/) (PLAN §4.3).
 
 ---
 
@@ -25,9 +25,9 @@ Logs reais exportados em [`logs/stage4/`](../logs/stage4/) (PLAN §4.3).
 | 4.1 Logs de erro como divergências de honestidade (§4.7) | ✅ | `ALERTA`/`ator_indisponivel`/`fallback_executado`/`sensor_nao_registrado`; contados no verificador (`divergências (alertas)`) |
 | 4.2 Interpretador integrado nos testes comportamentais da Etapa 1 | ✅ | `vbl-cli/tests/e2e.rs` — 7 cenários via binário real |
 | 4.2 Subversão térmica em CI (modo simulado) | ✅ | `e2e_subversao_termica_atua_no_ator_e_audita` (CI: `cargo test -p vbl-cli --test e2e`) |
-| 4.3 Logs reais exportados + integridade + atuações corretas | ✅ | [`logs/stage4/`](../logs/stage4/) (3 cargas, binário + JSONL) + [`VERIFICATION.txt`](../logs/stage4/VERIFICATION.txt) |
+| 4.3 Logs reais exportados + integridade + atuações corretas | ✅ | [`logs/stage4/`](../../logs/stage4/) (3 cargas, binário + JSONL) + [`VERIFICATION.txt`](../../logs/stage4/VERIFICATION.txt) |
 | Verificador externo (agente externo, SHA-256) | ✅ | `vbl ledger-verify` (binário **ou** JSONL; exit 1 = corrompido) |
-| Formato binário compacto documentado | ✅ | [`docs/NOTEBOOK-FORMAT-v1.md`](NOTEBOOK-FORMAT-v1.md) + codec em `production_ledger.rs` |
+| Formato binário compacto documentado | ✅ | [`docs/NOTEBOOK-FORMAT-v1.md`](../NOTEBOOK-FORMAT-v1.md) + codec em `production_ledger.rs` |
 
 Testes: **144 no workspace** (matriz 42 · canon 5 · transição 36 · runtime 0 ·
 Caderno de produção **12** · FXP 42 · **E2E 7**) — todos passando; clippy
@@ -121,14 +121,14 @@ flowchart LR
 
 ## 6. Logs reais exportados (PLAN §4.3)
 
-Em [`logs/stage4/`](../logs/stage4/) — release build, simulador determinístico:
+Em [`logs/stage4/`](../../logs/stage4/) — release build, simulador determinístico:
 
 | Arquivo | Carga | Eventos | Joules | Cadeia |
 |---|---|---|---|---|
 | `thermal-subversion.vcad` (+`.jsonl`) | BDD Caso 2 (`--at 3:cpu_temp=86.5`) | 17 | 450,00 J | ÍNTEGRA |
 | `attention-fatigue.vcad` (+`.jsonl`) | BDD Caso 1 (`--at 2:attention=15`) | 21 | 600,00 J | ÍNTEGRA |
 | `actor-failure-fallback.vcad` (+`.jsonl`) | BDD Caso 3 (`--fail-actor Fan`) | 29 | 600,00 J | ÍNTEGRA |
-| [`VERIFICATION.txt`](../logs/stage4/VERIFICATION.txt) | saída do `vbl ledger-verify` sobre os três + estresse 60k | — | — | ÍNTEGRA |
+| [`VERIFICATION.txt`](../../logs/stage4/VERIFICATION.txt) | saída do `vbl ledger-verify` sobre os três + estresse 60k | — | — | ÍNTEGRA |
 
 Reprodução (10k formas, log grande gerado sob demanda):
 

@@ -4,7 +4,7 @@
 
 A Etapa 3 entrega o **Flux Protocol (FXP)** como camada única de I/O do
 VerboLang: schema de mensagem v1 definido **antes** dos drivers
-([`docs/FXP-SCHEMA-v1.md`](FXP-SCHEMA-v1.md)), registro de dispositivos com
+([`docs/FXP-SCHEMA-v1.md`](../FXP-SCHEMA-v1.md)), registro de dispositivos com
 aliases e fallback (FORMAL §6/§4.3), drivers reais e simulados, barramento
 multi-modo com honestidade de dados (FORMAL §4.7), fila prioritária com
 timeout/retry, transporte local × remoto e integração completa com o runtime e
@@ -16,7 +16,7 @@ o CLI da Etapa 2.
 
 | Entregável | Status | Onde |
 |---|---|---|
-| Schema de mensagem v1 definido antes dos drivers | ✅ | [`docs/FXP-SCHEMA-v1.md`](FXP-SCHEMA-v1.md) (codec: `core/crates/vbl-fxp/src/schema.rs`) |
+| Schema de mensagem v1 definido antes dos drivers | ✅ | [`docs/FXP-SCHEMA-v1.md`](../FXP-SCHEMA-v1.md) (codec: `core/crates/vbl-fxp/src/schema.rs`) |
 | Registro de sensores e atores (nomes simbólicos → endpoints) | ✅ | `vbl-fxp/src/registry.rs` |
 | Drivers reais (thermal_zone, RAPL ×2, hwmon PWM, LED class) | ✅ | `vbl-fxp/src/drivers.rs` |
 | Drivers simulados (backend determinístico + AttentionSource) | ✅ | `vbl-runtime/src/sim.rs` + `drivers.rs` |
@@ -44,7 +44,7 @@ benches para medir I/O cru).
 
 ## 3. Arquitetura implementada
 
-### 3.1 Schema v1 ([`docs/FXP-SCHEMA-v1.md`](FXP-SCHEMA-v1.md) → `schema.rs`)
+### 3.1 Schema v1 ([`docs/FXP-SCHEMA-v1.md`](../FXP-SCHEMA-v1.md) → `schema.rs`)
 
 Frame `[u32 LE length][header 12 B][name][body]`; magic `FXP`; version 1;
 opcodes `READ/ACT/HEARTBEAT/HELLO/BYE` e acks `0x81–0x84`; flags
@@ -178,7 +178,7 @@ Precisões declaradas no registro: `cpu_temp` ±2%, `cpu_power` ±5%,
 | Benches criterion (`make rust-bench`) | dentro dos orçamentos (§2) |
 | `vbl fxp-probe` | cobertura §6 = 6/6, saída auditável |
 
-Matriz de rastreabilidade do schema (§8 de [`docs/FXP-SCHEMA-v1.md`](FXP-SCHEMA-v1.md)):
+Matriz de rastreabilidade do schema (§8 de [`docs/FXP-SCHEMA-v1.md`](../FXP-SCHEMA-v1.md)):
 `schema_roundtrip` ↔ codec; `registry` ↔ §7 config/registro; `drivers` ↔ §3.2/3.3;
 `transport` ↔ §4/§6/§7; `bus` ↔ §5 flags/honestidade + PLAN §3.1/3.4;
 `queue` ↔ PLAN §3.4.

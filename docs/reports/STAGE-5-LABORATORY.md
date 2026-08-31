@@ -12,7 +12,7 @@ energia com leitura RAPL real, perf fino e validação do FXP em hardware real.
 
 ## 1. FXP híbrido em hardware real — registro e cenários
 
-Registro do laboratório: [`logs/stage5/lab/fxp-lab.cfg`](../logs/stage5/lab/fxp-lab.cfg)
+Registro do laboratório: [`logs/stage5/lab/fxp-lab.cfg`](../../logs/stage5/lab/fxp-lab.cfg)
 (`mode = hibrido`). `vbl fxp-probe` com a config:
 
 | Dispositivo | Rota | Disponibilidade |
@@ -73,8 +73,8 @@ simulado, imediatos no mundo físico. Suíte: **149 testes** verdes
 
 ## 4. Precisão energética Caderno × RAPL (AGENTS §1.4)
 
-Protocolo ([`rapl-experiment.sh`](../logs/stage5/lab/rapl-experiment.sh),
-saída em [`rapl-precision.txt`](../logs/stage5/lab/rapl-precision.txt)): 1 janela
+Protocolo ([`rapl-experiment.sh`](../../logs/stage5/lab/rapl-experiment.sh),
+saída em [`rapl-precision.txt`](../../logs/stage5/lab/rapl-precision.txt)): 1 janela
 de repouso (60 s; piso 36,03 W com soak de fundo + desktop) e 3 janelas de
 carga — 92 ticks × 1 s de parede (`--real-ms 1000`), forma única recebendo a
 partilha integral da potência RAPL lida a cada tick. Comparação **full-to-full**:
@@ -100,7 +100,7 @@ um medidor externo independente — essa exigiria wattímetro de referência.
 `perf_event_paranoid=1` aplicado; `perf record -F 99 -g --call-graph dwarf`
 acoplado ao soak de 24 h (30 s, 2 993 amostras) e a uma instância idêntica
 curta (45 s, 4 470 amostras, símbolos completos —
-[`perf-soak2-report.txt`](../logs/stage5/lab/perf-soak2-report.txt)).
+[`perf-soak2-report.txt`](../../logs/stage5/lab/perf-soak2-report.txt)).
 Perfil confirmado por símbolo:
 
 | Overhead | Símbolo | Interpretação |

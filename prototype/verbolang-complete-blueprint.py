@@ -19,7 +19,7 @@ Inclui:
 - Condições de revisão que podem referenciar múltiplos sensores por forma.
 - Ações com atores via act(nome, valor).
 
-Alinhamentos da Etapa 1 (suíte em tests/ — cf. docs/STAGE-1-REPORT.md):
+Alinhamentos da Etapa 1 (suíte em tests/ — cf. docs/reports/STAGE-1-REPORT.md):
 - FXP e tick_seconds injetáveis (simulador determinístico / mock em processo).
 - Fins de forma tipificados no Caderno (FORMAL §6): dissolve_rule,
   dissolve_horizon, collapse_maintenance, dissolve_subvert; além de
@@ -530,7 +530,7 @@ VALOR_POETICO_CANONICO = (
 )
 
 # Orçamentos de retenção por conjugação (AGENTS.md §1.3, reancorados no
-# docs/ADR-001-linguagem-nucleo.md): o contador do runtime é um PROXY
+# docs/adrs/ADR-001-linguagem-nucleo.md): o contador do runtime é um PROXY
 # determinístico (estruturas de livro-razão), não medição de heap real —
 # a medição física fica para a Etapa 5 (PLAN §5.1).
 ORCAMENTO_RETENCAO = {"event": 256, "equilibrium": 1024, "nonequilibrium": 512}

@@ -71,7 +71,7 @@ ou desligado; a UI sobrevive ao Ctrl+C do vLLM (setsid) e vive até
 `make stop`.
 
 Servidor: [`scripts/webui.py`](../scripts/webui.py) (só stdlib) — estático na
-**raiz do repositório** (o chat busca `/docs/VBL-CHEATSHEET.md`) + rotas de
+**raiz do repositório** (o chat busca `/docs/cheatsheet/VBL-CHEATSHEET.md`) + rotas de
 métricas: `GET /api/sources`, `GET /api/snapshot?src=…`,
 `GET /api/events?src=…` (SSE). Bind exclusivo em `127.0.0.1`.
 

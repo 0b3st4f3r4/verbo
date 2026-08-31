@@ -30,7 +30,7 @@ loader, persistência) · `vbl-cli` (binário `vbl`, tokio).
   msg [‖ extras_json])`, head `0×64`), JSONL, `verify_chain`, busca por
   kind/filtro. 18 kinds canônicos nos níveis INFO/ASSESSMENT/ALERT/COLLAPSE/
   SUBVERSION/LEAK/SENSOR_READ/ACTUATION — normalizados na v1.1 da spec
-  ([NOTA DE VERSÃO](NOTEBOOK-FORMAT-v1.md); kinds v1 em PT seguem aceitos pelo
+  ([NOTA DE VERSÃO](../NOTEBOOK-FORMAT-v1.md); kinds v1 em PT seguem aceitos pelo
   verificador; eram "kinds em PT até a Fase C" da
   padronização — ver NOTEBOOK-FORMAT-v1).
 - **FXP** (`fxp.rs`): trait `Fxp` injetável + `FxpSimulator` com o registro

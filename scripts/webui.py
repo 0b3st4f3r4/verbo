@@ -3,7 +3,7 @@
 """webui.py — servidor da UI (estático + ponte de métricas do Caderno).
 
 Substitui o `python3 -m http.server` do `serve-local-llm.sh`: continua
-servindo a RAIZ do repositório (a UI precisa alcançar /docs/VBL-CHEATSHEET.md)
+servindo a RAIZ do repositório (a UI precisa alcançar /docs/cheatsheet/VBL-CHEATSHEET.md)
 e adiciona as rotas de métricas em tempo real do runtime VerboLang:
 
     GET /                    → redirect para /web/ (entrada do dashboard)

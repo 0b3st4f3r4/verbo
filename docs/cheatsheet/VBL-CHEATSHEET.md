@@ -1,10 +1,10 @@
 # VBL-CHEATSHEET.md — VerboLang em uma página (referência humana)
 
-> Artefato canônico da demanda do [`PLAN.md`](PLAN.md) §7 (caminho "a" — modelo
+> Artefato canônico da demanda do [`PLAN.md`](../PLAN.md) §7 (caminho "a" — modelo
 > local com conhecimento da linguagem). Mantido junto da spec: qualquer mudança
-> relevante na [`FORMAL.md`](FORMAL.md) deve refletir aqui. **Injeção no
-> modelo**: a UI ([`web/chat.html`](../web/chat.html)) e o validador
-> ([`../scripts/validate_cheatsheet.py`](../scripts/validate_cheatsheet.py))
+> relevante na [`FORMAL.md`](../FORMAL.md) deve refletir aqui. **Injeção no
+> modelo**: a UI ([`web/chat.html`](../../web/chat.html)) e o validador
+> ([`../scripts/validate_cheatsheet.py`](../../scripts/validate_cheatsheet.py))
 > usam a versão densa para agentes,
 > [`VBL-CHEATSHEET-AGENTES.md`](VBL-CHEATSHEET-AGENTES.md) (~1.200 tokens —
 > cabe na janela de 4096 ao lado da conversa); este arquivo completo é a

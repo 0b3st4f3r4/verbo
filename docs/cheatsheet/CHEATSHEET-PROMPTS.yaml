@@ -5,7 +5,7 @@
 # 3 execuções cada; aceito se ≥ 90% das respostas passam no verificador
 # sintático (tests/vlcheck.py — mini-validador dedicado; o parser real é da
 # Etapa 2) E na rubrica semântica abaixo. Resultados versionados em
-# docs/CHEATSHEET-VALIDATION.md (gerado por scripts/validate_cheatsheet.py).
+# docs/cheatsheet/CHEATSHEET-VALIDATION.md (gerado por scripts/validate_cheatsheet.py).
 #
 # Rubrica: lista de itens; cada item deve aparecer na resposta (case-insensitive).
 # Um item pode ser uma lista => qualquer alternativa satisfaz (any-of).
@@ -23,7 +23,7 @@ versao: 4
 #     + duas reviews).
 execucoes_por_prompt: 3
 limiar_aceitacao: 0.90
-# v1 (auditoria da Etapa 1): 45% — falhas triadas em docs/STAGE-1-REPORT.md §10
+# v1 (auditoria da Etapa 1): 45% — falhas triadas em docs/reports/STAGE-1-REPORT.md §10
 # (lacunas do cheat sheet corrigidas; rubrics de formatação exata substituídas
 # por âncoras estruturais; prompts ambíguos passaram a exigir programa completo).
 # v2: 71,7% — semântica 29/30; falhas de sintaxe majoritariamente reais do modelo.

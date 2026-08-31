@@ -5,7 +5,7 @@
 | **Status** | Concluída — critérios de "Done" do AGENTS.md §2.2 atendidos |
 | **Data** | 30/08/2026 |
 | **CI (§1.3 a)** | GitHub Actions (`.github/workflows/ci.yml`) + alvo local `make test` — a mesma suíte nos dois lugares |
-| **Linguagem (§1.3 d)** | **Rust** — [`docs/ADR-001-linguagem-nucleo.md`](ADR-001-linguagem-nucleo.md), orçamentos reancorados |
+| **Linguagem (§1.3 d)** | **Rust** — [`docs/adrs/ADR-001-linguagem-nucleo.md`](../adrs/ADR-001-linguagem-nucleo.md), orçamentos reancorados |
 
 ## 1. Escopo entregue (PLAN §1.1–§1.3)
 
@@ -14,7 +14,7 @@
 | §1.1 BDD | 3 cenários canônicos em `tests/features/*.feature` (`# language: en`), com mocks via **behave**: 17 steps passando |
 | §1.2 TDD | 63 testes pytest em `tests/unit/`: finitude, falha controlada de sensores, comandos a atores, ordem do tick, integridade do Caderno, validador de superfície |
 | §1.3 b — fronteira mock × simulador | `tests/fxp_sim/mocks.py` (**MockFXP**, dicionários em processo) × `tests/fxp_sim/simulator.py` (**FXPSimulator** — séries roteirizadas, injeção de falhas, fallback no registro, efeitos físicos determinísticos). Schema binário v1 → Etapa 3 |
-| §1.3 c — banco de 20 prompts | `docs/CHEATSHEET-PROMPTS.yaml` (S01–S10 sintaxe, M01–M10 semântica) + `scripts/validate_cheatsheet.py` (3 execuções/prompt, verificador `tests/vlcheck.py`, relatório em `docs/CHEATSHEET-VALIDATION.md`, limiar ≥ 90 %) |
+| §1.3 c — banco de 20 prompts | `docs/cheatsheet/CHEATSHEET-PROMPTS.yaml` (S01–S10 sintaxe, M01–M10 semântica) + `scripts/validate_cheatsheet.py` (3 execuções/prompt, verificador `tests/vlcheck.py`, relatório em `docs/cheatsheet/CHEATSHEET-VALIDATION.md`, limiar ≥ 90 %) |
 
 **SUT:** o protótipo Python (`prototype/verbolang-complete-blueprint.py`) é a
 especificação executável; runtime recebe FXP e relógio virtual **injetados**

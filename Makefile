@@ -79,8 +79,8 @@ release-check:
 
 smoke:
 > @set -e; \
-  for p in web/index.html web/chat.html web/metrics.html web/docs.html web/md.js docs/VBL-CHEATSHEET.md \
-           docs/VBL-CHEATSHEET-AGENTES.md web/verbolog.svg \
+  for p in web/index.html web/chat.html web/metrics.html web/docs.html web/md.js docs/cheatsheet/VBL-CHEATSHEET.md \
+           docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md web/verbolog.svg \
            web/vendor/mermaid.min.js web/vendor/katex/katex.min.js; do \
     code=$$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(UI_PORT)/$$p"); \
     echo "$$code  $$p"; \

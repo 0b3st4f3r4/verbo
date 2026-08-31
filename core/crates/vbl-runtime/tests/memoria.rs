@@ -122,7 +122,7 @@ fn heap_budget_per_form_and_conjugation() {
     assert!(per_equil < per_neq, "equilibrium deve reter menos que nonequilibrium+review");
     // Tetos REVISTOS da Etapa 5 (AGENTS §4 — meta provisória medida:
     // event/equilibrium 743 B, nonequilibrium+review 1448 B na máquina de
-    // referência; detalhes em docs/STAGE-5-REPORT.md §2):
+    // referência; detalhes em docs/reports/STAGE-5-REPORT.md §2):
     assert!(per_event <= 1_024, "event: {per_event} B/forma fora do teto revisado (1 KB)");
     assert!(per_equil <= 1_024, "equilibrium: {per_equil} B/forma fora do teto revisado (1 KB)");
     assert!(per_neq <= 2_048, "nonequilibrium+review: {per_neq} B/forma fora do teto revisado (2 KB)");

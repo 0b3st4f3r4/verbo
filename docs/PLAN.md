@@ -250,10 +250,10 @@ O simulador será implementado na Etapa 1 como parte dos mocks e evoluído para 
 
 ## 7. Demanda registrada — dotar o modelo local de conhecimento da VerboLang
 
-**Status:** ✅ **atendido (31/08/2026)** — caminho "a" validado: banco fixo de 20 prompts × 3 execuções contra o Qwen3-4B local, com o cheat sheet injetado, **56/60 = 93,3% ≥ 90% — ACEITO** (`docs/CHEATSHEET-VALIDATION.md`; histórico: v1 45% → v2 71,7% → v3 73,3% → v4 93,3%, iterações registradas no cabeçalho do banco de prompts). O cheat sheet continua canônico: mudanças na `FORMAL.md` devem refletir nele, e revalidações rodam com `make validate-cheatsheet`. **Responsáveis sugeridos:** AD (conteúdo canônico) + EC (validação contra a EBNF) + GQT (critério de aceite).
+**Status:** ✅ **atendido (31/08/2026)** — caminho "a" validado: banco fixo de 20 prompts × 3 execuções contra o Qwen3-4B local, com o cheat sheet injetado, **56/60 = 93,3% ≥ 90% — ACEITO** (`docs/cheatsheet/CHEATSHEET-VALIDATION.md`; histórico: v1 45% → v2 71,7% → v3 73,3% → v4 93,3%, iterações registradas no cabeçalho do banco de prompts). O cheat sheet continua canônico: mudanças na `FORMAL.md` devem refletir nele, e revalidações rodam com `make validate-cheatsheet`. **Responsáveis sugeridos:** AD (conteúdo canônico) + EC (validação contra a EBNF) + GQT (critério de aceite).
 
 O modelo local do pipeline (Qwen3-4B-Instruct-2507, via vLLM — ver
-`docs/SETUP-LOCAL-LLM.md`) **não detém conhecimento da VerboLang**: nenhum
+`docs/setup/SETUP-LOCAL-LLM.md`) **não detém conhecimento da VerboLang**: nenhum
 trecho da especificação (`docs/FORMAL.md`) está no seu treino, e a janela de
 4096 tokens do servidor inviabiliza despejar a spec inteira no contexto. Consequência
 prática: qualquer tarefa da linguagem delegada ao modelo local **precisa levar
@@ -270,8 +270,8 @@ Caminhos possíveis (não exclusivos, em ordem de custo):
 
 | Caminho | Descrição | Custo |
 |---|---|---|
-| **a. "Cheat sheet" canônico** ✅ | Prompt de sistema compacto (≤ ~1.200 tokens) derivado da `FORMAL.md`: EBNF resumida, as três conjugações, regras de `horizon`/`keep()`/`subvert`, registro mínimo do FXP. Artefatos versionados: [`docs/VBL-CHEATSHEET-AGENTES.md`](VBL-CHEATSHEET-AGENTES.md) (denso, para agentes — injetado pela UI e pelo validador) e [`docs/VBL-CHEATSHEET.md`](VBL-CHEATSHEET.md) (completo — referência humana e fonte do denso); injetáveis na UI de consulta (alternância "Modelo puro ↔ + VerboLang") e no PoC. | Baixo — documentação |
-| **b. RAG sobre a spec** | Recuperação dos trechos relevantes da `FORMAL.md` por similaridade antes de cada consulta. Exige nó de embeddings (não cabe na VRAM junto do chat — ver `SETUP-LOCAL-LLM.md` §3.3) ou embeddings remotos. | Médio |
+| **a. "Cheat sheet" canônico** ✅ | Prompt de sistema compacto (≤ ~1.200 tokens) derivado da `FORMAL.md`: EBNF resumida, as três conjugações, regras de `horizon`/`keep()`/`subvert`, registro mínimo do FXP. Artefatos versionados: [`docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md`](cheatsheet/VBL-CHEATSHEET-AGENTES.md) (denso, para agentes — injetado pela UI e pelo validador) e [`docs/cheatsheet/VBL-CHEATSHEET.md`](cheatsheet/VBL-CHEATSHEET.md) (completo — referência humana e fonte do denso); injetáveis na UI de consulta (alternância "Modelo puro ↔ + VerboLang") e no PoC. | Baixo — documentação |
+| **b. RAG sobre a spec** | Recuperação dos trechos relevantes da `FORMAL.md` por similaridade antes de cada consulta. Exige nó de embeddings (não cabe na VRAM junto do chat — ver `docs/setup/SETUP-LOCAL-LLM.md` §3.3) ou embeddings remotos. | Médio |
 | **c. Fine-tune / LoRA** | Ajuste do Qwen3-4B com pares (pergunta, trecho da spec); inviável nos 6 GB de VRAM atuais, exige hardware maior. | Alto |
 
 **Critério de aceite (caminho a), mensurável:** banco fixo de 20 prompts (10 de

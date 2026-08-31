@@ -818,7 +818,7 @@ fn case1_attention_fatigue_end_to_end() {
 }
 
 // ======================================================================
-// Etapa 5 — decisão AD pendente da Etapa 4 (docs/STAGE-4-REPORT.md §7):
+// Etapa 5 — decisão AD pendente da Etapa 4 (docs/reports/STAGE-4-REPORT.md §7):
 // as regras de revisão SOBREVIVEM à reclassificação e permanecem ativas na
 // `equilibrium`. Fundamento na FORMAL: o diagrama de estados (§4.1) lista
 // `revisão` como caminho de EQ → DIS e a §4.2 manda avaliar as condições de

@@ -38,7 +38,7 @@ emb = emb.replace(
            "  pássaros (dips) têm ápices alinhados na linha tracejada do\n"
            "  horizonte. O raio do disco (glass_r) mantém as luzes das pontas\n"
            "  inteiras — nada corta na borda. Gerador: design/gen.py.") + '<svg xmlns', 1)
-open(os.path.join(ROOT, "docs", "verbolog-triangle.svg"), "w").write(emb)
+open(os.path.join(ROOT, "docs", "brand", "verbolog-triangle.svg"), "w").write(emb)
 
 # 3) banner
 ban = build_banner()
@@ -50,9 +50,9 @@ ban = ban.replace(
            "  emblema e segue sob o traço espectral\n"
            "  (azul→teal→verde→amarelo→vermelho), cujo pássaro mergulha abaixo\n"
            "  da linha.") + '<svg xmlns', 1)
-open(os.path.join(ROOT, "docs", "verbolog-banner.svg"), "w").write(ban)
+open(os.path.join(ROOT, "docs", "brand", "verbolog-banner.svg"), "w").write(ban)
 
 print("persisted:",
       os.path.join(ROOT, "web", "verbolog.svg"),
-      os.path.join(ROOT, "docs", "verbolog-triangle.svg"),
-      os.path.join(ROOT, "docs", "verbolog-banner.svg"), sep="\n  ")
+      os.path.join(ROOT, "docs", "brand", "verbolog-triangle.svg"),
+      os.path.join(ROOT, "docs", "brand", "verbolog-banner.svg"), sep="\n  ")

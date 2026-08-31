@@ -183,7 +183,7 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   interrompida pelo verbo.
 - `serve-local-llm.sh` sobe **primeiro a UI** (ponte `scripts/webui.py` na
   porta **8188**, só loopback; estático na raiz do repo **+ métricas SSE do
-  Caderno** — cf. [`web/README.md`](../web/README.md)) e depois o modelo: a
+  Caderno** — cf. [`web/README.md`](../../web/README.md)) e depois o modelo: a
   UI **não depende do LLM** — sobrevive a Ctrl+C (setsid) e funciona com ele
   carregando, sem chave ou desligado (o badge classifica o estado real,
   inclusive 401 de navegador sem chave). Encerra com `make stop`.
@@ -202,10 +202,10 @@ VBL_EMBED_URL=http://127.0.0.1:8002/v1 python3 prototype/verbolang-llm-poc.py
   + VerboLang; tooltip
   traz o estado, inclusive o custo do cheat sheet em tokens). O modo
   "+ VerboLang" injeta o cheat sheet canônico
-  ([`VBL-CHEATSHEET.md`](VBL-CHEATSHEET.md)) como prompt de
+  ([`VBL-CHEATSHEET.md`](../cheatsheet/VBL-CHEATSHEET.md)) como prompt de
   sistema e conta o custo dele no medidor de contexto. O prompt de sistema é
   fixo e localizado (sem editor na UI). Lembre: o modelo local
-  **não conhece a linguagem** sem isso (demanda em [`PLAN.md`](PLAN.md) §7) —
+  **não conhece a linguagem** sem isso (demanda em [`PLAN.md`](../PLAN.md) §7) —
   para consultas sobre a VerboLang, ligue o modo e mantenha folga no medidor.
   As perguntas sugeridas na home acompanham o modo (gerais no puro; da
   linguagem no + VerboLang).

@@ -84,7 +84,7 @@ def step_no_maintenance(context):
 @then('0 bytes remain retained on the heap for the form (verified with runtime counters)')
 def step_zero_bytes_retained(context):
     name = context.form_name
-    # Interpretação registrada (docs/STAGE-1-REPORT.md): o estado
+    # Interpretação registrada (docs/reports/STAGE-1-REPORT.md): o estado
     # laborativo (nonequilibrium) foi integralmente liberado — 0 bytes de
     # trabalho retidos; o que permanece é a forma equilibrium persistida em
     # disco, dentro do orçamento de retenção da conjugação (ADR-001).

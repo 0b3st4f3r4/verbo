@@ -1,6 +1,6 @@
 #
 
-<p align="center"><img src="docs/verbolog-banner.svg" alt="VerboLang" width="640"></p>
+<p align="center"><img src="docs/brand/verbolog-banner.svg" alt="VerboLang" width="640"></p>
 
 **Uma linguagem de programação onde nenhum dado é inerte.**
 
@@ -144,31 +144,31 @@ embeddings com o chat desligado ou em outra máquina.
 | [`docs/FXP-SCHEMA-v1.md`](docs/FXP-SCHEMA-v1.md) | Schema v1 do Flux Protocol: frames, opcodes, flags, timeouts, config e rastreabilidade |
 | [`docs/NOTEBOOK-FORMAT-v1.md`](docs/NOTEBOOK-FORMAT-v1.md) | Formato binário `.vcad` do Caderno de produção: frames, cadeia SHA-256, rodapé e verificação externa |
 | [`core/`](core/) | Núcleo em Rust (Etapa 2+): `vbl-lang`, `vbl-runtime`, `vbl-fxp` (protocolo, drivers, barramento) e `vbl-cli` |
-| [`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md) | Pipeline de LLMs: GLM-5.3/Flash (cloud) + Qwen3-4B-2507 (local) |
+| [`docs/setup/SETUP-LOCAL-LLM.md`](docs/setup/SETUP-LOCAL-LLM.md) | Pipeline de LLMs: GLM-5.3/Flash (cloud) + Qwen3-4B-2507 (local) |
 | [`prototype/verbolang-complete-blueprint.py`](prototype/verbolang-complete-blueprint.py) | Protótipo de referência (FXP, runtime, Caderno, bloco `main`) |
 | [`prototype/verbolang-llm-poc.py`](prototype/verbolang-llm-poc.py) | PoC: comunicação inter-LLM (agentes LLM como atores/sensores no FXP) |
 | [`tests/`](tests/) | Suíte da Etapa 1: BDD (behave), unitários (pytest), simulador FXP determinístico e fronteira mock |
 | [`tests/vlcheck.py`](tests/vlcheck.py) | Validador de superfície `.vl` (mini-validador do PLAN §7) |
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | CI (GitHub Actions): checagens estáticas + pytest + behave a cada push/PR |
-| [`docs/STAGE-1-REPORT.md`](docs/STAGE-1-REPORT.md) | Relatório da Etapa 1: matriz de rastreabilidade, interpretações e divergências |
-| [`docs/STAGE-2-REPORT.md`](docs/STAGE-2-REPORT.md) | Relatório da Etapa 2: parser, engine de tick, Caderno e CLI `vbl` |
-| [`docs/STAGE-3-REPORT.md`](docs/STAGE-3-REPORT.md) | Relatório da Etapa 3: FXP real — schema v1, drivers, barramento, fila e transporte |
-| [`docs/STAGE-4-REPORT.md`](docs/STAGE-4-REPORT.md) | Relatório da Etapa 4: Caderno de produção (assíncrono, `.vcad`), E2E e overhead medido |
-| [`docs/STAGE-5-REPORT.md`](docs/STAGE-5-REPORT.md) | Relatório da Etapa 5: profiling, otimizações medidas, heap e execução longa |
-| [`docs/STAGE-5-GOALS-REVIEW.md`](docs/STAGE-5-GOALS-REVIEW.md) | Revisão formal das metas provisórias (AGENTS §4) com números medidos |
+| [`docs/reports/STAGE-1-REPORT.md`](docs/reports/STAGE-1-REPORT.md) | Relatório da Etapa 1: matriz de rastreabilidade, interpretações e divergências |
+| [`docs/reports/STAGE-2-REPORT.md`](docs/reports/STAGE-2-REPORT.md) | Relatório da Etapa 2: parser, engine de tick, Caderno e CLI `vbl` |
+| [`docs/reports/STAGE-3-REPORT.md`](docs/reports/STAGE-3-REPORT.md) | Relatório da Etapa 3: FXP real — schema v1, drivers, barramento, fila e transporte |
+| [`docs/reports/STAGE-4-REPORT.md`](docs/reports/STAGE-4-REPORT.md) | Relatório da Etapa 4: Caderno de produção (assíncrono, `.vcad`), E2E e overhead medido |
+| [`docs/reports/STAGE-5-REPORT.md`](docs/reports/STAGE-5-REPORT.md) | Relatório da Etapa 5: profiling, otimizações medidas, heap e execução longa |
+| [`docs/reports/STAGE-5-GOALS-REVIEW.md`](docs/reports/STAGE-5-GOALS-REVIEW.md) | Revisão formal das metas provisórias (AGENTS §4) com números medidos |
 | [`logs/stage4/`](logs/stage4/) | Logs reais do Caderno exportados das cargas E2E + relatórios de verificação externa |
 | [`logs/stage5/`](logs/stage5/) | Baselines/medidas dos benches, soak de longa execução, ASan e logs do Caderno pós-otimização |
-| [`docs/ADR-001-linguagem-nucleo.md`](docs/ADR-001-linguagem-nucleo.md) | Decisão Rust × C com orçamentos de memória/latência reancorados |
-| [`docs/CHEATSHEET-PROMPTS.yaml`](docs/CHEATSHEET-PROMPTS.yaml) | Banco fixo de 20 prompts para validação do cheat sheet (PLAN §7) |
-| [`docs/CHEATSHEET-VALIDATION.md`](docs/CHEATSHEET-VALIDATION.md) | Resultados versionados da validação do cheat sheet |
+| [`docs/adrs/ADR-001-linguagem-nucleo.md`](docs/adrs/ADR-001-linguagem-nucleo.md) | Decisão Rust × C com orçamentos de memória/latência reancorados |
+| [`docs/cheatsheet/CHEATSHEET-PROMPTS.yaml`](docs/cheatsheet/CHEATSHEET-PROMPTS.yaml) | Banco fixo de 20 prompts para validação do cheat sheet (PLAN §7) |
+| [`docs/cheatsheet/CHEATSHEET-VALIDATION.md`](docs/cheatsheet/CHEATSHEET-VALIDATION.md) | Resultados versionados da validação do cheat sheet |
 | [`scripts/validate_cheatsheet.py`](scripts/validate_cheatsheet.py) | Executa o banco de prompts contra o LLM local e avalia com o vlcheck |
 | [`scripts/serve-local-llm.sh`](scripts/serve-local-llm.sh) | Sobe o modelo local Qwen3-4B-Instruct-2507-FP8 via vLLM (e abre o dashboard) |
 | [`web/`](web/README.md) | Dashboard do runtime: entrada ([`index.html`](web/index.html)), **chat** single-file ([`chat.html`](web/chat.html): streaming SSE, medidor de contexto, alternância puro ↔ +VerboLang) e **métricas em tempo real** do Caderno ([`metrics.html`](web/metrics.html)) |
 | [`scripts/webui.py`](scripts/webui.py) | Ponte do dashboard: estático na raiz do repo + métricas SSE do Caderno (`.vcad`/JSONL) — só stdlib |
 | [`web/verbolog.svg`](web/verbolog.svg) | Marca do projeto (logo e favicon da UI) |
-| [`docs/verbolog-triangle.svg`](docs/verbolog-triangle.svg) | Emblema mestre da marca: triângulo invertido de metal escovado sobre vidro fosco, lados em degradê azul-verde-vermelho, três pássaros alinhados no horizonte (gerador em [`design/`](design/)) |
-| [`docs/VBL-CHEATSHEET-AGENTES.md`](docs/VBL-CHEATSHEET-AGENTES.md) | Cheat sheet denso para agentes (~1.200 tokens) — a versão injetada pela UI e pelo validador |
-| [`docs/VBL-CHEATSHEET.md`](docs/VBL-CHEATSHEET.md) | VerboLang em uma página — cheat sheet canônico completo (referência humana, fonte do denso) |
+| [`docs/brand/verbolog-triangle.svg`](docs/brand/verbolog-triangle.svg) | Emblema mestre da marca: triângulo invertido de metal escovado sobre vidro fosco, lados em degradê azul-verde-vermelho, três pássaros alinhados no horizonte (gerador em [`design/`](design/)) |
+| [`docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md`](docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md) | Cheat sheet denso para agentes (~1.200 tokens) — a versão injetada pela UI e pelo validador |
+| [`docs/cheatsheet/VBL-CHEATSHEET.md`](docs/cheatsheet/VBL-CHEATSHEET.md) | VerboLang em uma página — cheat sheet canônico completo (referência humana, fonte do denso) |
 | [`LICENSE`](LICENSE) | Licença GPL-3.0 (copyleft) |
 
 > **Ordem de leitura sugerida:** [`docs/MANIFESTO.md`](docs/MANIFESTO.md) →
@@ -194,8 +194,8 @@ números são outros; as *lições* são as que viajam.
 | Sensores de energia | RAPL `intel-rapl:0` (package) · k10temp (`hwmon4`) |
 
 Detalhes do pipeline de LLM local e as lições de VRAM em 6 GB:
-[`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md). Metodologia dos benches
-e reancoragem de metas: [`docs/STAGE-5-GOALS-REVIEW.md`](docs/STAGE-5-GOALS-REVIEW.md).
+[`docs/setup/SETUP-LOCAL-LLM.md`](docs/setup/SETUP-LOCAL-LLM.md). Metodologia dos benches
+e reancoragem de metas: [`docs/reports/STAGE-5-GOALS-REVIEW.md`](docs/reports/STAGE-5-GOALS-REVIEW.md).
 
 ## Roadmap
 
@@ -206,13 +206,13 @@ barramento real/simulado/híbrido, fila prioritária e transporte Unix/TCP), o
 cadeia SHA-256, verificação externa `vbl ledger-verify` e suíte E2E) e a
 **revisão de qualidade/otimização** da Etapa 5 (encoder direto do Caderno,
 hash incremental, auditor de heap, soak de longa execução e revisão formal
-das metas) ([relatório da Etapa 5](docs/STAGE-5-REPORT.md)).
+das metas) ([relatório da Etapa 5](docs/reports/STAGE-5-REPORT.md)).
 
 1. **Etapa 1** ✅ — Suíte BDD/TDD/E2E com mocks e simulador FXP
-2. **Etapa 2** ✅ — Núcleo da linguagem em **Rust**: lexer, parser, AST e motor de tick assíncrono ([ADR-001](docs/ADR-001-linguagem-nucleo.md))
-3. **Etapa 3** ✅ — FXP real: schema v1, registro de dispositivos, drivers, barramento multi-modo e transporte local×remoto ([relatório](docs/STAGE-3-REPORT.md))
-4. **Etapa 4** ✅ — Caderno de produção (gravação assíncrona, `.vcad`, `ledger-verify`) e validação end-to-end ([relatório](docs/STAGE-4-REPORT.md))
-5. **Etapa 5** ✅ — Qualidade, profiling termodinâmico e otimização ([relatório](docs/STAGE-5-REPORT.md) · [revisão de metas](docs/STAGE-5-GOALS-REVIEW.md))
+2. **Etapa 2** ✅ — Núcleo da linguagem em **Rust**: lexer, parser, AST e motor de tick assíncrono ([ADR-001](docs/adrs/ADR-001-linguagem-nucleo.md))
+3. **Etapa 3** ✅ — FXP real: schema v1, registro de dispositivos, drivers, barramento multi-modo e transporte local×remoto ([relatório](docs/reports/STAGE-3-REPORT.md))
+4. **Etapa 4** ✅ — Caderno de produção (gravação assíncrona, `.vcad`, `ledger-verify`) e validação end-to-end ([relatório](docs/reports/STAGE-4-REPORT.md))
+5. **Etapa 5** ✅ — Qualidade, profiling termodinâmico e otimização ([relatório](docs/reports/STAGE-5-REPORT.md) · [revisão de metas](docs/reports/STAGE-5-GOALS-REVIEW.md))
 
 Para rodar a suíte: `make setup && make test` (Python) e `make rust-check` +
 `make rust-e2e` (núcleo Rust, Etapas 2–4). Gates da Etapa 5:
@@ -239,13 +239,13 @@ dashboard + documentos, com SHA-256) na release.
 O projeto usa um pipeline de **dois modelos**: o orquestrador **GLM-5.3/Flash**
 (cloud, revisão de ontologia e arquitetura) e o **Qwen3-4B-Instruct-2507**
 (local, via vLLM — trabalho bulk offline, dados de sensores não saem da máquina).
-Configuração completa em [`docs/SETUP-LOCAL-LLM.md`](docs/SETUP-LOCAL-LLM.md).
+Configuração completa em [`docs/setup/SETUP-LOCAL-LLM.md`](docs/setup/SETUP-LOCAL-LLM.md).
 
 > **Atenção:** o modelo local **não conhece a VerboLang** — a especificação não
 > está no seu treino e a janela de 4096 tokens impede carregá-la inteira.
 > Tarefas da linguagem exigem injetar contexto no prompt: use o modo
 > **"+ VerboLang"** da UI de consulta (injeta o denso
-> [`docs/VBL-CHEATSHEET-AGENTES.md`](docs/VBL-CHEATSHEET-AGENTES.md)) ou o
+> [`docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md`](docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md)) ou o
 > cheat sheet no seu próprio prompt. Demanda e caminhos (cheat sheet, RAG,
 > fine-tune) em [`docs/PLAN.md` §7](docs/PLAN.md).
 

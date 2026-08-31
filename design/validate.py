@@ -19,9 +19,9 @@ ROOT = os.path.dirname(HERE)
 DARK = (17, 22, 29)  # #11161d — fundo escuro da UI
 
 FILES = {
-    "emblem": (os.path.join(ROOT, "docs", "verbolog-triangle.svg"), 512),
+    "emblem": (os.path.join(ROOT, "docs", "brand", "verbolog-triangle.svg"), 512),
     "icon":   (os.path.join(ROOT, "web", "verbolog.svg"), 256),
-    "banner": (os.path.join(ROOT, "docs", "verbolog-banner.svg"), 880),
+    "banner": (os.path.join(ROOT, "docs", "brand", "verbolog-banner.svg"), 880),
 }
 
 # geometria esperada (derivada de gen.EMB — sem valores mágicos)

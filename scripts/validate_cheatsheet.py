@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Validação do cheat sheet contra o modelo local (docs/PLAN.md §7).
 
-Executa o banco fixo de 20 prompts (docs/CHEATSHEET-PROMPTS.yaml) N vezes
+Executa o banco fixo de 20 prompts (docs/cheatsheet/CHEATSHEET-PROMPTS.yaml) N vezes
 contra um endpoint OpenAI-compatível (o vLLM local do projeto), injetando a
-versão densa para agentes (docs/VBL-CHEATSHEET-AGENTES.md — a mesma que a UI
+versão densa para agentes (docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md — a mesma que a UI
 injeta no modo "+ VerboLang") como prompt de sistema, e avalia:
 
 - prompts de sintaxe: o primeiro bloco de código da resposta deve passar no
@@ -12,7 +12,7 @@ injeta no modo "+ VerboLang") como prompt de sistema, e avalia:
 - rubrica semântica: âncoras obrigatórias da FORMAL presentes na resposta.
 
 Aceito se ≥ 90% das respostas passam (rubrica E sintaxe, quando aplicável).
-O relatório é versionado em docs/CHEATSHEET-VALIDATION.md.
+O relatório é versionado em docs/cheatsheet/CHEATSHEET-VALIDATION.md.
 
 Uso:
   python3 scripts/validate_cheatsheet.py \
@@ -185,9 +185,9 @@ def main() -> int:
     parser.add_argument("--model", default=os.environ.get("VBL_LLM_MODEL",
                           "qwen3-4b"))
     parser.add_argument("--api-key-env", default="LOCAL_VLLM_KEY")
-    parser.add_argument("--banco", default="docs/CHEATSHEET-PROMPTS.yaml")
-    parser.add_argument("--cheatsheet", default="docs/VBL-CHEATSHEET-AGENTES.md")
-    parser.add_argument("--saida", default="docs/CHEATSHEET-VALIDATION.md")
+    parser.add_argument("--banco", default="docs/cheatsheet/CHEATSHEET-PROMPTS.yaml")
+    parser.add_argument("--cheatsheet", default="docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md")
+    parser.add_argument("--saida", default="docs/cheatsheet/CHEATSHEET-VALIDATION.md")
     parser.add_argument("--execucoes", type=int, default=None,
                         help="sobrepõe execucoes_por_prompt do banco")
     parser.add_argument("--temperatura", type=float, default=0.2)

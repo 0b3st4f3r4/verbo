@@ -227,7 +227,7 @@ impl Ledger for ProductionLedger {
     /// Caminho quente (Etapa 5 — PLAN §5.2): acumula os Joules e envia os
     /// dados crus; a linha canônica é composta na thread de gravação sem
     /// `format!`+`Json::obj` intermediários (o custo dominante medido na
-    /// Etapa 4 — docs/STAGE-4-REPORT.md §3). Agregados e contagens têm o
+    /// Etapa 4 — docs/reports/STAGE-4-REPORT.md §3). Agregados e contagens têm o
     /// MESMO contrato do caminho geral.
     fn leak(&mut self, form: &str, watts: f64, seconds: f64) {
         let joules = watts * seconds;
@@ -266,7 +266,7 @@ impl Ledger for ProductionLedger {
 /// Etapa 5: linha e cabeça da cadeia vivem em buffers REUTILIZADOS (um único
 /// `String` de linha para todo o log) e o elo é calculado sobre duas fatias
 /// com digest cru — sem concatenar `head+line` nem fazer a viagem hex → cru
-/// de cada frame (docs/STAGE-4-REPORT.md §3: encoding direto).
+/// de cada frame (docs/reports/STAGE-4-REPORT.md §3: encoding direto).
 fn write_thread(rec: Receiver<Msg>, path: PathBuf) -> std::io::Result<Summary> {
     let arquivo = std::fs::File::create(&path)?;
     let mut w = BufWriter::with_capacity(BUFFER_BYTES, arquivo);
