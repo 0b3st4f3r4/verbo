@@ -71,12 +71,14 @@ function verificarPagina(arquivo, declaracao) {
 
 const home = verificarPagina("index.html", "const HOME_I18N");
 const metrics = verificarPagina("metrics.html", "const I18N");
+const docs = verificarPagina("docs.html", "const I18N");
 
 // rtl somente no árabe, nas duas páginas (o chat já define dir por língua)
 for (const l of LINGUAS) {
   const esperado = l === "ar" ? "rtl" : "ltr";
   assert.strictEqual(home[l].dir, esperado, `index[${l}].dir`);
   assert.strictEqual(metrics[l].dir, esperado, `metrics[${l}].dir`);
+  assert.strictEqual(docs[l].dir, esperado, `docs[${l}].dir`);
 }
 
 // termos técnicos que nunca se traduzem (âncoras de honestidade do produto)

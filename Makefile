@@ -23,7 +23,7 @@ CARGO_HOME := $(abspath core/.cargo-home)
 export CARGO_HOME
 NIGHTLY ?= nightly
 
-.PHONY: help check smoke serve up stop ui web setup test test-unit test-bdd validate-cheatsheet
+.PHONY: help check smoke release-check serve up stop ui web setup test test-unit test-bdd validate-cheatsheet
 .PHONY: rust-build rust-test rust-e2e rust-lint rust-asan rust-bench rust-check rust-coverage rust-clean
 .PHONY: rust-memoria rust-soak
 
@@ -31,6 +31,7 @@ help:
 > @echo "VerboLang — atalhos:"
 > @echo "  make check   valida shell + JS inline da UI (rápido, offline)"
 > @echo "  make smoke   testa endpoints locais (precisa do servidor no ar)"
+> @echo "  make release-check  bateria antes da tag: check + testes web + smoke (docs/RELEASES.md)"
 > @echo "  make setup   cria .venv e instala requirements-dev.txt"
 > @echo "  make test    suíte completa: unitários (pytest) + BDD (behave)"
 > @echo "  make test-unit  apenas testes unitários (pytest)"
@@ -69,7 +70,7 @@ check:
 
 smoke:
 > @set -e; \
-  for p in web/index.html web/chat.html web/metrics.html docs/VBL-CHEATSHEET.md \
+  for p in web/index.html web/chat.html web/metrics.html web/docs.html web/md.js docs/VBL-CHEATSHEET.md \
            docs/VBL-CHEATSHEET-AGENTES.md web/verbolog.svg \
            web/vendor/mermaid.min.js web/vendor/katex/katex.min.js; do \
     code=$$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(UI_PORT)/$$p"); \

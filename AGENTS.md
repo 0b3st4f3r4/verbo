@@ -248,7 +248,10 @@ impede carregá-la inteira. Regras para a equipe de agentes:
   custo no medidor de contexto); `web/metrics.html` mostra as métricas em
   tempo real do runtime (Caderno) e não depende do modelo — o badge
   (`web/badge.js`, matriz testada em `tests/unit/web/badge.test.js`)
-  distingue "modelo no ar sem chave no navegador (401)" de "modelo fora".
+  distingue "modelo no ar sem chave no navegador (401)" de "modelo fora";
+  `web/docs.html` serve a documentação renderizada (FORMAL, Manifesto,
+  cheat sheets — markdown do repo via `web/md.js`, testado em
+  `tests/unit/web/md.test.js`).
 
 ## 6. Economia de contexto para agentes (rtk)
 

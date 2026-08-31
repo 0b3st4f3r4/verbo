@@ -24,6 +24,7 @@ espectro termodinâmico do triângulo:
 | **Espectro azul→teal→verde→amarelo→vermelho** | Medidor de contexto do chat (o contexto *esquenta* ao encher); tokens `--ok/--warn/--bad`; kinds do feed (LEAK=amarelo, SUBVERSION/COLLAPSE=vermelho, SENSOR_READ=verde, ACTUATION=azul) |
 | **Violeta = o meta** (o nó do verbo do triângulo) | Identidade do **chat**: accent e bolhas do usuário; **fatia violeta na barra** de contexto = custo do VerboLang no contexto (cheat sheet + instrução, honestidade termodinâmica do meta); na **home**, a aresta do cartão do chat é o lado do meta do triângulo (vermelho→violeta→azul) |
 | **Amarelo = a energia** | Identidade do **metrics**: accent, Joules, atuações e o gráfico de energia no calor do espectro; na home, o cartão de métricas (aresta verde→amarelo→vermelho) |
+| **Ciano = a razão** | Identidade do **docs** (`docs.html`): accent e índice; na home, o cartão de documentação à esquerda (aresta azul→ciano→verde) — a ordem dos cartões espelha a logo (esquerda/direita/topo) |
 | **Vidro fosco com aurora borrada** | Fundo das páginas (aurora azul/vermelho/verde fixa) + `backdrop-filter` nos cartões, cabeçalhos e badges (com fallback `@supports` para painéis sólidos) |
 | **Linha do horizonte tracejada** | Divisória sob os cabeçalhos (dashboard, métricas) e entre as seções do Caderno — onde as leituras pousam |
 | **Pássaros no horizonte** | Estados vazios do metrics (`sem dados ainda` etc.): um pássaro pousado que some quando o dado chega |
@@ -33,7 +34,8 @@ A paleta vive nos blocos `:root`/`[data-theme]` de cada página (filosofia
 single-file, zero dependências): hexes da marca `#4da3ff`/`#35c9c1`/
 `#3fb96f`/`#e0c94f`/`#ff5a52` e o violeta do meta `#a55cff` (tema claro usa
 variantes com contraste suficiente). Cada página carrega uma cor do sistema:
-chat=violeta (o verbo), metrics=amarelo (a energia), home=revela as duas.
+chat=violeta (o verbo), metrics=amarelo (a energia), docs=ciano (a razão),
+home=revela os três lados.
 
 ## I18n — as 7 línguas da família
 
@@ -45,6 +47,7 @@ português; o chat é a referência histórica dos dicionários):
 | `index.html` (home) | `HOME_I18N` ×7 — o **seletor de idioma** vive aqui (controla a família via `localStorage` `vllm.lang`); títulos, cartões, rodapé e os rótulos do botão de tema |
 | `chat.html` | `I18N` ×7 (original do projeto) — obedece ao `vllm.lang` e reage ao evento `storage` |
 | `metrics.html` | `I18N` ×7 — tudo traduzido: título, badges (modelo/SSE/execução), rótulos dos cartões, seções, estados vazios, rodapé e os textos dinâmicos do gráfico; números seguem o `Intl.NumberFormat` da língua |
+| `docs.html` | `I18N` ×7 — o cromo (título, badges, rótulos de documentos/índice, estados de carga/erro); o conteúdo dos documentos fica na língua em que foi escrito |
 | `badge.js` | `TEXTOS` ×7 — `classificarModelo(status, temChave, modelo, lang)`; o padrão `lang="pt"` mantém o contrato original |
 
 Regras do contrato (testado em `tests/unit/web/i18n.test.js`): paridade total

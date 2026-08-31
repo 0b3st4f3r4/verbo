@@ -34,7 +34,7 @@
     /* espectro termodinâmico da marca: frio (#4da3ff) → calor (#ff5a52);
        violeta #a55cff = o meta (o nó do verbo); amarelo = a energia */
     --aur1: rgba(77,163,255,.14); --aur2: rgba(255,90,82,.12); --aur3: rgba(63,185,111,.10);
-    --meta: #b78aff; --heat: #e0c94f;
+    --meta: #b78aff; --heat: #e0c94f; --frio: #35c9c1;
   }
   html[data-theme="metal"] {
     color-scheme: dark;
@@ -43,7 +43,7 @@
     --accent: #35c9c1; --ok: #3fb96f; --warn: #e0c94f; --bad: #ff5a52;
     --code-bg: #272d34; --code-border: #3f4750; --shadow: 0 4px 14px rgba(0,0,0,.3);
     --aur1: rgba(77,163,255,.10); --aur2: rgba(255,90,82,.09); --aur3: rgba(63,185,111,.08);
-    --meta: #b78aff; --heat: #e0c94f;
+    --meta: #b78aff; --heat: #e0c94f; --frio: #5fd6cf;
   }
   html[data-theme="light"] {
     color-scheme: light;
@@ -52,7 +52,7 @@
     --accent: #0b62a8; --ok: #23804d; --warn: #a06f12; --bad: #c04343;
     --code-bg: #eef2f6; --code-border: #dfe5ec; --shadow: 0 4px 12px rgba(27,37,48,.12);
     --aur1: rgba(77,163,255,.10); --aur2: rgba(255,90,82,.08); --aur3: rgba(63,185,111,.08);
-    --meta: #6d3fc4; --heat: #8a6a10;
+    --meta: #6d3fc4; --heat: #8a6a10; --frio: #0a7d75;
   }
 
   * { box-sizing: border-box; }
@@ -104,11 +104,14 @@
     backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
     transition: transform .12s ease, border-color .12s ease;
   }
-  /* os cartões carregam os lados do triângulo: o do meta (topo: vermelho→violeta→azul)
-     e o do calor (direita: verde→amarelo→vermelho) — o lado esquerdo vive no logo */
+  /* os cartões carregam os LADOS do triângulo, na ordem da logo: esquerda
+     (azul→ciano→verde = a razão/docs), direita (verde→amarelo→vermelho = a
+     energia/metrics) e topo (vermelho→violeta→azul = o meta/chat) */
   a.card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; opacity: .85; }
+  a.card.espectro-frio::before { background: linear-gradient(90deg, #4da3ff, #35c9c1, #3fb96f); }
   a.card.espectro-meta::before { background: linear-gradient(90deg, #ff5a52, #a55cff, #4da3ff); }
   a.card.espectro-calor::before { background: linear-gradient(90deg, #3fb96f, #e0c94f, #ff5a52); }
+  a.card.espectro-frio h2 { color: var(--frio); }
   a.card.espectro-meta h2 { color: var(--meta); }
   a.card.espectro-calor h2 { color: var(--heat); }
   @supports not (backdrop-filter: blur(1px)) {
@@ -144,6 +147,11 @@
 <div class="horizon" aria-hidden="true"></div>
 
 <main>
+  <a class="card espectro-frio" href="docs.html">
+    <span class="ico">📜</span>
+    <h2 id="c-docs-h">Documentação do Verbo</h2>
+    <p id="c-docs-p">A razão do projeto, renderizada: FORMAL, Manifesto, cheat sheets e planos — os .md do repo com índice ancorado e verbolang destacado.</p>
+  </a>
   <a class="card espectro-calor" href="metrics.html">
     <span class="ico">📈</span>
     <h2 id="c-metrics-h">Métricas em tempo real</h2>
@@ -193,7 +201,9 @@ const HOME_I18N = {
     foot: 'O runtime VerboLang é o <b>motor de ticks</b> (<code>vbl run</code>) — o LLM é opcional aqui: com o modelo inativo, as métricas continuam no ar e o estado aparece no badge acima.',
     themeLight: "tema claro", themeMetal: "tema metal", themeDark: "tema escuro", langAria: "idioma",
     badgeChecking: "verificando modelo…", badgeTitle: "estado do modelo local (LLM)",
-    dir: "ltr",
+    docsH: "Documentação do Verbo",
+    docsP: 'A razão do projeto, renderizada: FORMAL, Manifesto, cheat sheets e planos — os .md do repo com índice ancorado e verbolang destacado.',
+        dir: "ltr",
   },
   en: {
     title: "VerboLang · dashboard", sub: "runtime dashboard",
@@ -204,7 +214,9 @@ const HOME_I18N = {
     foot: 'The VerboLang runtime is the <b>tick engine</b> (<code>vbl run</code>) — the LLM is optional here: with the model offline, metrics stay up and the badge shows the state.',
     themeLight: "light theme", themeMetal: "metal theme", themeDark: "dark theme", langAria: "language",
     badgeChecking: "checking model…", badgeTitle: "local model (LLM) state",
-    dir: "ltr",
+    docsH: "Documentation of the Verb",
+    docsP: "The reason of the project, rendered: FORMAL, Manifesto, cheat sheets and plans — repo .md files with anchored index and highlighted verbolang.",
+        dir: "ltr",
   },
   zh: {
     title: "VerboLang · 仪表板", sub: "运行时仪表板",
@@ -215,7 +227,9 @@ const HOME_I18N = {
     foot: 'VerboLang 运行时是<b>节拍引擎</b>（<code>vbl run</code>）— LLM 在这里是可选的：模型离线时，指标仍然在线，状态显示在上方的徽章中。',
     themeLight: "浅色主题", themeMetal: "金属主题", themeDark: "深色主题", langAria: "语言",
     badgeChecking: "正在检查模型…", badgeTitle: "本地模型（LLM）状态",
-    dir: "ltr",
+    docsH: "动词之文档",
+    docsP: "项目理念的呈现：FORMAL、宣言、速查表与计划 — 仓库中的 .md 文件，带锚点目录和 verbolang 高亮。",
+        dir: "ltr",
   },
   ru: {
     title: "VerboLang · панель", sub: "панель среды выполнения",
@@ -226,7 +240,9 @@ const HOME_I18N = {
     foot: 'Среда выполнения VerboLang — это <b>движок тиков</b> (<code>vbl run</code>) — LLM здесь необязателен: при выключенной модели метрики продолжают работать, состояние видно в бейдже выше.',
     themeLight: "светлая тема", themeMetal: "тема металла", themeDark: "тёмная тема", langAria: "язык",
     badgeChecking: "проверяем модель…", badgeTitle: "состояние локальной модели (LLM)",
-    dir: "ltr",
+    docsH: "Документация Глагола",
+    docsP: "Разум проекта в рендере: FORMAL, Манифест, шпаргалки и планы — .md файлы репозитория с якорным оглавлением и подсветкой verbolang.",
+        dir: "ltr",
   },
   hi: {
     title: "VerboLang · डैशबोर्ड", sub: "रनटाइम डैशबोर्ड",
@@ -237,7 +253,9 @@ const HOME_I18N = {
     foot: 'VerboLang रनटाइम <b>टिक इंजन</b> है (<code>vbl run</code>) — यहाँ LLM वैकल्पिक है: मॉडल बंद होने पर भी मेट्रिक्स चालू रहते हैं और स्थिति ऊपर बैज में दिखती है।',
     themeLight: "हल्की थीम", themeMetal: "धातु थीम", themeDark: "गहरी थीम", langAria: "भाषा",
     badgeChecking: "मॉडल की जाँच हो रही है…", badgeTitle: "स्थानीय मॉडल (LLM) की स्थिति",
-    dir: "ltr",
+    docsH: "क्रिया का दस्तावेज़ीकरण",
+    docsP: "परियोजना का तर्क रेंडर हुआ: FORMAL, मेनिफेस्टो, चीटशीट और योजनाएँ — रिपो की .md फ़ाइलें, एंकर सूची और verbolang हाइलाइट के साथ।",
+        dir: "ltr",
   },
   af: {
     title: "VerboLang · paneel", sub: "runtime-paneel",
@@ -248,7 +266,9 @@ const HOME_I18N = {
     foot: 'Die VerboLang-runtime is die <b>tik-enjin</b> (<code>vbl run</code>) — die LLM is hier opsioneel: met die model af bly metrics aanlyn en toon die kenteken bo die toestand.',
     themeLight: "ligtema", themeMetal: "metaaltema", themeDark: "donker tema", langAria: "taal",
     badgeChecking: "model word gekontroleer…", badgeTitle: "toestand van die plaaslike model (LLM)",
-    dir: "ltr",
+    docsH: "Dokumentasie van die Werkwoord",
+    docsP: "Die rede van die projek, weergegee: FORMAL, Manifes, spiekbriefe en planne — die repo se .md-lêers met geankerde indeks en uitgeligte verbolang.",
+        dir: "ltr",
   },
   ar: {
     title: "VerboLang · لوحة القيادة", sub: "لوحة بيئة التشغيل",
@@ -259,7 +279,9 @@ const HOME_I18N = {
     foot: 'بيئة تشغيل VerboLang هي <b>محرك النبضات</b> (<code>vbl run</code>) — الـ LLM اختياري هنا: مع توقف النموذج، تبقى المقاييس تعمل وتظهر الحالة في الشارة أعلاه.',
     themeLight: "سمة فاتحة", themeMetal: "سمة معدنية", themeDark: "سمة داكنة", langAria: "اللغة",
     badgeChecking: "جارٍ فحص النموذج…", badgeTitle: "حالة النموذج المحلي (LLM)",
-    dir: "rtl",
+    docsH: "توثيق الفعل",
+    docsP: "منطق المشروع معروضًا: FORMAL والبيان وأوراق المراجعة والخطط — ملفات .md من المستودع بفهرس مثبّت وverbolang ملوّن.",
+        dir: "rtl",
   },
 };
 let lang = localStorage.getItem("vllm.lang") || (navigator.language || "pt-BR").slice(0, 2).toLowerCase();
@@ -292,6 +314,8 @@ function applyLang() {
   const d = homeT();
   document.title = d.title;
   document.getElementById("home-sub").textContent = d.sub;
+  document.getElementById("c-docs-h").textContent = d.docsH;
+  document.getElementById("c-docs-p").innerHTML = d.docsP;
   document.getElementById("c-metrics-h").textContent = d.metricsH;
   document.getElementById("c-metrics-p").innerHTML = d.metricsP;
   document.getElementById("c-chat-h").textContent = d.chatH;

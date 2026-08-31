@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VerboLang · documentação</title>
+<link rel="icon" type="image/svg+xml" href="verbolog.svg">
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<!--
+  docs.html — Documentação do Verbo: o terceiro módulo da família, ciano
+  (o lado frio e claro do triângulo: azul→CIANO→verde = a razão). Renderiza
+  os .md do próprio repo com web/md.js (escape-primeiro, índice ancorado,
+  verbolang destacado, mermaid/KaTeX vendidos e preguiçosos). Sem ler nada
+  de fora: os documentos são exatamente os arquivos do repositório.
+  Tema/idioma: obedece vllm.theme/vllm.lang (os controles vivem na home).
+  Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
+-->
+<style>
+  @font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url("fonts/inter-latin-400.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap;
+    src: url("fonts/inter-latin-600.woff2") format("woff2"); }
+  @font-face { font-family: "Iosevka"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url("fonts/iosevka-latin-400.woff2") format("woff2"); }
+
+  :root, html[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e1319; --bg-glow: #16202b; --panel: #171d24; --panel-2: #1b232c;
+    --border: #29323e; --border-soft: #212a34; --text: #dde6f0; --dim: #8fa1b5;
+    /* accent ciano: a página da razão — o lado frio e claro da marca */
+    --accent: #35c9c1; --ok: #3fb96f; --warn: #e0c94f; --bad: #ff5a52;
+    --code-bg: #0d1116; --code-border: #212a34; --shadow: 0 4px 14px rgba(0,0,0,.35);
+    --aur1: rgba(77,163,255,.14); --aur2: rgba(255,90,82,.12); --aur3: rgba(63,185,111,.10);
+  }
+  html[data-theme="metal"] {
+    color-scheme: dark;
+    --bg: #24292f; --bg-glow: #2e353d; --panel: #333941; --panel-2: #3d4450;
+    --border: #4a525d; --border-soft: #3f4750; --text: #e6eaee; --dim: #9aa6b2;
+    --accent: #5fd6cf; --ok: #3fb96f; --warn: #e0c94f; --bad: #ff5a52;
+    --code-bg: #272d34; --code-border: #3f4750; --shadow: 0 4px 14px rgba(0,0,0,.3);
+    --aur1: rgba(77,163,255,.10); --aur2: rgba(255,90,82,.09); --aur3: rgba(63,185,111,.08);
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f2f5f8; --bg-glow: #e7edf4; --panel: #ffffff; --panel-2: #eaeef3;
+    --border: #cfd7e0; --border-soft: #dde3ea; --text: #1b2530; --dim: #5a6a7b;
+    --accent: #0a7d75; --ok: #23804d; --warn: #a06f12; --bad: #c04343;
+    --code-bg: #eef2f6; --code-border: #dfe5ec; --shadow: 0 4px 12px rgba(27,37,48,.12);
+    --aur1: rgba(77,163,255,.10); --aur2: rgba(255,90,82,.08); --aur3: rgba(63,185,111,.08);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; font: 15px/1.5 "Inter", system-ui, sans-serif;
+    color: var(--text);
+    background: radial-gradient(46rem 30rem at 14% -8%, var(--aur1), transparent 62%),
+                radial-gradient(46rem 30rem at 86% -8%, var(--aur2), transparent 62%),
+                radial-gradient(40rem 26rem at 50% 112%, var(--aur3), transparent 60%),
+                radial-gradient(80rem 40rem at 50% -10%, var(--bg-glow), var(--bg));
+    background-attachment: fixed;
+  }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .7rem;
+    padding: .9rem 1.2rem; border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--panel) 74%, transparent);
+    backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header img { width: 30px; height: 30px; }
+  header h1 { font-size: 1rem; font-weight: 600; margin: 0 auto 0 0; }
+  .badge {
+    display: inline-flex; align-items: center; gap: .4rem;
+    font: 400 .74rem/1 "Iosevka", ui-monospace, monospace; color: var(--dim);
+    border: 1px solid var(--border); border-radius: 999px; padding: .38rem .7rem;
+    background: color-mix(in srgb, var(--panel) 74%, transparent); white-space: nowrap;
+    backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+  }
+  .badge a { color: var(--dim); text-decoration: none; }
+  .badge a:hover { color: var(--accent); }
+  .horizon { height: 1px; margin: 0 1.2rem;
+    background: repeating-linear-gradient(90deg, var(--dim) 0 2px, transparent 2px 9px);
+    opacity: .45; }
+
+  main {
+    display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 1rem;
+    padding: 1.1rem 1.2rem 2rem; max-width: 1240px; margin: 0 auto;
+    align-items: start;
+  }
+  aside { position: sticky; top: 64px; display: grid; gap: .9rem; max-height: calc(100vh - 84px); overflow: auto; }
+  aside .caixa {
+    border: 1px solid var(--border); border-radius: 12px; padding: .7rem;
+    background: color-mix(in srgb, var(--panel) 74%, transparent);
+    backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+  }
+  aside .rotulo {
+    font: 400 .68rem/1 "Iosevka", ui-monospace, monospace; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--dim); margin: .1rem 0 .5rem .2rem;
+  }
+  .docs-list { display: grid; gap: 2px; }
+  .docs-list button {
+    all: unset; cursor: pointer; font: 400 .78rem/1.3 "Iosevka", ui-monospace, monospace;
+    color: var(--dim); padding: .32rem .5rem; border-radius: 7px; border: 1px solid transparent;
+  }
+  .docs-list button:hover { color: var(--text); background: var(--panel-2); }
+  .docs-list button.ativo { color: var(--accent); border-color: var(--border); background: var(--panel-2); }
+  #indice { display: grid; gap: 1px; }
+  #indice a {
+    color: var(--dim); text-decoration: none; font-size: .8rem;
+    padding: .18rem .5rem; border-radius: 6px; border-left: 2px solid var(--border-soft);
+  }
+  #indice a.n3 { padding-left: 1.1rem; }
+  #indice a:hover { color: var(--accent); border-left-color: var(--accent); }
+
+  article#doc {
+    border: 1px solid var(--border); border-radius: 14px; padding: 1.4rem 1.7rem 2rem;
+    background: color-mix(in srgb, var(--panel) 74%, transparent);
+    backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.05);
+    min-height: 60vh;
+  }
+  /* tipografia do documento renderizado */
+  #doc h2, #doc h3, #doc h4, #doc h5, #doc h6 { line-height: 1.25; margin: 1.6em 0 .5em; scroll-margin-top: 72px; }
+  #doc h2 { font-size: 1.22rem; border-bottom: 1px dashed var(--border); padding-bottom: .35rem; }
+  #doc h3 { font-size: 1.05rem; }
+  #doc h4, #doc h5, #doc h6 { font-size: .93rem; color: var(--dim); }
+  #doc p { margin: .65em 0; }
+  #doc ul, #doc ol { margin: .6em 0; padding-left: 1.4em; }
+  #doc li { margin: .25em 0; }
+  #doc blockquote {
+    margin: .8em 0; padding: .5em .9em; border-left: 3px solid var(--accent);
+    background: var(--panel-2); border-radius: 0 9px 9px 0; color: var(--dim);
+  }
+  #doc hr { border: 0; height: 1px; margin: 1.4em 0;
+    background: repeating-linear-gradient(90deg, var(--dim) 0 2px, transparent 2px 9px); opacity: .5; }
+  #doc code, #doc pre {
+    font-family: "Iosevka", ui-monospace, monospace; font-size: .84rem;
+    background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 6px;
+  }
+  #doc code { padding: .1em .35em; }
+  #doc pre { padding: .8em 1em; overflow-x: auto; margin: .8em 0; }
+  #doc pre code { background: none; border: 0; padding: 0; }
+  #doc .tblwrap { overflow-x: auto; margin: .8em 0; }
+  #doc table { border-collapse: collapse; font-size: .86rem; }
+  #doc th, #doc td { border: 1px solid var(--border); padding: .4em .7em; text-align: left; }
+  #doc th { background: var(--panel-2); font-weight: 600; }
+  #doc a { color: var(--accent); }
+  .tok-k { color: var(--accent); font-weight: 600; }
+  .tok-s { color: var(--ok); }
+  .tok-c { color: var(--dim); font-style: italic; }
+  .mermaid-box { margin: 1em 0; text-align: center; }
+  .mermaid-box svg { max-width: 100%; height: auto; }
+  pre.mermaid-src { outline: 1px dashed var(--border); }
+  pre.mermaid-src.mermaid-error { outline-color: var(--bad); }
+  .katex-src.mdisp { display: block; text-align: center; margin: 8px 0; overflow-x: auto; }
+
+  .vazio {
+    display: inline-flex; align-items: center; gap: .6rem; color: var(--dim);
+    font-size: .85rem; padding: 1rem 0;
+  }
+  .vazio .pouso { width: 36px; height: 10px; color: var(--dim); flex: none; }
+
+  @media (max-width: 880px) {
+    main { grid-template-columns: 1fr; }
+    aside { position: static; max-height: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <img src="verbolog.svg" alt="VerboLang">
+  <h1 id="h1">Documentação do Verbo</h1>
+  <span class="badge"><span id="doc-atual">—</span></span>
+  <span class="badge"><a id="link-home" href="index.html">← dashboard</a></span>
+</header>
+<div class="horizon" aria-hidden="true"></div>
+
+<main>
+  <aside>
+    <nav class="caixa" aria-label="documentos">
+      <div class="rotulo" id="lbl-docs">documentos</div>
+      <div class="docs-list" id="lista"></div>
+    </nav>
+    <nav class="caixa" aria-label="índice">
+      <div class="rotulo" id="lbl-indice">índice</div>
+      <div id="indice"></div>
+    </nav>
+  </aside>
+  <section>
+    <article id="doc"><span class="vazio"><svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg><span id="doc-vazio">escolha um documento</span></span></article>
+  </section>
+</main>
+
+<script src="md.js"></script>
+<script>
+"use strict";
+// ── tema compartilhado com a família (os controles vivem na home) ─────────
+const THEME_ORDER = ["light", "metal", "dark"];
+const tema = localStorage.getItem("vllm.theme");
+document.documentElement.dataset.theme = THEME_ORDER.includes(tema) ? tema : "dark";
+
+// ── i18n: as mesmas 7 línguas da família ──────────────────────────────────
+const I18N = {
+  pt: {
+    docTitle: "VerboLang · documentação", h1: "Documentação do Verbo",
+    backHome: "← dashboard", lblDocs: "documentos", lblIndice: "índice",
+    carregando: "carregando…", docVazio: "escolha um documento",
+    erroFetch: "não encontrei {p} — o arquivo existe no repo?",
+    dir: "ltr",
+  },
+  en: {
+    docTitle: "VerboLang · documentation", h1: "Documentation of the Verb",
+    backHome: "← dashboard", lblDocs: "documents", lblIndice: "index",
+    carregando: "loading…", docVazio: "pick a document",
+    erroFetch: "couldn't find {p} — does the file exist in the repo?",
+    dir: "ltr",
+  },
+  zh: {
+    docTitle: "VerboLang · 文档", h1: "动词之文档",
+    backHome: "← 仪表板", lblDocs: "文档", lblIndice: "目录",
+    carregando: "加载中…", docVazio: "请选择一个文档",
+    erroFetch: "未找到 {p} — 仓库里有这个文件吗？",
+    dir: "ltr",
+  },
+  ru: {
+    docTitle: "VerboLang · документация", h1: "Документация Глагола",
+    backHome: "← панель", lblDocs: "документы", lblIndice: "оглавление",
+    carregando: "загрузка…", docVazio: "выберите документ",
+    erroFetch: "не нашёл {p} — есть ли файл в репозитории?",
+    dir: "ltr",
+  },
+  hi: {
+    docTitle: "VerboLang · दस्तावेज़ीकरण", h1: "क्रिया का दस्तावेज़ीकरण",
+    backHome: "← डैशबोर्ड", lblDocs: "दस्तावेज़", lblIndice: "विषय-सूची",
+    carregando: "लोड हो रहा है…", docVazio: "एक दस्तावेज़ चुनें",
+    erroFetch: "{p} नहीं मिला — फ़ाइल रिपो में है?",
+    dir: "ltr",
+  },
+  af: {
+    docTitle: "VerboLang · dokumentasie", h1: "Dokumentasie van die Werkwoord",
+    backHome: "← paneel", lblDocs: "dokumente", lblIndice: "inhoudsopgawe",
+    carregando: "laai tans…", docVazio: "kies 'n dokument",
+    erroFetch: "kon {p} nie vind — bestaan die lêer in die repo?",
+    dir: "ltr",
+  },
+  ar: {
+    docTitle: "VerboLang · التوثيق", h1: "توثيق الفعل",
+    backHome: "← لوحة القيادة", lblDocs: "المستندات", lblIndice: "الفهرس",
+    carregando: "جارٍ التحميل…", docVazio: "اختر مستندًا",
+    erroFetch: "لم أجد {p} — هل الملف موجود في المستودع؟",
+    dir: "rtl",
+  },
+};
+let lang = localStorage.getItem("vllm.lang") ||
+  (navigator.language || "pt-BR").slice(0, 2).toLowerCase();
+if (!I18N[lang]) lang = "pt";
+const t = (k) => (I18N[lang][k] ?? I18N.pt[k]);
+
+// ── os documentos: exatamente os arquivos do repositório (raiz do server) ─
+const DOCS = [
+  "/docs/FORMAL.md", "/docs/MANIFESTO.md", "/docs/VBL-CHEATSHEET.md",
+  "/docs/VBL-CHEATSHEET-AGENTES.md", "/docs/PLAN.md", "/docs/RELEASES.md",
+  "/CHANGELOG.md", "/AGENTS.md", "/README.md",
+  "/docs/FXP-SCHEMA-v1.md", "/docs/NOTEBOOK-FORMAT-v1.md",
+  "/docs/ADR-001-linguagem-nucleo.md", "/docs/SETUP-LOCAL-LLM.md",
+];
+let atual = "";
+
+const $ = (id) => document.getElementById(id);
+
+function aplicarIdioma() {
+  localStorage.setItem("vllm.lang", lang);
+  document.documentElement.lang = lang === "pt" ? "pt-BR" : lang;
+  document.documentElement.dir = I18N[lang].dir;
+  document.title = t("docTitle");
+  $("h1").textContent = t("h1");
+  $("link-home").textContent = t("backHome");
+  $("lbl-docs").textContent = t("lblDocs");
+  $("lbl-indice").textContent = t("lblIndice");
+  const v = $("doc-vazio");
+  if (v && !atual) v.textContent = t("docVazio");
+}
+
+// ── mermaid (vendor local, preguiçoso: só carrega se o doc tiver diagrams) ─
+let mermaidSeq = 0;
+const diagrams = [];
+let mermaidCarregando = null;
+function ensureMermaid() {
+  if (window.mermaid) return Promise.resolve();
+  if (!mermaidCarregando) {
+    mermaidCarregando = new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "vendor/mermaid.min.js";
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+  return mermaidCarregando;
+}
+function mermaidThemeName() { return (document.documentElement.dataset.theme === "light") ? "neutral" : "dark"; }
+function applyMermaidTheme() {
+  if (!window.mermaid) return;
+  mermaid.initialize({ startOnLoad: false, securityLevel: "strict",
+    theme: mermaidThemeName(), fontFamily: "Inter, system-ui, sans-serif" });
+  for (const d of diagrams) {
+    mermaid.render("mmd-" + (++mermaidSeq), d.code)
+      .then(({ svg }) => { d.box.innerHTML = svg; })
+      .catch(() => {});
+  }
+}
+async function enhanceMermaid(escopo) {
+  if (!window.mermaid) return;
+  for (const pre of escopo.querySelectorAll("pre.mermaid-src")) {
+    const code = pre.textContent;
+    try {
+      const { svg } = await mermaid.render("mmd-" + (++mermaidSeq), code);
+      const box = document.createElement("div");
+      box.className = "mermaid-box";
+      box.innerHTML = svg;
+      pre.replaceWith(box);
+      diagrams.push({ box, code });
+    } catch {
+      pre.classList.add("mermaid-error");   // diagrama inválido: o código fica
+    }
+  }
+}
+
+// ── leitura: fetch do .md do repo + render local (web/md.js) ──────────────
+function resolverDoc(href) {
+  // href absoluto (começa com "/") não recebe o base do doc atual
+  const j = href.startsWith("/") ? href
+    : (atual.split("/").slice(0, -1).join("/") ? atual.split("/").slice(0, -1).join("/") + "/" : "") + href;
+  const partes = [];
+  for (const p of j.split("/")) {
+    if (p === "..") partes.pop();
+    else if (p !== "." && p !== "") partes.push(p);   // "" = barra dupla
+  }
+  return "?doc=/" + partes.join("/");
+}
+
+async function carregarDoc(caminho, empurra) {
+  atual = caminho;
+  $("doc-atual").textContent = caminho.split("/").pop();
+  $("doc-atual").style.color = "var(--accent)";
+  const alvo = $("doc");
+  alvo.innerHTML = '<span class="vazio"><svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg><span></span></span>';
+  alvo.querySelector(".vazio span:last-child").textContent = t("carregando");
+  try {
+    const r = await fetch(caminho);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const texto = await r.text();
+    const toc = [];
+    alvo.innerHTML = vblMd.md(texto, {
+      onHeading: (h) => { if (h.level <= 3) toc.push(h); },
+      internal: resolverDoc,
+    });
+    const indice = $("indice");
+    indice.replaceChildren(...toc.map((h) => {
+      const a = document.createElement("a");
+      a.href = "#" + h.id;
+      a.textContent = h.text;
+      if (h.level >= 3) a.className = "n3";
+      return a;
+    }));
+    for (const b of document.querySelectorAll("#lista button")) {
+      b.classList.toggle("ativo", b.dataset.doc === caminho);
+    }
+    if (empurra) history.replaceState(null, "", "?doc=" + caminho);
+    if (alvo.querySelector(".mermaid-src")) {
+      ensureMermaid().then(() => enhanceMermaid(alvo)).catch(() => {});
+    }
+  } catch (e) {
+    alvo.innerHTML = "";
+    const v = document.createElement("span");
+    v.className = "vazio";
+    v.innerHTML = '<svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg><span></span>';
+    v.querySelector("span").textContent = t("erroFetch").replace("{p}", caminho) + " (" + e.message + ")";
+    alvo.append(v);
+  }
+}
+
+// lista lateral
+$("lista").replaceChildren(...DOCS.map((d) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.dataset.doc = d;
+  b.textContent = d.split("/").pop();
+  b.addEventListener("click", () => carregarDoc(d, true));
+  return b;
+}));
+
+// ── boot ──────────────────────────────────────────────────────────────────
+aplicarIdioma();
+const pedidoBruto = new URLSearchParams(location.search).get("doc");
+const pedido = pedidoBruto ? (pedidoBruto.startsWith("/") ? pedidoBruto : "/" + pedidoBruto) : null;
+carregarDoc(pedido || DOCS[0], false);
+
+window.addEventListener("storage", (e) => {
+  if (e.key === "vllm.lang" && e.newValue && I18N[e.newValue]) {
+    lang = e.newValue; aplicarIdioma();
+  }
+  if (e.key === "vllm.theme" && e.newValue && THEME_ORDER.includes(e.newValue)) {
+    document.documentElement.dataset.theme = e.newValue;
+    applyMermaidTheme();
+  }
+});
+</script>
+</body>
+</html>
