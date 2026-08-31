@@ -1,0 +1,68 @@
+<!--
+verbolog-triangle.svg — emblema mestre da marca VerboLang.
+  Triângulo invertido (ponta do V para baixo, verde). Vértices: azul
+  #4da3ff (sup. esq.), vermelho #ff5a52 (sup. dir.), verde #3fb96f.
+  Arestas com stop médio (teal, amarelo, violeta). Os três pássaros
+  (dips) têm ápices alinhados na linha tracejada do horizonte; o nó
+  violeta central é o nó principal. O vazamento interno mantém o
+  centro escuro — o triângulo vaza para dentro, nunca se fecha.
+  Gerador: design/gen.py.
+Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="VerboLang">
+  <defs>
+    <radialGradient id="evbg" cx="0.5" cy="0.4" r="0.8">
+      <stop offset="0" stop-color="#1d2733"/>
+      <stop offset="1" stop-color="#11161d"/>
+    </radialGradient>
+    <filter id="ebw" filterUnits="userSpaceOnUse" x="-64" y="-64" width="640" height="640"><feGaussianBlur stdDeviation="8.0"/></filter>
+    <filter id="ebl1" filterUnits="userSpaceOnUse" x="-64" y="-64" width="640" height="640"><feGaussianBlur stdDeviation="6.0"/></filter>
+    <filter id="ebl2" filterUnits="userSpaceOnUse" x="-64" y="-64" width="640" height="640"><feGaussianBlur stdDeviation="2.2"/></filter>
+    <clipPath id="etri"><polygon points="91.46 113.50 420.54 113.50 256.00 398.50"/></clipPath>
+    <linearGradient id="egA" gradientUnits="userSpaceOnUse" x1="91.46" y1="113.50" x2="256.00" y2="398.50">
+      <stop offset="0" stop-color="#4da3ff"/>
+      <stop offset="0.5" stop-color="#35c9c1"/>
+      <stop offset="1" stop-color="#3fb96f"/>
+    </linearGradient>
+    <linearGradient id="egB" gradientUnits="userSpaceOnUse" x1="256.00" y1="398.50" x2="420.54" y2="113.50">
+      <stop offset="0" stop-color="#3fb96f"/>
+      <stop offset="0.5" stop-color="#e0c94f"/>
+      <stop offset="1" stop-color="#ff5a52"/>
+    </linearGradient>
+    <linearGradient id="egC" gradientUnits="userSpaceOnUse" x1="420.54" y1="113.50" x2="91.46" y2="113.50">
+      <stop offset="0" stop-color="#ff5a52"/>
+      <stop offset="0.5" stop-color="#a55cff"/>
+      <stop offset="1" stop-color="#4da3ff"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="112.0" fill="url(#evbg)"/>
+  <line x1="16.0" y1="229.00" x2="496.0" y2="229.00" stroke="#8a93a3" stroke-opacity="0.3" stroke-width="3.2" stroke-dasharray="6.4 22.4"/>
+  <g clip-path="url(#etri)">
+    <path d="M 91.46 113.50 L 256.00 398.50" fill="none" stroke="url(#egA)" stroke-width="58.0" opacity="0.19" filter="url(#ebw)"/>
+    <path d="M 256.00 398.50 L 420.54 113.50" fill="none" stroke="url(#egB)" stroke-width="58.0" opacity="0.19" filter="url(#ebw)"/>
+    <path d="M 420.54 113.50 L 91.46 113.50" fill="none" stroke="url(#egC)" stroke-width="58.0" opacity="0.19" filter="url(#ebw)"/>
+  </g>
+  <g clip-path="url(#etri)">
+    <path d="M 153.73 221.36 L 209.56 227.75 Q 220.49 229.00 216.11 239.09 L 193.73 290.64" fill="none" stroke="url(#egA)" stroke-width="22.0" opacity="0.3" stroke-linecap="round" stroke-linejoin="round" filter="url(#ebl1)"/>
+    <path d="M 153.73 221.36 L 209.56 227.75 Q 220.49 229.00 216.11 239.09 L 193.73 290.64" fill="none" stroke="url(#egA)" stroke-width="9.5" opacity="0.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#ebl2)"/>
+    <path d="M 318.27 290.64 L 295.89 239.09 Q 291.51 229.00 302.44 227.75 L 358.27 221.36" fill="none" stroke="url(#egB)" stroke-width="22.0" opacity="0.3" stroke-linecap="round" stroke-linejoin="round" filter="url(#ebl1)"/>
+    <path d="M 318.27 290.64 L 295.89 239.09 Q 291.51 229.00 302.44 227.75 L 358.27 221.36" fill="none" stroke="url(#egB)" stroke-width="9.5" opacity="0.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#ebl2)"/>
+    <path d="M 308.00 113.50 L 260.52 218.97 Q 256.00 229.00 251.48 218.97 L 204.00 113.50" fill="none" stroke="url(#egC)" stroke-width="26.0" opacity="0.38" stroke-linecap="round" stroke-linejoin="round" filter="url(#ebl1)"/>
+    <path d="M 308.00 113.50 L 260.52 218.97 Q 256.00 229.00 251.48 218.97 L 204.00 113.50" fill="none" stroke="url(#egC)" stroke-width="11.0" opacity="0.55" stroke-linecap="round" stroke-linejoin="round" filter="url(#ebl2)"/>
+  </g>
+  <path d="M 91.46 113.50 L 124.09 170.03 C 128.77 178.12 121.20 187.01 123.07 190.25 C 124.94 193.49 136.42 191.38 141.09 199.47 L 153.73 221.36 L 209.56 227.75 Q 220.49 229.00 216.11 239.09 L 193.73 290.64 L 206.36 312.53 C 211.04 320.62 203.47 329.51 205.34 332.75 C 207.21 335.99 218.69 333.88 223.36 341.97 L 256.00 398.50" fill="none" stroke="url(#egA)" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 256.00 398.50 L 288.64 341.97 C 293.31 333.88 304.79 335.99 306.66 332.75 C 308.53 329.51 300.96 320.62 305.64 312.53 L 318.27 290.64 L 295.89 239.09 Q 291.51 229.00 302.44 227.75 L 358.27 221.36 L 370.91 199.47 C 375.58 191.38 387.06 193.49 388.93 190.25 C 390.80 187.01 383.23 178.12 387.91 170.03 L 420.54 113.50" fill="none" stroke="url(#egB)" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 420.54 113.50 L 355.27 113.50 C 345.92 113.50 342.01 102.50 338.27 102.50 C 334.53 102.50 330.62 113.50 321.27 113.50 L 308.00 113.50 L 260.52 218.97 Q 256.00 229.00 251.48 218.97 L 204.00 113.50 L 190.73 113.50 C 181.38 113.50 177.47 102.50 173.73 102.50 C 169.99 102.50 166.08 113.50 156.73 113.50 L 91.46 113.50" fill="none" stroke="url(#egC)" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="220.49" cy="229.00" r="12.5" fill="#35c9c1" opacity="0.22"/>
+  <circle cx="220.49" cy="229.00" r="4.4" fill="#eaf4ff"/>
+  <circle cx="291.51" cy="229.00" r="12.5" fill="#e0c94f" opacity="0.22"/>
+  <circle cx="291.51" cy="229.00" r="4.4" fill="#eaf4ff"/>
+  <circle cx="256.00" cy="229.00" r="14.5" fill="#a55cff" opacity="0.28"/>
+  <circle cx="256.00" cy="229.00" r="5.0" fill="#eaf4ff"/>
+  <circle cx="91.46" cy="113.50" r="17.0" fill="#4da3ff" opacity="0.25"/>
+  <circle cx="91.46" cy="113.50" r="6.5" fill="#4da3ff"/>
+  <circle cx="420.54" cy="113.50" r="17.0" fill="#ff5a52" opacity="0.25"/>
+  <circle cx="420.54" cy="113.50" r="6.5" fill="#ff5a52"/>
+  <circle cx="256.00" cy="398.50" r="17.0" fill="#3fb96f" opacity="0.25"/>
+  <circle cx="256.00" cy="398.50" r="6.5" fill="#3fb96f"/>
+</svg>

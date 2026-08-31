@@ -1,43 +1,65 @@
+<!--
+verbolog.svg — marca do projeto VerboLang.
+  Triângulo invertido de gradientes azul-verde-vermelho — ressoa como
+  o V da marca. Cada lado é um traço de osciloscópio que mergulha num
+  V (um pássaro); os três ápices formam uma fileira alinhada sobre a
+  linha tracejada do horizonte, com a cor vazando para dentro.
+Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
+-->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="VerboLang">
-  <!--
-    verbolog.svg — marca do projeto VerboLang.
-    Um traço de osciloscópio (a medição do FXP) que mergulha num "V" —
-    o verbo que interrompe o sinal e age sobre o mundo físico.
-    Parte do projeto VerboLang — licenciado sob a GNU GPL-3.0 (ver LICENSE).
-  -->
   <defs>
-    <radialGradient id="vbg" cx="0.5" cy="0.4" r="0.8">
+    <radialGradient id="ivbg" cx="0.5" cy="0.4" r="0.8">
       <stop offset="0" stop-color="#1d2733"/>
       <stop offset="1" stop-color="#11161d"/>
     </radialGradient>
-    <linearGradient id="vstroke" x1="0" y1="0" x2="1" y2="0">
+    <filter id="ibw" filterUnits="userSpaceOnUse" x="-64" y="-64" width="192" height="192"><feGaussianBlur stdDeviation="2.2"/></filter>
+    <filter id="ibl1" filterUnits="userSpaceOnUse" x="-64" y="-64" width="192" height="192"><feGaussianBlur stdDeviation="1.2"/></filter>
+    <filter id="ibl2" filterUnits="userSpaceOnUse" x="-64" y="-64" width="192" height="192"><feGaussianBlur stdDeviation="0.55"/></filter>
+    <clipPath id="itri"><polygon points="12.95 16.50 51.05 16.50 32.00 49.50"/></clipPath>
+    <linearGradient id="igA" gradientUnits="userSpaceOnUse" x1="12.95" y1="16.50" x2="32.00" y2="49.50">
       <stop offset="0" stop-color="#4da3ff"/>
+      <stop offset="0.5" stop-color="#35c9c1"/>
       <stop offset="1" stop-color="#3fb96f"/>
     </linearGradient>
+    <linearGradient id="igB" gradientUnits="userSpaceOnUse" x1="32.00" y1="49.50" x2="51.05" y2="16.50">
+      <stop offset="0" stop-color="#3fb96f"/>
+      <stop offset="0.5" stop-color="#e0c94f"/>
+      <stop offset="1" stop-color="#ff5a52"/>
+    </linearGradient>
+    <linearGradient id="igC" gradientUnits="userSpaceOnUse" x1="51.05" y1="16.50" x2="12.95" y2="16.50">
+      <stop offset="0" stop-color="#ff5a52"/>
+      <stop offset="0.5" stop-color="#a55cff"/>
+      <stop offset="1" stop-color="#4da3ff"/>
+    </linearGradient>
   </defs>
-
-  <!-- badge -->
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#vbg)" stroke="#2a3441" stroke-width="1.5"/>
-
-  <!-- graticule do osciloscópio -->
-  <path d="M9 43H55" stroke="#8496aa" stroke-opacity="0.14" stroke-width="1"/>
-  <path d="M9 30H55" stroke="#8496aa" stroke-opacity="0.10" stroke-width="1"/>
-
-  <!-- o traço: sinal com ruído que mergulha num V -->
-  <path d="M9 30H15.6
-           C17.3 30 17.8 25.6 19.5 25.6
-           C21.2 25.6 21.7 30 23.4 30
-           H26
-           L32 43
-           L38 30
-           H40.6
-           C42.3 30 42.8 25.6 44.5 25.6
-           C46.2 25.6 46.7 30 48.4 30
-           H55"
-        fill="none" stroke="url(#vstroke)" stroke-width="3"
-        stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- nó do verbo (vale do V) -->
-  <circle cx="32" cy="43" r="6" fill="#4da3ff" opacity="0.22"/>
-  <circle cx="32" cy="43" r="2.6" fill="#eaf4ff"/>
+  <rect x="0" y="0" width="64" height="64" rx="14.0" fill="url(#ivbg)"/>
+  <line x1="2.0" y1="29.62" x2="62.0" y2="29.62" stroke="#8a93a3" stroke-opacity="0.3" stroke-width="0.4" stroke-dasharray="0.8 2.8"/>
+  <g clip-path="url(#itri)">
+    <path d="M 12.95 16.50 L 32.00 49.50" fill="none" stroke="url(#igA)" stroke-width="7.5" opacity="0.2" filter="url(#ibw)"/>
+    <path d="M 32.00 49.50 L 51.05 16.50" fill="none" stroke="url(#igB)" stroke-width="7.5" opacity="0.2" filter="url(#ibw)"/>
+    <path d="M 51.05 16.50 L 12.95 16.50" fill="none" stroke="url(#igC)" stroke-width="7.5" opacity="0.2" filter="url(#ibw)"/>
+  </g>
+  <g clip-path="url(#itri)">
+    <path d="M 19.97 28.67 L 26.93 29.47 Q 28.32 29.62 27.76 30.91 L 24.97 37.33" fill="none" stroke="url(#igA)" stroke-width="4.6" opacity="0.3" stroke-linecap="round" stroke-linejoin="round" filter="url(#ibl1)"/>
+    <path d="M 19.97 28.67 L 26.93 29.47 Q 28.32 29.62 27.76 30.91 L 24.97 37.33" fill="none" stroke="url(#igA)" stroke-width="2.2" opacity="0.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#ibl2)"/>
+    <path d="M 39.03 37.33 L 36.24 30.91 Q 35.68 29.62 37.07 29.47 L 44.03 28.67" fill="none" stroke="url(#igB)" stroke-width="4.6" opacity="0.3" stroke-linecap="round" stroke-linejoin="round" filter="url(#ibl1)"/>
+    <path d="M 39.03 37.33 L 36.24 30.91 Q 35.68 29.62 37.07 29.47 L 44.03 28.67" fill="none" stroke="url(#igB)" stroke-width="2.2" opacity="0.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#ibl2)"/>
+    <path d="M 38.50 16.50 L 32.62 28.37 Q 32.00 29.62 31.38 28.37 L 25.50 16.50" fill="none" stroke="url(#igC)" stroke-width="8.6" opacity="0.38" stroke-linecap="round" stroke-linejoin="round" filter="url(#ibl1)"/>
+    <path d="M 38.50 16.50 L 32.62 28.37 Q 32.00 29.62 31.38 28.37 L 25.50 16.50" fill="none" stroke="url(#igC)" stroke-width="3.7" opacity="0.55" stroke-linecap="round" stroke-linejoin="round" filter="url(#ibl2)"/>
+  </g>
+  <path d="M 12.95 16.50 L 15.91 21.63 C 16.90 23.35 15.58 25.06 15.98 25.75 C 16.37 26.44 18.52 26.15 19.51 27.87 L 19.97 28.67 L 26.93 29.47 Q 28.32 29.62 27.76 30.91 L 24.97 37.33 L 25.44 38.13 C 26.43 39.85 25.11 41.56 25.50 42.25 C 25.90 42.94 28.05 42.65 29.04 44.37 L 32.00 49.50" fill="none" stroke="url(#igA)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 32.00 49.50 L 34.96 44.37 C 35.95 42.65 38.10 42.94 38.50 42.25 C 38.89 41.56 37.57 39.85 38.56 38.13 L 39.03 37.33 L 36.24 30.91 Q 35.68 29.62 37.07 29.47 L 44.03 28.67 L 44.49 27.87 C 45.48 26.15 47.63 26.44 48.02 25.75 C 48.42 25.06 47.10 23.35 48.09 21.63 L 51.05 16.50" fill="none" stroke="url(#igB)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 51.05 16.50 L 45.13 16.50 C 43.15 16.50 42.32 14.50 41.53 14.50 C 40.73 14.50 39.91 16.50 37.93 16.50 L 38.50 16.50 L 32.62 28.37 Q 32.00 29.62 31.38 28.37 L 25.50 16.50 L 26.07 16.50 C 24.09 16.50 23.27 14.50 22.47 14.50 C 21.68 14.50 20.85 16.50 18.87 16.50 L 12.95 16.50" fill="none" stroke="url(#igC)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="28.32" cy="29.62" r="3.1" fill="#35c9c1" opacity="0.22"/>
+  <circle cx="28.32" cy="29.62" r="1.2" fill="#eaf4ff"/>
+  <circle cx="35.68" cy="29.62" r="3.1" fill="#e0c94f" opacity="0.22"/>
+  <circle cx="35.68" cy="29.62" r="1.2" fill="#eaf4ff"/>
+  <circle cx="32.00" cy="29.62" r="3.6" fill="#a55cff" opacity="0.28"/>
+  <circle cx="32.00" cy="29.62" r="1.4" fill="#eaf4ff"/>
+  <circle cx="12.95" cy="16.50" r="3.4" fill="#4da3ff" opacity="0.25"/>
+  <circle cx="12.95" cy="16.50" r="1.7" fill="#4da3ff"/>
+  <circle cx="51.05" cy="16.50" r="3.4" fill="#ff5a52" opacity="0.25"/>
+  <circle cx="51.05" cy="16.50" r="1.7" fill="#ff5a52"/>
+  <circle cx="32.00" cy="49.50" r="3.4" fill="#3fb96f" opacity="0.25"/>
+  <circle cx="32.00" cy="49.50" r="1.7" fill="#3fb96f"/>
 </svg>
