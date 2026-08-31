@@ -25,35 +25,50 @@
     color-scheme: dark;
     --bg: #0e1319; --bg-glow: #16202b; --panel: #171d24; --panel-2: #1b232c;
     --border: #29323e; --border-soft: #212a34; --text: #dde6f0; --dim: #8fa1b5;
-    --accent: #46aeb7; --ok: #3fb96f; --warn: #e0a83a; --bad: #e05c5c;
+    /* accent amarelo: a página da energia — Joules, gráfico e atuações no calor do espectro */
+    --accent: #e0c94f; --ok: #3fb96f; --warn: #e0c94f; --bad: #ff5a52;
+    --blue: #4da3ff;
     --code-bg: #0d1116; --code-border: #212a34; --shadow: 0 4px 14px rgba(0,0,0,.35);
+    /* espectro termodinâmico da marca: frio (#4da3ff) → calor (#ff5a52) */
+    --aur1: rgba(77,163,255,.14); --aur2: rgba(255,90,82,.12); --aur3: rgba(63,185,111,.10);
   }
   html[data-theme="metal"] {
     color-scheme: dark;
     --bg: #24292f; --bg-glow: #2e353d; --panel: #333941; --panel-2: #3d4450;
     --border: #4a525d; --border-soft: #3f4750; --text: #e6eaee; --dim: #9aa6b2;
-    --accent: #52b1bb; --ok: #4cba7f; --warn: #d8a944; --bad: #e06565;
+    --accent: #e0c94f; --ok: #3fb96f; --warn: #e0c94f; --bad: #ff5a52;
+    --blue: #6db8ff;
     --code-bg: #272d34; --code-border: #3f4750; --shadow: 0 4px 14px rgba(0,0,0,.3);
+    --aur1: rgba(77,163,255,.10); --aur2: rgba(255,90,82,.09); --aur3: rgba(63,185,111,.08);
   }
   html[data-theme="light"] {
     color-scheme: light;
     --bg: #f2f5f8; --bg-glow: #e7edf4; --panel: #ffffff; --panel-2: #eaeef3;
     --border: #cfd7e0; --border-soft: #dde3ea; --text: #1b2530; --dim: #5a6a7b;
-    --accent: #106c80; --ok: #23804d; --warn: #a06f12; --bad: #c04343;
+    --accent: #8a6a10; --ok: #23804d; --warn: #a06f12; --bad: #c04343;
+    --blue: #0b62a8;
     --code-bg: #eef2f6; --code-border: #dfe5ec; --shadow: 0 4px 12px rgba(27,37,48,.12);
+    --aur1: rgba(77,163,255,.10); --aur2: rgba(255,90,82,.08); --aur3: rgba(63,185,111,.08);
   }
 
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh; font: 15px/1.5 "Inter", system-ui, sans-serif;
-    color: var(--text); background: radial-gradient(80rem 40rem at 50% -10%, var(--bg-glow), var(--bg));
+    color: var(--text);
+    background: radial-gradient(46rem 30rem at 14% -8%, var(--aur1), transparent 62%),
+                radial-gradient(46rem 30rem at 86% -8%, var(--aur2), transparent 62%),
+                radial-gradient(40rem 26rem at 50% 112%, var(--aur3), transparent 60%),
+                radial-gradient(80rem 40rem at 50% -10%, var(--bg-glow), var(--bg));
+    background-attachment: fixed;
   }
   .mono { font-family: "Iosevka", ui-monospace, monospace; }
 
   header {
     display: flex; flex-wrap: wrap; align-items: center; gap: .7rem;
     padding: .9rem 1.2rem; border-bottom: 1px solid var(--border);
-    background: var(--panel);
+    background: color-mix(in srgb, var(--panel) 74%, transparent);
+    backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
     position: sticky; top: 0; z-index: 5;
   }
   header img { width: 30px; height: 30px; }
@@ -62,14 +77,33 @@
     display: inline-flex; align-items: center; gap: .4rem;
     font: 400 .74rem/1 "Iosevka", ui-monospace, monospace; color: var(--dim);
     border: 1px solid var(--border); border-radius: 999px; padding: .38rem .7rem;
-    background: var(--panel); white-space: nowrap;
+    background: color-mix(in srgb, var(--panel) 74%, transparent); white-space: nowrap;
+    backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
   }
   .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
-  .badge.ok .dot { background: var(--ok); }
-  .badge.warn .dot { background: var(--warn); }
-  .badge.err .dot { background: var(--bad); }
+  .badge.ok .dot { background: var(--ok); box-shadow: 0 0 6px color-mix(in srgb, var(--ok) 70%, transparent); }
+  .badge.warn .dot { background: var(--warn); box-shadow: 0 0 6px color-mix(in srgb, var(--warn) 70%, transparent); }
+  .badge.err .dot { background: var(--bad); box-shadow: 0 0 6px color-mix(in srgb, var(--bad) 70%, transparent); }
   .badge a { color: inherit; text-decoration: none; }
   .badge a:hover { color: var(--accent); }
+
+  /* linha do horizonte da marca: divisória tracejada onde as leituras pousam */
+  .horizon {
+    height: 1px;
+    background: repeating-linear-gradient(90deg,
+      color-mix(in srgb, var(--dim) 38%, transparent) 0 2px, transparent 2px 9px);
+  }
+  .secao { position: relative; }
+  .secao::before { content: ""; position: absolute; inset: -0.65rem 0 auto 0; height: 1px;
+    background: repeating-linear-gradient(90deg,
+      color-mix(in srgb, var(--dim) 26%, transparent) 0 2px, transparent 2px 9px); }
+  /* pássaro pousado no horizonte: marca o estado "sem dados ainda" — some quando o dado chega */
+  .vazio { display: inline-flex; align-items: center; gap: .5rem; color: var(--dim); font-size: .8rem; }
+  .vazio .pouso { width: 34px; height: 10px; flex: none; }
+  @supports not (backdrop-filter: blur(1px)) {
+    header, .badge, .cartao, .item { background: var(--panel); }
+  }
 
   .barra {
     display: flex; flex-wrap: wrap; gap: .6rem; align-items: center;
@@ -89,8 +123,10 @@
 
   .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .8rem; }
   .cartao {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-    padding: .85rem 1rem; box-shadow: var(--shadow);
+    background: color-mix(in srgb, var(--panel) 76%, transparent);
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: .85rem 1rem; box-shadow: inset 0 1px 0 rgba(255,255,255,.05), var(--shadow);
+    backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
   }
   .cartao .rotulo { color: var(--dim); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
   .cartao .valor { font: 600 1.45rem/1.2 "Iosevka", ui-monospace, monospace; margin-top: .2rem; }
@@ -103,8 +139,10 @@
     text-transform: uppercase; letter-spacing: .06em; }
   .grelha { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .6rem; }
   .item {
-    background: var(--panel); border: 1px solid var(--border-soft); border-radius: 10px;
+    background: color-mix(in srgb, var(--panel) 70%, transparent);
+    border: 1px solid var(--border-soft); border-radius: 10px;
     padding: .6rem .75rem;
+    backdrop-filter: blur(10px) saturate(1.1); -webkit-backdrop-filter: blur(10px) saturate(1.1);
   }
   .item .nome { font: 400 .8rem/1.3 "Iosevka", ui-monospace, monospace; color: var(--dim);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -136,7 +174,7 @@
   .ev .tick { color: var(--dim); flex: none; }
   .ev.k-LEAK .kind { color: var(--warn); border-color: var(--warn); }
   .ev.k-SUBVERSION .kind, .ev.k-COLLAPSE .kind { color: var(--bad); border-color: var(--bad); }
-  .ev.k-ACTUATION .kind { color: var(--accent); border-color: var(--accent); }
+  .ev.k-ACTUATION .kind { color: var(--blue); border-color: var(--blue); }
   .ev.k-SENSOR_READ .kind { color: var(--ok); border-color: var(--ok); }
 
   footer { max-width: 72rem; margin: 0 auto; padding: 0 1.2rem 2rem;
@@ -154,6 +192,7 @@
   <span id="b-exec" class="badge" title="estado da execução no ledger"><span class="dot"></span><span>execução: …</span></span>
   <span class="badge"><a href="index.html">← dashboard</a></span>
 </header>
+<div class="horizon" aria-hidden="true"></div>
 
 <div class="barra">
   <label for="fonte">ledger:</label>
@@ -176,17 +215,17 @@
 
   <section class="secao">
     <h2>Eventos por kind</h2>
-    <div class="kinds" id="kinds"><span class="vazio">sem dados ainda</span></div>
+    <div class="kinds" id="kinds"><span class="vazio"><svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg>sem dados ainda</span></div>
   </section>
 
   <section class="secao">
     <h2>Sensores (última leitura)</h2>
-    <div class="grelha" id="sensores"><span class="vazio">sem leituras</span></div>
+    <div class="grelha" id="sensores"><span class="vazio"><svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg>sem leituras</span></div>
   </section>
 
   <section class="secao">
     <h2>Atores (última atuação)</h2>
-    <div class="grelha" id="atores"><span class="vazio">sem atuações</span></div>
+    <div class="grelha" id="atores"><span class="vazio"><svg class="pouso" viewBox="0 0 36 10" aria-hidden="true"><line x1="0" y1="7" x2="36" y2="7" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 5"/><circle cx="18" cy="7" r="1.4" fill="#a55cff"/></svg>sem atuações</span></div>
   </section>
 
   <section class="secao">

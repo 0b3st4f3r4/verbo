@@ -13,6 +13,28 @@ aparece identificável no badge e as métricas seguem no ar.
 | `verbolog.svg` | Marca do projeto (logo + favicon) |
 | `fonts/`, `vendor/` | Fontes auto-hospedadas (SIL OFL 1.1) e vendored KaTeX/Mermaid (MIT) |
 
+## Sistema visual — razão e arte
+
+As páginas reproduzem a linguagem da marca (`design/`), mapeando o
+Materialismo Computacional em estética — a paleta de status é o próprio
+espectro termodinâmico do triângulo:
+
+| Elemento da marca | Onde aparece na UI |
+|---|---|
+| **Espectro azul→teal→verde→amarelo→vermelho** | Medidor de contexto do chat (o contexto *esquenta* ao encher); tokens `--ok/--warn/--bad`; kinds do feed (LEAK=amarelo, SUBVERSION/COLLAPSE=vermelho, SENSOR_READ=verde, ACTUATION=azul) |
+| **Violeta = o meta** (o nó do verbo do triângulo) | Identidade do **chat**: accent e bolhas do usuário; **fatia violeta na barra** de contexto = custo do VerboLang no contexto (cheat sheet + instrução, honestidade termodinâmica do meta); na **home**, a aresta do cartão do chat é o lado do meta do triângulo (vermelho→violeta→azul) |
+| **Amarelo = a energia** | Identidade do **metrics**: accent, Joules, atuações e o gráfico de energia no calor do espectro; na home, o cartão de métricas (aresta verde→amarelo→vermelho) |
+| **Vidro fosco com aurora borrada** | Fundo das páginas (aurora azul/vermelho/verde fixa) + `backdrop-filter` nos cartões, cabeçalhos e badges (com fallback `@supports` para painéis sólidos) |
+| **Linha do horizonte tracejada** | Divisória sob os cabeçalhos (dashboard, métricas) e entre as seções do Caderno — onde as leituras pousam |
+| **Pássaros no horizonte** | Estados vazios do metrics (`sem dados ainda` etc.): um pássaro pousado que some quando o dado chega |
+| **Nós com halo** | Dots dos badges (halo na cor do estado, miolo sólido) |
+
+A paleta vive nos blocos `:root`/`[data-theme]` de cada página (filosofia
+single-file, zero dependências): hexes da marca `#4da3ff`/`#35c9c1`/
+`#3fb96f`/`#e0c94f`/`#ff5a52` e o violeta do meta `#a55cff` (tema claro usa
+variantes com contraste suficiente). Cada página carrega uma cor do sistema:
+chat=violeta (o verbo), metrics=amarelo (a energia), home=revela as duas.
+
 ## Como rodar
 
 ```bash
