@@ -25,27 +25,34 @@ struct Config {
 }
 
 fn args() -> Config {
+    match parse_args(std::env::args().skip(1)) {
+        Ok(c) => c,
+        Err(msg) => {
+            eprintln!("vbl-soak: {msg}");
+            eprintln!("uso: vbl-soak [--alive-forms N] [--ticks T] [--seconds S] [--report A_CADA]");
+            std::process::exit(2);
+        }
+    }
+}
+
+/// Parser puro dos argumentos (ensaio in-process; `args` só o amarra ao env).
+/// Valor não numérico mantém o default (a carga é heurística, não contrato).
+fn parse_args(it: impl Iterator<Item = String>) -> Result<Config, String> {
     let mut c = Config { alive: 10_000, max_ticks: u64::MAX, max_seconds: 0, report: 10_000 };
-    let mut it = std::env::args().skip(1);
+    let mut it = it.peekable();
     while let Some(a) = it.next() {
         let mut value = |default: u64| -> u64 {
-            it.next()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(default)
+            it.next().and_then(|v| v.parse().ok()).unwrap_or(default)
         };
         match a.as_str() {
             "--alive-forms" => c.alive = value(c.alive as u64) as usize,
             "--ticks" => c.max_ticks = value(c.max_ticks),
             "--seconds" => c.max_seconds = value(c.max_seconds),
             "--report" => c.report = value(c.report),
-            other => {
-                eprintln!("vbl-soak: argumento desconhecido '{other}'");
-                eprintln!("uso: vbl-soak [--alive-forms N] [--ticks T] [--seconds S] [--report A_CADA]");
-                std::process::exit(2);
-            }
+            other => return Err(format!("argumento desconhecido '{other}'")),
         }
     }
-    c
+    Ok(c)
 }
 
 /// RSS do processo em bytes (VmRSS de /proc/self/status; 0 se indisponível).
@@ -66,6 +73,12 @@ fn rss_bytes() -> u64 {
 
 fn main() {
     let cfg = args();
+    std::process::exit(run(cfg));
+}
+
+/// O ciclo de soak com teto de ticks/segundos; devolve 0 (estável) ou
+/// 1 (RSS cresceu além da tolerância) — sem process::exit no meio.
+fn run(cfg: Config) -> i32 {
     let start = std::time::Instant::now();
     println!(
         "vbl-soak: vivas alvo = {}, teto = {} ticks / {} s de parede, relatório a cada {} ticks",
@@ -144,10 +157,11 @@ fn main() {
             rss_final / 1024,
             tolerance / 1024
         );
-        std::process::exit(1);
+        return 1;
     }
     println!("# SOAK OK: RSS estável (final ≤ patamar + 10% + 4 MiB)");
     let _ = std::fs::remove_dir_all(&dir);
+    0
 }
 
 /// Forma `event` de carga com horizonte curto (renovação pelo runtime).
@@ -171,5 +185,50 @@ fn event_form(name: &str, now: f64) -> vbl_runtime::Form {
         dissolved: false,
         horizon_version: 0,
         maintenance_version: 0,
+    }
+}
+
+// ── suíte in-process: parser de args, RSS e o ciclo enxuto (12 ticks) ─────
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_args_defaults_overrides_e_erro() {
+        // defaults (carga de referência: 10k vivas, teto infinito)
+        let c = parse_args(std::iter::empty()).unwrap();
+        assert_eq!((c.alive, c.max_ticks, c.max_seconds, c.report), (10_000, u64::MAX, 0, 10_000));
+        // overrides completos
+        let c = parse_args(["--alive-forms", "30", "--ticks", "12", "--seconds", "0",
+                            "--report", "5"].iter().map(|s| s.to_string())).unwrap();
+        assert_eq!((c.alive, c.max_ticks, c.max_seconds, c.report), (30, 12, 0, 5));
+        // valor não numérico mantém o default (carga é heurística)
+        let c = parse_args(["--ticks", "muito"].iter().map(|s| s.to_string())).unwrap();
+        assert_eq!(c.max_ticks, u64::MAX);
+        // argumento desconhecido → erro de uso (a main sai com 2)
+        assert!(parse_args(["--voar"].iter().map(|s| s.to_string())).is_err());
+    }
+
+    #[test]
+    fn rss_do_processo_e_forma_de_carga() {
+        // em Linux com /proc, o RSS do próprio processo é positivo
+        if std::path::Path::new("/proc/self/status").exists() {
+            assert!(rss_bytes() > 0);
+        }
+        // forma de carga: event com horizonte de 3 ticks e renovável
+        let f = event_form("c7", 42.0);
+        assert_eq!(f.name, "c7");
+        assert_eq!(f.horizon_s, 3.0);
+        assert_eq!(f.creation_time, 42.0);
+        assert!(!f.dissolved);
+        assert!(f.rules.is_empty());
+    }
+
+    #[test]
+    fn ciclo_enxuto_termina_estavel() {
+        // 12 ticks com 3 vivas: cobre patamar (tick 10), relatórios periódicos
+        // e o veredito final (RSS sob carga constante renova sem crescer)
+        let cfg = Config { alive: 3, max_ticks: 12, max_seconds: 0, report: 5 };
+        assert_eq!(run(cfg), 0);
     }
 }
