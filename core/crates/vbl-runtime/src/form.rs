@@ -12,11 +12,11 @@ use crate::fxp::Value;
 use vbl_lang::Conjugation;
 
 /// Valor poético canônico da subversão (FORMAL §4.5).
-pub const VALOR_POETICO_CANONICO: &str =
+pub const CANONICAL_POETIC_VALUE: &str =
     "poesia_gerada_pelo_calor_do_silicio_e_resfriamento_da_mente";
 
 /// Orçamentos de retenção por conjugação em bytes (ADR-001).
-pub const ORCAMENTO_RETENCAO: (u64, u64, u64) = (256, 1024, 512); // event, equilibrium, nonequilibrium
+pub const RETENTION_BUDGET: (u64, u64, u64) = (256, 1024, 512); // event, equilibrium, nonequilibrium
 
 /// Ações compiladas para o runtime (threshold já convertido para número puro).
 #[derive(Debug, Clone, PartialEq)]
@@ -26,7 +26,7 @@ pub enum ActionRt {
     ReclassifyEquilibrium,
     ReclassifyNonequilibrium,
     NotifyShutdown,
-    Act { ator: String, valor: Value },
+    Act { actor: String, value: Value },
 }
 
 /// Regra de revisão compilada.
@@ -40,11 +40,11 @@ pub struct RuleRt {
 
 /// Conjugação com estado de manutenção (`nonequilibrium` apenas).
 #[derive(Debug, Clone, PartialEq)]
-pub struct Manutencao {
+pub struct Maintenance {
     /// Prazo entre manutenções (s) — o DECLARADO sobrevive a reclassificações.
     pub deadline_s: f64,
     /// Instante virtual da última manutenção (keep implícito ou explícito).
-    pub ultima: f64,
+    pub last: f64,
 }
 
 /// Forma ativa.
@@ -66,44 +66,44 @@ pub struct Form {
     /// Prazo declarado alguma vez pela forma (habilita NEQ→EQ→NEQ — FORMAL §3).
     pub declared_maintenance_deadline: Option<f64>,
     /// Estado de manutenção; `Some` apenas em `nonequilibrium`.
-    pub manutencao: Option<Manutencao>,
+    pub maintenance: Option<Maintenance>,
     /// Anotação de auditoria `cooperation`/`extraction` (PLAN §2.2).
     pub exchange_mode: Option<String>,
     /// Custo em bytes (`equilibrium`); `None` → tamanho real gravado (§4.1).
     pub cost_bytes: Option<u64>,
     /// Regras de revisão ativas (sobrevivem à reclassificação — Etapa 1).
     pub rules: Vec<RuleRt>,
-    pub dissolvida: bool,
+    pub dissolved: bool,
     /// Versão do estado do horizon (muda na (re)classificação) — o
     /// escalonador descarta entradas obsoletas pela versão.
-    pub horizon_versao: u64,
+    pub horizon_version: u64,
     /// Versão do estado de manutenção (`keep` renova; 0 fora de NEQ).
-    pub manutencao_versao: u64,
+    pub maintenance_version: u64,
 }
 
 impl Form {
     /// Cabe em que instante a forma expira (criação + horizon).
-    pub fn horizonte_fim(&self) -> f64 {
+    pub fn horizon_end(&self) -> f64 {
         self.creation_time + self.horizon_s
     }
 
     /// `horizon` esgotado? (`>=` — no limite exato expira; Etapa 1, FORMAL §4.1)
-    pub fn horizon_esgotado(&self, agora: f64) -> bool {
-        (agora - self.creation_time) >= self.horizon_s
+    pub fn horizon_exhausted(&self, now: f64) -> bool {
+        (now - self.creation_time) >= self.horizon_s
     }
 
     /// Prazo de manutenção vencido? (`>` estritamente maior — Etapa 1)
-    pub fn manutencao_vencida(&self, agora: f64) -> bool {
-        match &self.manutencao {
-            Some(m) => (agora - m.ultima) > m.deadline_s,
+    pub fn maintenance_due(&self, now: f64) -> bool {
+        match &self.maintenance {
+            Some(m) => (now - m.last) > m.deadline_s,
             None => false,
         }
     }
 
     /// Manutenção: renova o prazo (keep implícito ou explícito).
-    pub fn keep(&mut self, agora: f64) {
-        if let Some(m) = &mut self.manutencao {
-            m.ultima = agora;
+    pub fn keep(&mut self, now: f64) {
+        if let Some(m) = &mut self.maintenance {
+            m.last = now;
         }
     }
 
@@ -114,18 +114,18 @@ impl Form {
             Conjugation::Equilibrium => 128,
             Conjugation::Nonequilibrium => 160,
         };
-        let valor = match &self.value {
+        let value = match &self.value {
             Value::Num(n) => n.to_string().len(),
             Value::Str(s) | Value::Ident(s) => s.len(),
         } as u64;
-        base + valor + 32 * self.rules.len() as u64
+        base + value + 32 * self.rules.len() as u64
     }
 }
 
 /// Registro de livros do runtime (contadores de retenção por forma).
 #[derive(Debug, Clone, Default)]
-pub struct Retencao {
-    pub por_forma: std::collections::BTreeMap<String, u64>,
+pub struct Retention {
+    pub per_form: std::collections::BTreeMap<String, u64>,
     /// Estruturas de trabalho laborativo (NEQ): prazo + último keep.
     pub labor: std::collections::BTreeMap<String, u64>,
 }

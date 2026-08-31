@@ -16,7 +16,7 @@ pub enum Conjugation {
 }
 
 impl Conjugation {
-    pub fn nome(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         match self {
             Conjugation::Event => "event",
             Conjugation::Equilibrium => "equilibrium",
@@ -25,7 +25,7 @@ impl Conjugation {
     }
 
     /// `currency` padrão da conjugação (FORMAL §3, nota sobre `currency`).
-    pub fn currency_padrao(&self) -> &'static str {
+    pub fn default_currency(&self) -> &'static str {
         match self {
             Conjugation::Event => "CpuCycles",
             Conjugation::Equilibrium => "DiskBytes",
@@ -44,7 +44,7 @@ pub enum TimeUnit {
 }
 
 impl TimeUnit {
-    pub fn fator(&self) -> f64 {
+    pub fn factor(&self) -> f64 {
         match self {
             TimeUnit::S => 1.0,
             TimeUnit::Ms => 1e-3,
@@ -53,7 +53,7 @@ impl TimeUnit {
         }
     }
 
-    pub fn sufixo(&self) -> &'static str {
+    pub fn suffix(&self) -> &'static str {
         match self {
             TimeUnit::S => "s",
             TimeUnit::Ms => "ms",
@@ -66,14 +66,14 @@ impl TimeUnit {
 /// Duração: número + unidade, convertida para segundos (f64).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Duration {
-    pub valor: f64,
+    pub value: f64,
     pub unit: TimeUnit,
     pub span: Span,
 }
 
 impl Duration {
-    pub fn segundos(&self) -> f64 {
-        self.valor * self.unit.fator()
+    pub fn seconds(&self) -> f64 {
+        self.value * self.unit.factor()
     }
 }
 
@@ -87,7 +87,7 @@ pub enum PhysicalUnit {
 }
 
 impl PhysicalUnit {
-    pub fn simbolo(&self) -> &'static str {
+    pub fn symbol(&self) -> &'static str {
         match self {
             PhysicalUnit::W => "W",
             PhysicalUnit::DegC => "°C",
@@ -96,7 +96,7 @@ impl PhysicalUnit {
     }
 
     /// Grandeza canônica associada (FORMAL §6 — registro mínimo).
-    pub fn grandeza(&self) -> &'static str {
+    pub fn quantity(&self) -> &'static str {
         match self {
             PhysicalUnit::W => "potencia",
             PhysicalUnit::DegC => "temperatura",
@@ -129,8 +129,8 @@ impl Expression {
         Self { kind: ExprKind::Num(v), span }
     }
 
-    pub fn ident(nome: impl Into<String>, span: Span) -> Self {
-        Self { kind: ExprKind::Ident(nome.into()), span }
+    pub fn ident(name: impl Into<String>, span: Span) -> Self {
+        Self { kind: ExprKind::Ident(name.into()), span }
     }
 }
 
@@ -138,7 +138,7 @@ impl Expression {
 /// numérico antes da comparação — FORMAL §3, nota sobre `threshold`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Threshold {
-    pub valor: f64,
+    pub value: f64,
     /// `None` = número puro (sem unidade declarada).
     pub unit: Option<PhysicalUnit>,
 }
@@ -146,7 +146,7 @@ pub struct Threshold {
 /// `sensor_ref = identifier | string` — nome simbólico no FXP.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SensorRef {
-    pub nome: String,
+    pub name: String,
     pub span: Span,
 }
 
@@ -162,7 +162,7 @@ pub enum CmpOp {
 }
 
 impl CmpOp {
-    pub fn simbolo(&self) -> &'static str {
+    pub fn symbol(&self) -> &'static str {
         match self {
             CmpOp::Lt => "<",
             CmpOp::Gt => ">",
@@ -173,14 +173,14 @@ impl CmpOp {
         }
     }
 
-    pub fn avalia(&self, sensor: f64, limiar: f64) -> bool {
+    pub fn evaluate(&self, sensor: f64, threshold: f64) -> bool {
         match self {
-            CmpOp::Lt => sensor < limiar,
-            CmpOp::Gt => sensor > limiar,
-            CmpOp::Le => sensor <= limiar,
-            CmpOp::Ge => sensor >= limiar,
-            CmpOp::Eq => sensor == limiar,
-            CmpOp::Ne => sensor != limiar,
+            CmpOp::Lt => sensor < threshold,
+            CmpOp::Gt => sensor > threshold,
+            CmpOp::Le => sensor <= threshold,
+            CmpOp::Ge => sensor >= threshold,
+            CmpOp::Eq => sensor == threshold,
+            CmpOp::Ne => sensor != threshold,
         }
     }
 }

@@ -5,18 +5,18 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use vbl_fxp::registry::RemoteAddr;
-use vbl_fxp::schema::{AckAct, Corpo, DeviceDesc};
-use vbl_fxp::transport::{esperar_pronto_unix, servir_tcp, servir_unix, ErroTransporte};
-use vbl_fxp::{Mensagem, WireValue as WV};
+use vbl_fxp::schema::{AckAct, Body, DeviceDesc};
+use vbl_fxp::transport::{wait_ready_unix, serve_tcp, serve_unix, TransportError};
+use vbl_fxp::{Message, WireValue as WV};
 
-const PRAZO: Duration = Duration::from_secs(2);
-const PRAZO_CURTO: Duration = Duration::from_millis(120);
+const DEADLINE: Duration = Duration::from_secs(2);
+const SHORT_DEADLINE: Duration = Duration::from_millis(120);
 
-fn tmpsocket(nome: &str) -> PathBuf {
+fn tmpsocket(name: &str) -> PathBuf {
     static N: AtomicUsize = AtomicUsize::new(0);
     std::env::temp_dir().join(format!(
         "vbl-fxp-{}-{}-{}.sock",
-        nome,
+        name,
         std::process::id(),
         N.fetch_add(1, Ordering::Relaxed)
     ))
@@ -24,123 +24,123 @@ fn tmpsocket(nome: &str) -> PathBuf {
 
 /// Echo canônico: READ → READ_OK (com canônico + marca sintética);
 /// ACT → ACT_ACK Entregue; HEARTBEAT → HEARTBEAT_ACK ok.
-fn echo(msg: Mensagem) -> Option<Mensagem> {
+fn echo(msg: Message) -> Option<Message> {
     Some(match msg.opcode {
         vbl_fxp::schema::op::READ => {
-            Mensagem::read_ok(86.5, "cpu_temp", false, msg.seq)
+            Message::read_ok(86.5, "cpu_temp", false, msg.seq)
         }
-        vbl_fxp::schema::op::ACT => Mensagem::act_ack(AckAct::Entregue, false, msg.seq),
-        vbl_fxp::schema::op::HEARTBEAT => Mensagem::heartbeat_ack(true, msg.seq),
-        _ => Mensagem::bye(msg.seq),
+        vbl_fxp::schema::op::ACT => Message::act_ack(AckAct::Delivered, false, msg.seq),
+        vbl_fxp::schema::op::HEARTBEAT => Message::heartbeat_ack(true, msg.seq),
+        _ => Message::bye(msg.seq),
     })
 }
 
 #[test]
-fn unix_roundtrip_com_ack_e_seq_correlacionado() {
+fn unix_roundtrip_with_correlated_ack_and_seq() {
     let path = tmpsocket("echo");
-    let _srv = servir_unix(&path, echo).expect("subir servidor");
-    assert!(esperar_pronto_unix(&path, PRAZO));
+    let _srv = serve_unix(&path, echo).expect("subir servidor");
+    assert!(wait_ready_unix(&path, DEADLINE));
 
-    let mut c = vbl_fxp::transport::Conexao::unix(&path, PRAZO).unwrap();
+    let mut c = vbl_fxp::transport::Connection::unix(&path, DEADLINE).unwrap();
 
-    let r = c.pedir(&Mensagem::read("cpu_temp", 7, true), PRAZO).unwrap();
+    let r = c.request(&Message::read("cpu_temp", 7, true), DEADLINE).unwrap();
     assert_eq!(r.seq, 7);
-    let Corpo::ReadOk { valor, canonical } = r.corpo else { panic!("resposta errada") };
-    assert_eq!((valor, canonical.as_str()), (86.5, "cpu_temp"));
-    assert_eq!(r.flags & vbl_fxp::schema::flag::SINTETICO, 0, "leitura real no fio");
+    let Body::ReadOk { value, canonical } = r.body else { panic!("resposta errada") };
+    assert_eq!((value, canonical.as_str()), (86.5, "cpu_temp"));
+    assert_eq!(r.flags & vbl_fxp::schema::flag::SYNTHETIC, 0, "leitura real no fio");
 
     let r = c
-        .pedir(&Mensagem::act("Ventoinha", WV::Num(200.0), 8, true), PRAZO)
+        .request(&Message::act("Ventoinha", WV::Num(200.0), 8, true), DEADLINE)
         .unwrap();
-    assert_eq!(r.corpo, Corpo::ActAck { status: AckAct::Entregue });
+    assert_eq!(r.body, Body::ActAck { status: AckAct::Delivered });
 
     // Encerramento limpo (BYE sem ack).
-    c.enviar(&Mensagem::bye(0)).unwrap();
+    c.enviar(&Message::bye(0)).unwrap();
 }
 
 #[test]
-fn tcp_remoto_fala_o_mesmo_frame_v1() {
-    let (srv, port) = servir_tcp(echo).expect("subir servidor tcp");
-    let mut c = vbl_fxp::transport::Conexao::tcp("127.0.0.1", port, PRAZO).unwrap();
-    let r = c.pedir(&Mensagem::read("cpu_power", 11, true), PRAZO).unwrap();
+fn remote_tcp_speaks_same_frame_v1() {
+    let (srv, port) = serve_tcp(echo).expect("subir servidor tcp");
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", port, DEADLINE).unwrap();
+    let r = c.request(&Message::read("cpu_power", 11, true), DEADLINE).unwrap();
     assert_eq!(r.seq, 11);
     srv.parar();
 }
 
 #[test]
-fn timeout_honesto_quando_o_ator_e_mudo() {
+fn honest_timeout_when_actor_is_mute() {
     let path = tmpsocket("mudo");
     // Servidor que não responde (ator não respondendo — BDD Caso 3).
-    let _srv = servir_unix(&path, |_msg| None).expect("subir servidor");
-    assert!(esperar_pronto_unix(&path, PRAZO));
-    let mut c = vbl_fxp::transport::Conexao::unix(&path, PRAZO).unwrap();
-    let inicio = std::time::Instant::now();
+    let _srv = serve_unix(&path, |_msg| None).expect("subir servidor");
+    assert!(wait_ready_unix(&path, DEADLINE));
+    let mut c = vbl_fxp::transport::Connection::unix(&path, DEADLINE).unwrap();
+    let start = std::time::Instant::now();
     let err = c
-        .pedir(&Mensagem::heartbeat("Ventoinha", 3), PRAZO_CURTO)
+        .request(&Message::heartbeat("Ventoinha", 3), SHORT_DEADLINE)
         .unwrap_err();
-    assert_eq!(err, ErroTransporte::Timeout);
-    assert!(inicio.elapsed() >= PRAZO_CURTO, "timeout não pode retornar antes do prazo");
+    assert_eq!(err, TransportError::Timeout);
+    assert!(start.elapsed() >= SHORT_DEADLINE, "timeout não pode retornar antes do prazo");
 }
 
 #[test]
-fn seq_dessincronizado_e_erro_nunca_ack_trocado() {
+fn desynced_seq_and_error_never_swapped_ack() {
     let path = tmpsocket("seq");
-    let _srv = servir_unix(&path, |msg| Some(Mensagem::read_ok(1.0, "x", false, msg.seq + 100)))
+    let _srv = serve_unix(&path, |msg| Some(Message::read_ok(1.0, "x", false, msg.seq + 100)))
         .expect("subir servidor");
-    assert!(esperar_pronto_unix(&path, PRAZO));
-    let mut c = vbl_fxp::transport::Conexao::unix(&path, PRAZO).unwrap();
+    assert!(wait_ready_unix(&path, DEADLINE));
+    let mut c = vbl_fxp::transport::Connection::unix(&path, DEADLINE).unwrap();
     assert!(matches!(
-        c.pedir(&Mensagem::read("x", 1, true), PRAZO),
-        Err(ErroTransporte::Quebrada(_))
+        c.request(&Message::read("x", 1, true), DEADLINE),
+        Err(TransportError::Broken(_))
     ));
 }
 
 #[test]
-fn hello_publica_o_registro_do_peer() {
+fn hello_publishes_peer_registry() {
     let path = tmpsocket("hello");
-    let registro = vec![
+    let registry = vec![
         DeviceDesc::Sensor {
             name: "cpu_temp".into(),
             min: Some(0.0),
             max: Some(120.0),
-            grandeza: "temperatura".into(),
-            unidade: "°C".into(),
-            precisao_pct: 2.0,
+            quantity: "temperatura".into(),
+            unit: "°C".into(),
+            precision_pct: 2.0,
         },
-        DeviceDesc::Ator {
+        DeviceDesc::Actor {
             name: "CpuPowerCap".into(),
             min: Some(10.0),
             max: Some(250.0),
             safety: Some(200.0),
         },
     ];
-    let _srv = servir_unix(&path, move |msg| {
+    let _srv = serve_unix(&path, move |msg| {
         matches!(msg.opcode, vbl_fxp::schema::op::HELLO)
-            .then(|| Mensagem::hello(registro.clone(), msg.seq))
+            .then(|| Message::hello(registry.clone(), msg.seq))
     })
     .expect("subir servidor");
-    assert!(esperar_pronto_unix(&path, PRAZO));
+    assert!(wait_ready_unix(&path, DEADLINE));
 
-    let mut c = vbl_fxp::transport::Conexao::unix(&path, PRAZO).unwrap();
+    let mut c = vbl_fxp::transport::Connection::unix(&path, DEADLINE).unwrap();
     let r = c
-        .pedir(&Mensagem::hello(vec![DeviceDesc::Ator {
+        .request(&Message::hello(vec![DeviceDesc::Actor {
             name: "Cliente".into(),
             min: None,
             max: None,
             safety: None,
-        }], 5), PRAZO)
+        }], 5), DEADLINE)
         .unwrap();
-    let Corpo::Hello { devices } = r.corpo else { panic!() };
+    let Body::Hello { devices } = r.body else { panic!() };
     assert_eq!(devices.len(), 2);
     assert_eq!(devices[0].name(), "cpu_temp");
 }
 
 #[test]
-fn conexao_a_servidor_inexistente_falha_sem_panico() {
+fn connection_to_nonexistent_server_fails_without_panic() {
     let path = tmpsocket("fantasma");
     assert!(matches!(
-        vbl_fxp::transport::Conexao::unix(&path, PRAZO),
-        Err(ErroTransporte::ConexaoFalhou(_))
+        vbl_fxp::transport::Connection::unix(&path, DEADLINE),
+        Err(TransportError::ConnectionFailed(_))
     ));
     // RemoteAddr descreve os dois esquemas (usado pelo Endpoint::Remote).
     let _ = RemoteAddr::Unix(path);

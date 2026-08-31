@@ -7,7 +7,7 @@
 //! PLAN §3.5). O registro mínimo obrigatório (FORMAL §6) já vem pronto no
 //! simulador, e a política de fallback é do REGISTRO do FXP (FORMAL §4.3).
 
-use crate::notebook::Caderno;
+use crate::ledger::Ledger;
 use crate::json::Json;
 use std::collections::BTreeMap;
 
@@ -50,8 +50,8 @@ impl std::fmt::Display for Value {
 /// Grandeza/unidade declarada de um sensor no registro (FORMAL §6).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SensorInfo {
-    pub grandeza: String,
-    pub unidade: String,
+    pub quantity: String,
+    pub unit: String,
 }
 
 /// Limites de um ator no registro (FORMAL §6) — validação **inclusiva**.
@@ -66,27 +66,27 @@ pub struct ActorLimits {
 #[derive(Debug, Clone, Default)]
 pub struct Registry {
     pub sensores: BTreeMap<String, SensorInfo>,
-    pub atores: BTreeMap<String, ActorLimits>,
+    pub actors: BTreeMap<String, ActorLimits>,
 }
 
 impl Registry {
     /// Registro mínimo obrigatório (FORMAL §6).
-    pub fn minimo() -> Self {
+    pub fn minimum() -> Self {
         let mut r = Self::default();
-        for (nome, grandeza, unidade) in [
+        for (name, quantity, unit) in [
             ("cpu_temp", "temperatura", "°C"),
             ("cpu_power", "potencia", "W"),
             ("attention", "atencao", "%"),
         ] {
             r.sensores
-                .insert(nome.into(), SensorInfo { grandeza: grandeza.into(), unidade: unidade.into() });
+                .insert(name.into(), SensorInfo { quantity: quantity.into(), unit: unit.into() });
         }
-        for (nome, min, max, safety) in [
+        for (name, min, max, safety) in [
             ("CpuPowerCap", Some(10.0), Some(250.0), Some(200.0)),
             ("Ventoinha", Some(0.0), Some(255.0), Some(200.0)),
             ("LedIndicador", None, None, None),
         ] {
-            r.atores.insert(nome.into(), ActorLimits { min, max, safety_limit: safety });
+            r.actors.insert(name.into(), ActorLimits { min, max, safety_limit: safety });
         }
         r
     }
@@ -95,48 +95,48 @@ impl Registry {
 /// Estado de um sensor no simulador.
 #[derive(Debug, Clone)]
 pub struct SensorState {
-    pub valor: f64,
-    pub acessivel: bool,
+    pub value: f64,
+    pub accessible: bool,
 }
 
 /// Estado de um ator no simulador.
 #[derive(Debug, Clone)]
 pub struct ActorState {
     pub limits: ActorLimits,
-    pub atual: Option<Value>,
-    pub disponivel: bool,
+    pub current: Option<Value>,
+    pub available: bool,
     /// Política de fallback do registro (FORMAL §4.3): primário → alternativos.
     pub fallback: Vec<String>,
     /// Efeito físico simulado do ator.
-    pub efeito: EfeitoAtor,
+    pub effect: ActorEffect,
 }
 
 /// Efeitos físicos determinísticos dos atores simulados (PLAN §6.5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum EfeitoAtor {
+pub enum ActorEffect {
     /// `CpuPowerCap`: limita a potência (se menor que a atual).
     PowerCap,
-    /// `Ventoinha`: resfria a temperatura proporcional ao PWM.
+    /// `Fan`: resfria a temperatura proporcional ao PWM.
     #[default]
-    Nenhum,
-    Ventoinha,
+    NoEffect,
+    Fan,
 }
 
 /// Falha de leitura de sensor (FORMAL §4.7) — nunca é `0.0`.
 #[derive(Debug, Clone, PartialEq)]
-pub enum FalhaSensor {
+pub enum SensorFailure {
     /// Sensor fora do registro do FXP.
-    NaoRegistrado,
+    NotRegistered,
     /// Registrado porém inacessível (falha de leitura em modo real).
-    Inacessivel,
+    Inaccessible,
 }
 
-impl FalhaSensor {
-    /// `motivo` canônico do alerta no Caderno (suíte da Etapa 1).
-    pub fn motivo(&self) -> &'static str {
+impl SensorFailure {
+    /// `reason` canônico do alerta no Caderno (suíte da Etapa 1).
+    pub fn reason(&self) -> &'static str {
         match self {
-            FalhaSensor::NaoRegistrado => "sensor_nao_registrado",
-            FalhaSensor::Inacessivel => "sensor_inacessivel",
+            SensorFailure::NotRegistered => "sensor_nao_registrado",
+            SensorFailure::Inaccessible => "sensor_inacessivel",
         }
     }
 }
@@ -144,82 +144,82 @@ impl FalhaSensor {
 /// Resultado de um comando `act` (FORMAL §4.3).
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActOutcome {
-    Entregue,
+    Delivered,
     /// Rejeitado sem envio — limite violado (inclusivo: igual ao limite passa).
-    Rejeitado { limite: Limite, valor_limite: f64 },
+    Rejected { limit: Limit, limit_value: f64 },
     /// Ator fora do registro.
-    AtorInexistente,
+    MissingActor,
     /// Heartbeat do ator não respondeu; fallback tentado conforme registro.
-    Indisponivel,
+    Unavailable,
     /// Fallback acionado com sucesso no ator alternativo.
-    FallbackExecutado { alternativo: String },
+    FallbackExecuted { alternativo: String },
     /// Todos os fallbacks falharam.
-    FallbackEsgotado,
+    FallbackExhausted,
     /// Valor fora do **domínio** do ator (extensão da Etapa 3): limites
     /// numéricos do registro cobrem min/max/safety; domínio cobre o resto
     /// (ex.: cor fora do mapa do `LedIndicador`, texto em ator numérico).
-    /// Sempre auditado (`ACT_ACK.ValorInvalido` no schema v1), nunca entrega
+    /// Sempre auditado (`ACT_ACK.InvalidValue` no schema v1), nunca entrega
     /// silenciosa.
-    ValorInvalido { motivo: String },
+    InvalidValue { reason: String },
 }
 
 impl ActOutcome {
     pub fn ok(&self) -> bool {
         matches!(
             self,
-            ActOutcome::Entregue | ActOutcome::FallbackExecutado { .. }
+            ActOutcome::Delivered | ActOutcome::FallbackExecuted { .. }
         )
     }
 }
 
 /// Prioridade canônica de comandos na fila do FXP (PLAN §3.4).
 /// Máxima para atuações associadas a `subvert` (FORMAL §4.5).
-pub const PRIORIDADE_SUBVERT: u8 = 0;
+pub const PRIORITY_SUBVERT: u8 = 0;
 /// Prioridade padrão de comandos de atuação.
-pub const PRIORIDADE_NORMAL: u8 = 10;
+pub const PRIORITY_NORMAL: u8 = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Limite {
+pub enum Limit {
     Min,
     Max,
     SafetyLimit,
 }
 
-impl Limite {
-    pub fn nome(&self) -> &'static str {
+impl Limit {
+    pub fn name(&self) -> &'static str {
         match self {
-            Limite::Min => "min",
-            Limite::Max => "max",
-            Limite::SafetyLimit => "safety_limit",
+            Limit::Min => "min",
+            Limit::Max => "max",
+            Limit::SafetyLimit => "safety_limit",
         }
     }
 }
 
 /// Barramento FXP consumido pelo runtime (não bloqueante; timeout na Etapa 3).
 pub trait Fxp {
-    /// Leitura por nome simbólico. Falha → [`FalhaSensor`] + alerta no Caderno
+    /// Leitura por nome simbólico. Falha → [`SensorFailure`] + alerta no Caderno
     /// (§4.7: sensor ausente NUNCA é 0.0 — zero é leitura física válida).
-    fn read_sensor(&mut self, nome: &str, caderno: &mut dyn Caderno)
-        -> Result<f64, FalhaSensor>;
+    fn read_sensor(&mut self, name: &str, ledger: &mut dyn Ledger)
+        -> Result<f64, SensorFailure>;
 
     /// Comando a ator: serializa, valida limites (inclusivos) e entrega;
     /// o Caderno registra tentativa, falha e fallback (§4.3).
-    fn act(&mut self, ator: &str, valor: Value, caderno: &mut dyn Caderno) -> ActOutcome;
+    fn act(&mut self, actor: &str, value: Value, ledger: &mut dyn Ledger) -> ActOutcome;
 
     /// Comando com prioridade de fila (Etapa 3): default ignora a prioridade
     /// e delega a [`Fxp::act`] — barramentos com fila prioritária (vbl-fxp)
-    /// sobrescrevem. O engine usa [`PRIORIDADE_SUBVERT`] para a `act` que
+    /// sobrescrevem. O engine usa [`PRIORITY_SUBVERT`] para a `act` que
     /// segue um `subvert` na mesma regra (FORMAL §4.5: sem atraso
     /// perceptível).
     fn act_with_priority(
         &mut self,
-        ator: &str,
-        valor: Value,
-        prioridade: u8,
-        caderno: &mut dyn Caderno,
+        actor: &str,
+        value: Value,
+        priority: u8,
+        ledger: &mut dyn Ledger,
     ) -> ActOutcome {
-        let _ = prioridade;
-        self.act(ator, valor, caderno)
+        let _ = priority;
+        self.act(actor, value, ledger)
     }
 
     /// Potência global do tick (partilha P/N — FORMAL §4.2).
@@ -227,7 +227,7 @@ pub trait Fxp {
 
     /// Avanço do tick no mundo (roteirização do simulador; Etapa 3: também
     /// re-entrega a fila de comandos, auditada no Caderno).
-    fn on_tick(&mut self, caderno: &mut dyn Caderno);
+    fn on_tick(&mut self, ledger: &mut dyn Ledger);
 
     /// Bytes em suporte estável (persistência — FORMAL §4.1).
     fn disk_bytes_used(&self) -> u64;

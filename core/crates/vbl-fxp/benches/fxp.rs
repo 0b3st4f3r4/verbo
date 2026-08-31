@@ -10,17 +10,17 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use vbl_fxp::bus::{BusConfig, FxpBus};
-use vbl_fxp::registry::{DeviceRegistry, FxpConfig, ModoOperacao};
-use vbl_fxp::schema::{decode, encode_to_vec, AckAct, Mensagem};
-use vbl_fxp::transport::{esperar_pronto_unix, servir_unix};
-use vbl_runtime::notebook::ChainCaderno;
+use vbl_fxp::registry::{DeviceRegistry, FxpConfig, OperationMode};
+use vbl_fxp::schema::{decode, encode_to_vec, AckAct, Message};
+use vbl_fxp::transport::{wait_ready_unix, serve_unix};
+use vbl_runtime::ledger::ChainLedger;
 use vbl_runtime::fxp::{Fxp, Value};
 
-fn tmpdir(nome: &str) -> PathBuf {
+fn tmpdir(name: &str) -> PathBuf {
     static N: AtomicUsize = AtomicUsize::new(0);
     let dir = std::env::temp_dir().join(format!(
         "vbl-bench-{}-{}-{}",
-        nome,
+        name,
         std::process::id(),
         N.fetch_add(1, Ordering::Relaxed)
     ));
@@ -28,11 +28,11 @@ fn tmpdir(nome: &str) -> PathBuf {
     dir
 }
 
-fn bus_simulado() -> FxpBus {
-    FxpBus::construir(
-        DeviceRegistry::minimo(),
-        BusConfig { modo: ModoOperacao::Simulado, ..Default::default() },
-        vbl_runtime::FxpSimulator::novo(),
+fn bus_simulated() -> FxpBus {
+    FxpBus::build(
+        DeviceRegistry::minimum(),
+        BusConfig { mode: OperationMode::Simulated, ..Default::default() },
+        vbl_runtime::FxpSimulator::new(),
     )
 }
 
@@ -51,83 +51,83 @@ fn bus_real_fixture() -> (FxpBus, PathBuf, PathBuf) {
         cap.display()
     ))
     .unwrap();
-    let mut registry = DeviceRegistry::minimo();
-    cfg.aplicar(&mut registry).unwrap();
-    let bus = FxpBus::construir(
+    let mut registry = DeviceRegistry::minimum();
+    cfg.apply(&mut registry).unwrap();
+    let bus = FxpBus::build(
         registry,
         // Cache ZERO: mede I/O cru, não acertos de cache.
-        BusConfig { modo: ModoOperacao::Hibrido, cache_ttl: Duration::ZERO, ..Default::default() },
-        vbl_runtime::FxpSimulator::novo(),
+        BusConfig { mode: OperationMode::Hybrid, cache_ttl: Duration::ZERO, ..Default::default() },
+        vbl_runtime::FxpSimulator::new(),
     );
     (bus, tz, cap)
 }
 
 fn schema_v1(c: &mut Criterion) {
-    let mut grupo = c.benchmark_group("fxp_schema_v1");
-    let msg = Mensagem::read_ok(86.5, "cpu_temp", false, 42);
-    grupo.bench_function("encode_decode_read_ok", |b| {
+    let mut group = c.benchmark_group("fxp_schema_v1");
+    let msg = Message::read_ok(86.5, "cpu_temp", false, 42);
+    group.bench_function("encode_decode_read_ok", |b| {
         b.iter(|| {
             let bytes = encode_to_vec(black_box(&msg)).expect("encode");
             let (dec, _) = decode(&bytes).expect("roundtrip");
             black_box(dec)
         })
     });
-    let act = Mensagem::act("CpuPowerCap", vbl_fxp::schema::WireValue::Num(50.0), 7, true);
-    grupo.bench_function("encode_decode_act", |b| {
+    let act = Message::act("CpuPowerCap", vbl_fxp::schema::WireValue::Num(50.0), 7, true);
+    group.bench_function("encode_decode_act", |b| {
         b.iter(|| {
             let bytes = encode_to_vec(black_box(&act)).expect("encode");
             let (dec, _) = decode(&bytes).expect("roundtrip");
             black_box(dec)
         })
     });
-    grupo.finish();
+    group.finish();
 }
 
-fn leitura_local(c: &mut Criterion) {
-    let mut grupo = c.benchmark_group("fxp_leitura_local");
-    grupo.throughput(criterion::Throughput::Elements(1));
+fn local_read(c: &mut Criterion) {
+    let mut group = c.benchmark_group("fxp_leitura_local");
+    group.throughput(criterion::Throughput::Elements(1));
 
     // Rota simulada (paridade Etapa 2).
-    let mut bus = bus_simulado();
-    let mut caderno = ChainCaderno::new();
-    grupo.bench_function("simulado", |b| {
+    let mut bus = bus_simulated();
+    let mut ledger = ChainLedger::new();
+    group.bench_function("simulado", |b| {
         b.iter(|| {
-            caderno.reset();
-            black_box(bus.read_sensor(black_box("cpu_temp"), &mut caderno).expect("leitura"))
+            ledger.reset();
+            black_box(bus.read_sensor(black_box("cpu_temp"), &mut ledger).expect("leitura"))
         })
     });
 
     // Rota real com driver de arquivo (fixture sysfs).
     let (mut bus, _tz, _cap) = bus_real_fixture();
-    let mut caderno = ChainCaderno::new();
-    grupo.bench_function("real_fixture", |b| {
+    let mut ledger = ChainLedger::new();
+    group.bench_function("real_fixture", |b| {
         b.iter(|| {
-            caderno.reset();
-            black_box(bus.read_sensor(black_box("cpu_temp"), &mut caderno).expect("leitura"))
+            ledger.reset();
+            black_box(bus.read_sensor(black_box("cpu_temp"), &mut ledger).expect("leitura"))
         })
     });
-    grupo.finish();
+    group.finish();
 }
 
-fn leitura_remota(c: &mut Criterion) {
-    let mut grupo = c.benchmark_group("fxp_leitura_remota");
-    grupo.throughput(criterion::Throughput::Elements(1));
+fn remote_read(c: &mut Criterion) {
+    let mut group = c.benchmark_group("fxp_leitura_remota");
+    group.throughput(criterion::Throughput::Elements(1));
 
     let sock = tmpdir("bench-remoto").join("fxpd.sock");
-    let _srv = servir_unix(
+    let _srv = serve_unix(
         &sock,
         |msg| match msg.opcode {
             vbl_fxp::schema::op::READ =>
-                Some(Mensagem::read_ok(77.5, "solar_panel", false, msg.seq)),
+                Some(Message::read_ok(77.5, "solar_panel", false, msg.seq)),
             vbl_fxp::schema::op::ACT =>
-                Some(Mensagem::act_ack(AckAct::Entregue, false, msg.seq)),
+                Some(Message::act_ack(AckAct::Delivered, false, msg.seq)),
             _ => None,
         },
     )
     .expect("servidor unix");
-    assert!(esperar_pronto_unix(&sock, Duration::from_secs(2)));
+    assert!(wait_ready_unix(&sock, Duration::from_secs(2)));
 
-    let mut registry = DeviceRegistry::minimo();
+    let mut registry = DeviceRegistry::minimum();
     let cfg = FxpConfig::parse(&format!(
         "mode = hibrido\ncache_ttl_ms = 0\n\
          solar_panel.grandeza = luz\nsolar_panel.unidade = W/m2\n\
@@ -135,48 +135,48 @@ fn leitura_remota(c: &mut Criterion) {
         sock.display()
     ))
     .unwrap();
-    cfg.aplicar(&mut registry).unwrap();
-    let mut bus = FxpBus::construir(
+    cfg.apply(&mut registry).unwrap();
+    let mut bus = FxpBus::build(
         registry,
         // Cache ZERO: cada iteração é um roundtrip real de schema v1.
-        BusConfig { modo: ModoOperacao::Hibrido, cache_ttl: Duration::ZERO, ..Default::default() },
-        vbl_runtime::FxpSimulator::novo(),
+        BusConfig { mode: OperationMode::Hybrid, cache_ttl: Duration::ZERO, ..Default::default() },
+        vbl_runtime::FxpSimulator::new(),
     );
-    let mut caderno = ChainCaderno::new();
-    grupo.bench_function("unix_roundtrip", |b| {
+    let mut ledger = ChainLedger::new();
+    group.bench_function("unix_roundtrip", |b| {
         b.iter(|| {
-            caderno.reset();
-            black_box(bus.read_sensor(black_box("solar_panel"), &mut caderno).expect("leitura"))
+            ledger.reset();
+            black_box(bus.read_sensor(black_box("solar_panel"), &mut ledger).expect("leitura"))
         })
     });
-    grupo.finish();
+    group.finish();
 }
 
-fn atuacao_local(c: &mut Criterion) {
-    let mut grupo = c.benchmark_group("fxp_atuacao_local");
-    grupo.throughput(criterion::Throughput::Elements(1));
+fn local_actuation(c: &mut Criterion) {
+    let mut group = c.benchmark_group("fxp_atuacao_local");
+    group.throughput(criterion::Throughput::Elements(1));
 
     // Ator simulado: validação + efeito no simulador (paridade Etapa 2).
-    let mut bus = bus_simulado();
-    let mut caderno = ChainCaderno::new();
-    grupo.bench_function("simulado", |b| {
+    let mut bus = bus_simulated();
+    let mut ledger = ChainLedger::new();
+    group.bench_function("simulado", |b| {
         b.iter(|| {
-            caderno.reset();
-            black_box(bus.act(black_box("CpuPowerCap"), Value::Num(50.0), &mut caderno))
+            ledger.reset();
+            black_box(bus.act(black_box("CpuPowerCap"), Value::Num(50.0), &mut ledger))
         })
     });
 
     // Ator real: validação no registro + escrita no endpoint (fixture µW).
     let (mut bus, _tz, _cap) = bus_real_fixture();
-    let mut caderno = ChainCaderno::new();
-    grupo.bench_function("real_fixture", |b| {
+    let mut ledger = ChainLedger::new();
+    group.bench_function("real_fixture", |b| {
         b.iter(|| {
-            caderno.reset();
-            black_box(bus.act(black_box("CpuPowerCap"), Value::Num(50.0), &mut caderno))
+            ledger.reset();
+            black_box(bus.act(black_box("CpuPowerCap"), Value::Num(50.0), &mut ledger))
         })
     });
-    grupo.finish();
+    group.finish();
 }
 
-criterion_group!(benches, schema_v1, leitura_local, leitura_remota, atuacao_local);
+criterion_group!(benches, schema_v1, local_read, remote_read, local_actuation);
 criterion_main!(benches);

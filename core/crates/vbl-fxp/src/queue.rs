@@ -8,62 +8,62 @@ use vbl_runtime::fxp::Value;
 
 /// Reexportado do runtime — os constantes canônicos vivem junto do trait
 /// `Fxp` (usado pelo engine para a atuação pós-`subvert`).
-pub use vbl_runtime::fxp::{PRIORIDADE_NORMAL, PRIORIDADE_SUBVERT};
+pub use vbl_runtime::fxp::{PRIORITY_NORMAL, PRIORITY_SUBVERT};
 
 /// Comando pendente de entrega.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Comando {
+pub struct Command {
     /// `seq` FXP da mensagem original (correlação ack).
     pub seq: u32,
-    pub ator: String,
-    pub valor: Value,
-    pub prioridade: u8,
+    pub actor: String,
+    pub value: Value,
+    pub priority: u8,
     /// Ticks virtuais já aguardando na fila (o bus expira conforme config).
-    pub ticks_esperando: u64,
+    pub ticks_waiting: u64,
     /// Ator primário original (para auditoria de fallbacks em cascata).
-    pub primario: Option<String>,
+    pub primary: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ErroFila {
+pub enum QueueError {
     /// Guarda anti-inchaço: mais pendências do que o orçamento.
-    Cheia { capacidade: usize },
+    Full { capacity: usize },
 }
 
-impl std::fmt::Display for ErroFila {
+impl std::fmt::Display for QueueError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ErroFila::Cheia { capacidade } => {
-                write!(f, "fila de comandos cheia (capacidade {capacidade})")
+            QueueError::Full { capacity } => {
+                write!(f, "fila de comandos cheia (capacidade {capacity})")
             }
         }
     }
 }
 
-impl std::error::Error for ErroFila {}
+impl std::error::Error for QueueError {}
 
 /// Ordem do heap: prioridade numérica menor = entregue antes; dentro da
 /// mesma prioridade, FIFO pelo seq.
 ///
-/// A ordenação total usa **apenas** `(prioridade, seq)` — o `Value` do
+/// A ordenação total usa **apenas** `(priority, seq)` — o `Value` do
 /// comando (com f64) nunca entra na comparação, o que torna o `Eq` manual
 /// legítimo para a chave (seq é único por mensagem do FXP).
 #[derive(Debug, Clone, PartialEq)]
-struct Entrada {
-    prioridade: u8,
+struct Entry {
+    priority: u8,
     seq: u32,
-    cmd: Comando,
+    cmd: Command,
 }
 
-impl Eq for Entrada {}
+impl Eq for Entry {}
 
-impl Ord for Entrada {
+impl Ord for Entry {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        Reverse((self.prioridade, self.seq)).cmp(&Reverse((other.prioridade, other.seq)))
+        Reverse((self.priority, self.seq)).cmp(&Reverse((other.priority, other.seq)))
     }
 }
 
-impl PartialOrd for Entrada {
+impl PartialOrd for Entry {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
@@ -75,20 +75,20 @@ impl PartialOrd for Entrada {
 /// entrega inicial esgota retry+fallback do registro; o bus tenta de novo a
 /// cada tick, na ordem de prioridade, até expirar o `queue_timeout`.
 #[derive(Debug, Clone)]
-pub struct FilaComandos {
-    heap: BinaryHeap<Entrada>,
-    capacidade: usize,
+pub struct CommandQueue {
+    heap: BinaryHeap<Entry>,
+    capacity: usize,
 }
 
-impl Default for FilaComandos {
+impl Default for CommandQueue {
     fn default() -> Self {
-        Self::com_capacidade(256)
+        Self::with_capacity(256)
     }
 }
 
-impl FilaComandos {
-    pub fn com_capacidade(capacidade: usize) -> Self {
-        Self { heap: BinaryHeap::new(), capacidade }
+impl CommandQueue {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self { heap: BinaryHeap::new(), capacity }
     }
 
     pub fn len(&self) -> usize {
@@ -99,85 +99,85 @@ impl FilaComandos {
         self.heap.is_empty()
     }
 
-    pub fn capacidade(&self) -> usize {
-        self.capacidade
+    pub fn capacity(&self) -> usize {
+        self.capacity
     }
 
     /// Enfileira comando (prioridade define a ordem de re-entrega).
-    pub fn empilhar(&mut self, mut cmd: Comando) -> Result<(), ErroFila> {
-        if self.heap.len() >= self.capacidade {
-            return Err(ErroFila::Cheia { capacidade: self.capacidade });
+    pub fn enqueue(&mut self, mut cmd: Command) -> Result<(), QueueError> {
+        if self.heap.len() >= self.capacity {
+            return Err(QueueError::Full { capacity: self.capacity });
         }
-        cmd.prioridade = cmd.prioridade.min(PRIORIDADE_NORMAL);
-        self.heap.push(Entrada { prioridade: cmd.prioridade, seq: cmd.seq, cmd });
+        cmd.priority = cmd.priority.min(PRIORITY_NORMAL);
+        self.heap.push(Entry { priority: cmd.priority, seq: cmd.seq, cmd });
         Ok(())
     }
 
     /// Entrega o próximo comando em ordem de prioridade (menor primeiro).
-    pub fn proximo(&mut self) -> Option<Comando> {
+    pub fn dequeue(&mut self) -> Option<Command> {
         self.heap.pop().map(|e| e.cmd)
     }
 
     /// Re-enfileira comando que falhou na re-entrega, somando 1 tick de espera.
-    pub fn devolver(&mut self, mut cmd: Comando) -> Result<(), ErroFila> {
-        cmd.ticks_esperando += 1;
-        self.empilhar(cmd)
+    pub fn requeue(&mut self, mut cmd: Command) -> Result<(), QueueError> {
+        cmd.ticks_waiting += 1;
+        self.enqueue(cmd)
     }
 
     /// Esvazia (desligamento limpo; comandos pendentes são descartados com
     /// evento de auditoria pelo bus).
-    pub fn limpar(&mut self) {
+    pub fn clear(&mut self) {
         self.heap.clear();
     }
 }
 
 #[cfg(test)]
-mod testes {
+mod tests {
     use super::*;
 
-    fn cmd(seq: u32, prioridade: u8) -> Comando {
-        Comando {
+    fn cmd(seq: u32, priority: u8) -> Command {
+        Command {
             seq,
-            ator: "Ventoinha".into(),
-            valor: Value::Num(100.0),
-            prioridade,
-            ticks_esperando: 0,
-            primario: None,
+            actor: "Ventoinha".into(),
+            value: Value::Num(100.0),
+            priority,
+            ticks_waiting: 0,
+            primary: None,
         }
     }
 
     #[test]
-    fn prioridade_maxima_entrega_primeiro_e_fifo_dentro_da_mesma() {
-        let mut fila = FilaComandos::default();
+    fn max_priority_delivers_first_fifo_within_same() {
+        let mut queue = CommandQueue::default();
         for seq in [3u32, 1, 2] {
-            fila.empilhar(cmd(seq, PRIORIDADE_NORMAL)).unwrap();
+            queue.enqueue(cmd(seq, PRIORITY_NORMAL)).unwrap();
         }
-        fila.empilhar(cmd(9, PRIORIDADE_SUBVERT)).unwrap();
+        queue.enqueue(cmd(9, PRIORITY_SUBVERT)).unwrap();
 
-        let ordem: Vec<u32> = (0..4).filter_map(|_| fila.proximo()).map(|c| c.seq).collect();
-        assert_eq!(ordem, vec![9, 1, 2, 3], "subvert (0) antes; FIFO dentro de normal (10)");
+        let order: Vec<u32> = (0..4).filter_map(|_| queue.dequeue()).map(|c| c.seq).collect();
+        assert_eq!(order, vec![9, 1, 2, 3], "subvert (0) antes; FIFO dentro de normal (10)");
     }
 
     #[test]
-    fn capacidade_e_guarda_anti_inchaco() {
-        let mut fila = FilaComandos::com_capacidade(2);
-        fila.empilhar(cmd(1, PRIORIDADE_NORMAL)).unwrap();
-        fila.empilhar(cmd(2, PRIORIDADE_NORMAL)).unwrap();
+    fn capacity_and_anti_bloat_guard() {
+        let mut queue = CommandQueue::with_capacity(2);
+        queue.enqueue(cmd(1, PRIORITY_NORMAL)).unwrap();
+        queue.enqueue(cmd(2, PRIORITY_NORMAL)).unwrap();
         assert!(matches!(
-            fila.empilhar(cmd(3, PRIORIDADE_NORMAL)),
-            Err(ErroFila::Cheia { capacidade: 2 })
+            queue.enqueue(cmd(3, PRIORITY_NORMAL)),
+            Err(QueueError::Full { capacity: 2 })
         ));
-        assert_eq!(fila.len(), 2);
+        assert_eq!(queue.len(), 2);
     }
 
     #[test]
-    fn devolver_soma_tick_de_espera_e_prioridade_e_saturada() {
-        let mut fila = FilaComandos::default();
-        fila.empilhar(cmd(1, 200)).unwrap(); // acima do normal: satura em 10
-        let c = fila.proximo().unwrap();
-        assert_eq!(c.prioridade, PRIORIDADE_NORMAL);
-        fila.devolver(c).unwrap();
-        let c = fila.proximo().unwrap();
-        assert_eq!(c.ticks_esperando, 1, "re-enfileirado conta o tempo na fila");
+    fn requeue_sum_wait_ticks_plus_priority_saturates() {
+        let mut queue = CommandQueue::default();
+        queue.enqueue(cmd(1, 200)).unwrap(); // acima do normal: satura em 10
+        let c = queue.dequeue().unwrap();
+        assert_eq!(c.priority, PRIORITY_NORMAL);
+        queue.requeue(c).unwrap();
+        let c = queue.dequeue().unwrap();
+        assert_eq!(c.ticks_waiting, 1, "re-enfileirado conta o tempo na fila");
     }
 }

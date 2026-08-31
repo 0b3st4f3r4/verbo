@@ -26,7 +26,7 @@ name = "scheduler"
 harness = false
 
 [[bench]]
-name = "notebook"
+name = "ledger"
 harness = false
 
 # Soak de longa execução (Etapa 5 — AGENTS §2.2: heap estável em longa duração)

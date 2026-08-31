@@ -4,7 +4,7 @@
 //! tick (contrato do loader da Etapa 1); blocos `every` vencidos executam
 //! uma vez por tick (`run_due`, chamado antes do tick do engine).
 
-use crate::notebook::{kinds, Caderno};
+use crate::ledger::{kinds, Ledger};
 use crate::engine::Engine;
 use crate::fxp::{Fxp, Value};
 use vbl_lang::Conjugation;
@@ -13,14 +13,14 @@ use vbl_lang::Conjugation;
 #[derive(Debug, Clone, PartialEq)]
 pub enum StmtRt {
     Keep(String),
-    Act { ator: String, valor: Value },
-    Every { periodo_s: f64, body: Vec<StmtRt> },
+    Act { actor: String, value: Value },
+    Every { period_s: f64, body: Vec<StmtRt> },
 }
 
 /// Bloco `every` com estado de agendamento (`next_due`).
 #[derive(Debug, Clone)]
 pub struct EveryBlock {
-    pub periodo_s: f64,
+    pub period_s: f64,
     pub next_due: f64,
     pub statements: Vec<StmtRt>,
 }
@@ -33,64 +33,64 @@ pub struct MainInterpreter {
 
 impl MainInterpreter {
     /// Registra um bloco `every <periodo> { <statements> }`.
-    pub fn add_every(&mut self, periodo_s: f64, statements: Vec<StmtRt>) {
+    pub fn add_every(&mut self, period_s: f64, statements: Vec<StmtRt>) {
         self.every_blocks
-            .push(EveryBlock { periodo_s, next_due: periodo_s, statements });
+            .push(EveryBlock { period_s, next_due: period_s, statements });
     }
 
     /// Executa os blocos `every` vencidos; chamado uma vez por tick,
     /// ANTES do `engine.tick()` (coreografia da demo da Etapa 1).
-    pub fn run_due<F: Fxp, C: Caderno>(&mut self, engine: &mut Engine<F, C>) {
+    pub fn run_due<F: Fxp, C: Ledger>(&mut self, engine: &mut Engine<F, C>) {
         let now = engine.sim_time;
-        let vencidos: Vec<usize> = (0..self.every_blocks.len())
+        let due: Vec<usize> = (0..self.every_blocks.len())
             .filter(|&i| now + 1e-9 >= self.every_blocks[i].next_due)
             .collect();
-        for i in vencidos {
+        for i in due {
             let statements = self.every_blocks[i].statements.clone();
             for st in &statements {
                 self.run_statement(engine, st);
             }
-            self.every_blocks[i].next_due += self.every_blocks[i].periodo_s;
+            self.every_blocks[i].next_due += self.every_blocks[i].period_s;
         }
     }
 
-    fn run_statement<F: Fxp, C: Caderno>(&mut self, engine: &mut Engine<F, C>, st: &StmtRt) {
+    fn run_statement<F: Fxp, C: Ledger>(&mut self, engine: &mut Engine<F, C>, st: &StmtRt) {
         match st {
-            StmtRt::Keep(forma) => {
-                let Some(form) = engine.forma(forma) else {
+            StmtRt::Keep(name) => {
+                let Some(form) = engine.form(name) else {
                     // cláusula de erro: keep de forma inexistente/dissolvida —
                     // registrado no Caderno, sem interromper o runtime
-                    engine.caderno.record(
+                    engine.ledger.record(
                         kinds::KEEP_FORMA_INEXISTENTE,
-                        &format!("keep('{forma}'): forma inexistente ou já dissolvida."),
-                        Json::obj([("forma", Json::str(forma))]),
+                        &format!("keep('{name}'): forma inexistente ou já dissolvida."),
+                        Json::obj([("forma", Json::str(name))]),
                     );
                     return;
                 };
                 if form.conjugation == Conjugation::Nonequilibrium {
-                    let agora = engine.sim_time;
-                    let versao = {
-                        let form = engine.forma_mut(forma).unwrap();
-                        form.keep(agora);
-                        form.manutencao_versao += 1;
-                        form.manutencao_versao
+                    let now = engine.sim_time;
+                    let version = {
+                        let form = engine.form_mut(name).unwrap();
+                        form.keep(now);
+                        form.maintenance_version += 1;
+                        form.maintenance_version
                     };
-                    let prazo = engine
-                        .forma(forma)
-                        .and_then(|f| f.manutencao.as_ref().map(|m| m.ultima + m.deadline_s))
+                    let deadline = engine
+                        .form(name)
+                        .and_then(|f| f.maintenance.as_ref().map(|m| m.last + m.deadline_s))
                         .unwrap_or(engine.sim_time);
-                    engine.scheduler.agendar(forma, crate::scheduler::Prazo::Manutencao, prazo, versao);
+                    engine.scheduler.schedule(name, crate::scheduler::Deadline::Maintenance, deadline, version);
                 } else {
-                    let conj = engine.forma(forma).map(|f| f.conjugation).unwrap_or(Conjugation::Event);
-                    engine.caderno.record(
+                    let conj = engine.form(name).map(|f| f.conjugation).unwrap_or(Conjugation::Event);
+                    engine.ledger.record(
                         kinds::KEEP_IGNORADO,
-                        &format!("keep('{forma}'): conjugação {} não exige manutenção.", conj.nome()),
-                        Json::obj([("forma", Json::str(forma))]),
+                        &format!("keep('{name}'): conjugação {} não exige manutenção.", conj.name()),
+                        Json::obj([("forma", Json::str(name))]),
                     );
                 }
             }
-            StmtRt::Act { ator, valor } => {
-                engine.fxp.act(ator, valor.clone(), &mut engine.caderno);
+            StmtRt::Act { actor, value } => {
+                engine.fxp.act(actor, value.clone(), &mut engine.ledger);
             }
             StmtRt::Every { .. } => unreachable!("blocos every vivem em every_blocks"),
         }

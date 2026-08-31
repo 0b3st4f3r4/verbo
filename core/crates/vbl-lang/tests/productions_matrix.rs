@@ -10,26 +10,26 @@ use vbl_lang::{
 };
 use vbl_lang::parse;
 
-fn erros(texto: &str) -> Vec<String> {
-    let (_, d) = parse(texto);
+fn errors(text: &str) -> Vec<String> {
+    let (_, d) = parse(text);
     d.items.iter().map(|i| i.code.clone()).collect()
 }
 
-fn sem_erros(texto: &str) {
-    let (_, d) = parse(texto);
+fn no_errors(text: &str) {
+    let (_, d) = parse(text);
     assert!(!d.has_errors(), "esperado programa válido, diagnósticos:\n{d}");
 }
 
-fn contem(texto: &str, codigo: &str) -> bool {
-    erros(texto).iter().any(|c| c == codigo)
+fn contains(text: &str, code: &str) -> bool {
+    errors(text).iter().any(|c| c == code)
 }
 
 // ======================================================================
 // Produção: program = { form_declaration | review_declaration } [ main_block ]
 // ======================================================================
 #[test]
-fn producao_programa_formas_reviews_e_main() {
-    sem_erros(
+fn program_production_forms_reviews_and_main() {
+    no_errors(
         "event A { value: \"v\", horizon: 3s }\n\
          review A { when cpu_temp > 90°C -> dissolve }\n\
          main { every 1s { keep(A) } }",
@@ -37,49 +37,49 @@ fn producao_programa_formas_reviews_e_main() {
 }
 
 #[test]
-fn producao_programa_ordem_livre_e_main_opcional() {
+fn program_production_free_order_and_optional_main() {
     // main ausente; review antes da forma também é aceito (a ligação é
     // resolvida no conjunto de declarações)
-    sem_erros("review A { when cpu_temp > 90°C -> dissolve }\nevent A { value: \"v\", horizon: 3s }");
-    sem_erros("event A { value: \"v\", horizon: 3s }");
+    no_errors("review A { when cpu_temp > 90°C -> dissolve }\nevent A { value: \"v\", horizon: 3s }");
+    no_errors("event A { value: \"v\", horizon: 3s }");
 }
 
 #[test]
-fn producao_programa_main_deve_ser_ultimo() {
-    assert!(contem(
+fn program_production_main_must_be_last() {
+    assert!(contains(
         "main { }\nevent A { value: \"v\", horizon: 3s }",
         "main_deve_ser_ultimo"
     ));
 }
 
 #[test]
-fn producao_programa_main_duplicado_rejeitado() {
-    assert!(contem("main { }\nmain { }", "main_duplicado"));
+fn program_production_duplicate_main_rejected() {
+    assert!(contains("main { }\nmain { }", "main_duplicado"));
 }
 
 #[test]
-fn producao_programa_topo_invalido() {
-    assert!(contem("42", "topo_invalido"));
-    assert!(contem("foo X { value: \"v\", horizon: 3s }", "topo_invalido"));
+fn program_production_invalid_top_level() {
+    assert!(contains("42", "topo_invalido"));
+    assert!(contains("foo X { value: \"v\", horizon: 3s }", "topo_invalido"));
 }
 
 // ======================================================================
 // Produção: form_declaration / conjugation_kw
 // ======================================================================
 #[test]
-fn producao_conjugation_kw_tres_variantes() {
+fn production_conjugation_kw_three_variants() {
     for (conj_txt, esperada) in [
         ("event", Conj::Event),
         ("equilibrium", Conj::Equilibrium),
         ("nonequilibrium", Conj::Nonequilibrium),
     ] {
-        let fonte = match esperada {
+        let source = match esperada {
             Conj::Nonequilibrium => {
                 format!("{conj_txt} X {{ value: \"v\", horizon: 3s, maintenance_deadline: 2s }}")
             }
             _ => format!("{conj_txt} X {{ value: \"v\", horizon: 3s }}"),
         };
-        let (p, d) = parse(&fonte);
+        let (p, d) = parse(&source);
         assert!(!d.has_errors(), "{conj_txt}: {d}");
         let f = p.forms().next().unwrap();
         assert_eq!(f.conjugation, esperada);
@@ -87,16 +87,16 @@ fn producao_conjugation_kw_tres_variantes() {
 }
 
 #[test]
-fn producao_form_declaration_estrutura() {
+fn production_form_declaration_structure() {
     // sem identificador / sem '{' / sem '}'
-    assert!(contem("event { value: \"v\", horizon: 3s }", "estrutura_forma"));
-    assert!(contem("event X value: \"v\" }", "estrutura_forma"));
-    assert!(contem("event X { value: \"v\", horizon: 3s", "bloco_nao_fechado"));
+    assert!(contains("event { value: \"v\", horizon: 3s }", "estrutura_forma"));
+    assert!(contains("event X value: \"v\" }", "estrutura_forma"));
+    assert!(contains("event X { value: \"v\", horizon: 3s", "bloco_nao_fechado"));
 }
 
 #[test]
-fn producao_form_declaration_duplicada() {
-    assert!(contem(
+fn production_form_declaration_duplicate() {
+    assert!(contains(
         "event X { value: \"v\", horizon: 3s }\nevent X { value: \"w\", horizon: 4s }",
         "forma_duplicada"
     ));
@@ -106,14 +106,14 @@ fn producao_form_declaration_duplicada() {
 // Produção: form_body + cláusulas de Lei 1 (value/horizon)
 // ======================================================================
 #[test]
-fn producao_form_body_value_e_horizon_obrigatorios_e_nesta_ordem() {
-    assert!(contem("event X { horizon: 3s }", "value_obrigatorio"));
-    assert!(contem("event X { value: \"v\" }", "horizon_obrigatorio"));
-    assert!(contem("event X { horizon: 3s, value: \"v\" }", "ordem_value_horizon"));
+fn production_form_body_value_and_horizon_required_in_this_order() {
+    assert!(contains("event X { horizon: 3s }", "value_obrigatorio"));
+    assert!(contains("event X { value: \"v\" }", "horizon_obrigatorio"));
+    assert!(contains("event X { horizon: 3s, value: \"v\" }", "ordem_value_horizon"));
 }
 
 #[test]
-fn nota_lei1_value_e_opaco_ao_runtime() {
+fn note_law1_value_is_opaque_to_runtime() {
     // expression aceita string, número e identificador (nota FORMAL §3)
     let (p, d) = parse("event X { value: \"s\", horizon: 3s }");
     assert!(!d.has_errors());
@@ -132,9 +132,9 @@ fn nota_lei1_value_e_opaco_ao_runtime() {
 }
 
 #[test]
-fn producao_form_body_virgula_final_rejeitada() {
-    assert!(contem("event X { value: \"v\", horizon: 3s, }", "virgula_final"));
-    assert!(contem(
+fn production_form_body_trailing_comma_rejected() {
+    assert!(contains("event X { value: \"v\", horizon: 3s, }", "virgula_final"));
+    assert!(contains(
         "main { every 1s { keep(X) }, }",
         "virgula_final"
     ));
@@ -144,7 +144,7 @@ fn producao_form_body_virgula_final_rejeitada() {
 // Produção: optional_attribute (6 variantes)
 // ======================================================================
 #[test]
-fn producao_optional_attribute_source_path() {
+fn production_optional_attribute_source_path() {
     let (p, d) = parse(
         "nonequilibrium X { value: \"v\", horizon: 3s, source_path: \"cpu_temp\", maintenance_deadline: 2s }",
     );
@@ -153,43 +153,43 @@ fn producao_optional_attribute_source_path() {
 }
 
 #[test]
-fn nota_source_path_exclusivamente_simbolico() {
+fn note_source_path_exclusively_symbolic() {
     // caminhos de SO não são source_path válidos (FORMAL §3, nota)
-    assert!(contem(
+    assert!(contains(
         "nonequilibrium X { value: \"v\", horizon: 3s, source_path: \"/sys/class/thermal/temp\", maintenance_deadline: 2s }",
         "source_path_nao_simbolico"
     ));
-    assert!(contem(
+    assert!(contains(
         "nonequilibrium X { value: \"v\", horizon: 3s, source_path: \"./local\", maintenance_deadline: 2s }",
         "source_path_nao_simbolico"
     ));
 }
 
 #[test]
-fn producao_optional_attribute_maintenance_deadline() {
+fn production_optional_attribute_maintenance_deadline() {
     let (p, d) = parse(
         "nonequilibrium X { value: \"v\", horizon: 3s, maintenance_deadline: 2.5s }",
     );
     assert!(!d.has_errors(), "{d}");
     let f = p.forms().next().unwrap();
-    assert_eq!(f.attrs.maintenance_deadline.unwrap().segundos(), 2.5);
+    assert_eq!(f.attrs.maintenance_deadline.unwrap().seconds(), 2.5);
 }
 
 #[test]
-fn nota_maintenance_deadline_obrigatorio_em_nonequilibrium() {
-    assert!(contem(
+fn note_maintenance_deadline_required_in_nonequilibrium() {
+    assert!(contains(
         "nonequilibrium X { value: \"v\", horizon: 3s }",
         "maintenance_deadline_ausente"
     ));
     // e proibido nas demais conjugações
-    assert!(contem(
+    assert!(contains(
         "event X { value: \"v\", horizon: 3s, maintenance_deadline: 2s }",
         "atributo_nao_aplicavel"
     ));
 }
 
 #[test]
-fn producao_optional_attribute_exchange_mode() {
+fn production_optional_attribute_exchange_mode() {
     let (p, d) = parse(
         "nonequilibrium X { value: \"v\", horizon: 3s, maintenance_deadline: 2s, exchange_mode: \"extraction\" }",
     );
@@ -201,50 +201,50 @@ fn producao_optional_attribute_exchange_mode() {
 }
 
 #[test]
-fn nota_exchange_mode_apenas_nonequilibrium() {
-    assert!(contem(
+fn note_exchange_mode_only_nonequilibrium() {
+    assert!(contains(
         "equilibrium X { value: \"v\", horizon: 3s, exchange_mode: \"cooperation\" }",
         "atributo_nao_aplicavel"
     ));
 }
 
 #[test]
-fn producao_optional_attribute_cost_bytes() {
+fn production_optional_attribute_cost_bytes() {
     let (p, d) = parse("equilibrium X { value: \"v\", horizon: 3s, cost_bytes: 4096 }");
     assert!(!d.has_errors(), "{d}");
     assert_eq!(p.forms().next().unwrap().attrs.cost_bytes, Some(4096));
     // decimal é rejeitado (integer na EBNF)
-    assert!(contem(
+    assert!(contains(
         "equilibrium X { value: \"v\", horizon: 3s, cost_bytes: 4.5 }",
         "cost_bytes_inteiro"
     ));
 }
 
 #[test]
-fn nota_cost_bytes_apenas_equilibrium() {
-    assert!(contem(
+fn note_cost_bytes_only_equilibrium() {
+    assert!(contains(
         "event X { value: \"v\", horizon: 3s, cost_bytes: 16 }",
         "atributo_nao_aplicavel"
     ));
 }
 
 #[test]
-fn producao_optional_attribute_currency() {
+fn production_optional_attribute_currency() {
     let (p, d) = parse("event X { value: \"v\", horizon: 3s, currency: \"CpuCycles\" }");
     assert!(!d.has_errors(), "{d}");
     assert_eq!(p.forms().next().unwrap().attrs.currency.as_deref(), Some("CpuCycles"));
 }
 
 #[test]
-fn nota_currency_herda_padrao_da_conjugacao() {
+fn note_currency_inherits_conjugation_default() {
     // padrões canônicos: CpuCycles/DiskBytes/PowerWatts (FORMAL §3)
-    assert_eq!(Conjugation::Event.currency_padrao(), "CpuCycles");
-    assert_eq!(Conjugation::Equilibrium.currency_padrao(), "DiskBytes");
-    assert_eq!(Conjugation::Nonequilibrium.currency_padrao(), "PowerWatts");
+    assert_eq!(Conjugation::Event.default_currency(), "CpuCycles");
+    assert_eq!(Conjugation::Equilibrium.default_currency(), "DiskBytes");
+    assert_eq!(Conjugation::Nonequilibrium.default_currency(), "PowerWatts");
 }
 
 #[test]
-fn producao_optional_attribute_classification() {
+fn production_optional_attribute_classification() {
     let (p, d) = parse(
         "event X { value: \"v\", horizon: 3s, classification: \"Transiente\" }",
     );
@@ -256,9 +256,9 @@ fn producao_optional_attribute_classification() {
 }
 
 #[test]
-fn producao_optional_attribute_desconhecido_e_duplicado() {
-    assert!(contem("event X { value: \"v\", horizon: 3s, foo: 1 }", "atributo_desconhecido"));
-    assert!(contem(
+fn production_optional_attribute_unknown_and_duplicate() {
+    assert!(contains("event X { value: \"v\", horizon: 3s, foo: 1 }", "atributo_desconhecido"));
+    assert!(contains(
         "event X { value: \"v\", horizon: 3s, horizon: 4s }",
         "atributo_duplicado"
     ));
@@ -268,7 +268,7 @@ fn producao_optional_attribute_desconhecido_e_duplicado() {
 // Produção: review_declaration / review_rule / sensor_ref / comparison_op
 // ======================================================================
 #[test]
-fn producao_review_declaration_com_regras() {
+fn production_review_declaration_with_rules() {
     let (p, d) = parse(
         "event A { value: \"v\", horizon: 3s }\n\
          review A { when cpu_temp > 90°C -> dissolve,\n\
@@ -279,12 +279,12 @@ fn producao_review_declaration_com_regras() {
 }
 
 #[test]
-fn nota_review_orfa_e_duplicada_sao_erros_de_compilacao() {
-    assert!(contem(
+fn note_review_orphan_and_duplicate_are_compile_errors() {
+    assert!(contains(
         "event X { value: \"v\", horizon: 3s }\nreview Y { when cpu_temp > 90°C -> dissolve }",
         "review_orfa"
     ));
-    assert!(contem(
+    assert!(contains(
         "event X { value: \"v\", horizon: 3s }\n\
          review X { when cpu_temp > 90°C -> dissolve }\n\
          review X { when cpu_temp < 10°C -> dissolve }",
@@ -293,23 +293,23 @@ fn nota_review_orfa_e_duplicada_sao_erros_de_compilacao() {
 }
 
 #[test]
-fn producao_sensor_ref_identificador_ou_string() {
+fn production_sensor_ref_identifier_or_string() {
     let (p, d) = parse(
         "event A { value: \"v\", horizon: 3s }\n\
          review A { when \"cpu_temp\" > 90°C -> dissolve }",
     );
     assert!(!d.has_errors(), "{d}");
-    assert_eq!(p.reviews().next().unwrap().rules[0].sensor.nome, "cpu_temp");
+    assert_eq!(p.reviews().next().unwrap().rules[0].sensor.name, "cpu_temp");
     // sem sensor → erro
-    assert!(contem(
+    assert!(contains(
         "event A { value: \"v\", horizon: 3s }\nreview A { when > 90°C -> dissolve }",
         "regra_mal_formada"
     ));
 }
 
 #[test]
-fn producao_comparison_op_seis_operadores() {
-    for (op, esperado) in [
+fn production_comparison_op_six_operators() {
+    for (op, expected) in [
         ("<", CmpOp::Lt),
         (">", CmpOp::Gt),
         ("<=", CmpOp::Le),
@@ -317,19 +317,19 @@ fn producao_comparison_op_seis_operadores() {
         ("==", CmpOp::Eq),
         ("!=", CmpOp::Ne),
     ] {
-        let fonte = format!(
+        let source = format!(
             "event A {{ value: \"v\", horizon: 3s }}\nreview A {{ when cpu_temp {op} 90°C -> dissolve }}"
         );
-        let (p, d) = parse(&fonte);
+        let (p, d) = parse(&source);
         assert!(!d.has_errors(), "op {op}: {d}");
-        assert_eq!(p.reviews().next().unwrap().rules[0].op, esperado);
+        assert_eq!(p.reviews().next().unwrap().rules[0].op, expected);
     }
     // operadores inválidos
-    assert!(contem(
+    assert!(contains(
         "event A { value: \"v\", horizon: 3s }\nreview A { when cpu_temp = 90°C -> dissolve }",
         "lexema_invalido"
     ));
-    assert!(contem(
+    assert!(contains(
         "event A { value: \"v\", horizon: 3s }\nreview A { when cpu_temp ~ 90°C -> dissolve }",
         "operador_invalido"
     ));
@@ -339,32 +339,32 @@ fn producao_comparison_op_seis_operadores() {
 // Produção: threshold / percentage / physical_quantity
 // ======================================================================
 #[test]
-fn producao_threshold_numero_porcentagem_e_grandeza_fisica() {
+fn production_threshold_number_percentage_and_physical_quantity() {
     let casos = [
         ("when cpu_temp > 90 -> None", 90.0, None),
         ("when attention < 30% -> Some(PhysicalUnit::Percent)", 30.0, Some(PhysicalUnit::Percent)),
         ("when cpu_temp > 85°C -> Some(PhysicalUnit::DegC)", 85.0, Some(PhysicalUnit::DegC)),
         ("when cpu_power >= 150W -> Some(PhysicalUnit::W)", 150.0, Some(PhysicalUnit::W)),
     ];
-    for (regra, valor, unidade) in casos {
-        let regra = regra
+    for (rule, value, unit) in casos {
+        let rule = rule
             .replace("-> None", "-> dissolve")
             .replace("-> Some(PhysicalUnit::Percent)", "-> dissolve")
             .replace("-> Some(PhysicalUnit::DegC)", "-> dissolve")
             .replace("-> Some(PhysicalUnit::W)", "-> dissolve");
-        let fonte = format!(
-            "event A {{ value: \"v\", horizon: 3s }}\nreview A {{ {regra} }}"
+        let source = format!(
+            "event A {{ value: \"v\", horizon: 3s }}\nreview A {{ {rule} }}"
         );
-        let (p, d) = parse(&fonte);
-        assert!(!d.has_errors(), "regra `{regra}`: {d}");
+        let (p, d) = parse(&source);
+        assert!(!d.has_errors(), "regra `{rule}`: {d}");
         let t = &p.reviews().next().unwrap().rules[0].threshold;
-        assert_eq!(t.valor, valor);
-        assert_eq!(t.unit, unidade);
+        assert_eq!(t.value, value);
+        assert_eq!(t.unit, unit);
     }
 }
 
 #[test]
-fn nota_threshold_unidade_e_capturada_para_validacao_no_registro() {
+fn note_threshold_unit_is_captured_for_registry_validation() {
     // A unidade é preservada na AST para validação contra a grandeza do
     // sensor no registro do FXP (FORMAL §3, nota; loader valida em runtime).
     let (p, d) = parse(
@@ -373,7 +373,7 @@ fn nota_threshold_unidade_e_capturada_para_validacao_no_registro() {
     assert!(!d.has_errors());
     assert_eq!(p.reviews().next().unwrap().rules[0].threshold.unit, Some(PhysicalUnit::DegC));
     // threshold não-numérico é rejeitado
-    assert!(contem(
+    assert!(contains(
         "event A { value: \"v\", horizon: 3s }\nreview A { when cpu_temp > alto -> dissolve }",
         "regra_mal_formada"
     ));
@@ -383,20 +383,20 @@ fn nota_threshold_unidade_e_capturada_para_validacao_no_registro() {
 // Produção: action_list / action (6 variantes)
 // ======================================================================
 #[test]
-fn producao_action_seis_variantes_na_ordem_declarada() {
-    let fonte = "\
+fn production_action_six_variants_in_declared_order() {
+    let source = "\
 event A { value: \"v\", horizon: 30s }\n\
 review A { when cpu_temp > 10°C -> dissolve }\n\
 review X { when cpu_temp > 10°C -> dissolve }";
-    let _ = fonte; // (cobertura simples abaixo)
-    let fonte = "\
+    let _ = source; // (cobertura simples abaixo)
+    let source = "\
 nonequilibrium A { value: \"v\", horizon: 30s, source_path: \"cpu_temp\", maintenance_deadline: 10s }\n\
 review A { when cpu_temp > 10°C -> notify_shutdown,\n\
            when cpu_temp < 5°C -> reclassify_as_equilibrium,\n\
            when attention < 5% -> reclassify_as_nonequilibrium,\n\
            when cpu_power >= 400W -> subvert,\n\
            when attention > 90% -> act(LedIndicador, \"verde\") }";
-    let (p, d) = parse(fonte);
+    let (p, d) = parse(source);
     assert!(!d.has_errors(), "{d}");
     let rules = &p.reviews().next().unwrap().rules;
     assert_eq!(rules[0].actions, vec![Action::NotifyShutdown]);
@@ -408,32 +408,32 @@ review A { when cpu_temp > 10°C -> notify_shutdown,\n\
             assert_eq!(actor, "LedIndicador");
             assert_eq!(value.kind, ExprKind::Str("verde".into()));
         }
-        outro => panic!("esperado act, encontrado {outro:?}"),
+        other => panic!("esperado act, encontrado {other:?}"),
     }
 }
 
 #[test]
-fn producao_action_list_multiplas_acoes_na_ordem() {
-    let fonte = "\
+fn production_action_list_multiple_actions_in_order() {
+    let source = "\
 nonequilibrium A { value: \"v\", horizon: 30s, source_path: \"cpu_temp\", maintenance_deadline: 10s }\n\
 review A { when cpu_temp > 85°C -> subvert, act(CpuPowerCap, 50) }";
-    let (p, d) = parse(fonte);
+    let (p, d) = parse(source);
     assert!(!d.has_errors(), "{d}");
-    let acoes = &p.reviews().next().unwrap().rules[0].actions;
-    assert_eq!(acoes.len(), 2);
-    assert_eq!(acoes[0], Action::Subvert);
-    match &acoes[1] {
+    let actions = &p.reviews().next().unwrap().rules[0].actions;
+    assert_eq!(actions.len(), 2);
+    assert_eq!(actions[0], Action::Subvert);
+    match &actions[1] {
         Action::Act { actor, value, .. } => {
             assert_eq!(actor, "CpuPowerCap");
             assert_eq!(value.kind, ExprKind::Num(50.0));
         }
-        outro => panic!("esperado act, encontrado {outro:?}"),
+        other => panic!("esperado act, encontrado {other:?}"),
     }
 }
 
 #[test]
-fn producao_action_desconhecida_rejeitada() {
-    assert!(contem(
+fn production_action_unknown_rejected() {
+    assert!(contains(
         "event A { value: \"v\", horizon: 3s }\nreview A { when cpu_temp > 90°C -> explodir }",
         "acao_desconhecida"
     ));
@@ -443,32 +443,32 @@ fn producao_action_desconhecida_rejeitada() {
 // Produção: main_block / statement (keep | act | every)
 // ======================================================================
 #[test]
-fn producao_main_block_keep_act_every() {
-    let fonte = "\
+fn production_main_block_keep_act_every() {
+    let source = "\
 nonequilibrium T { value: \"dados\", horizon: 30s, source_path: \"cpu_power\", maintenance_deadline: 5s }\n\
 main { keep(T),\n       act(LedIndicador, \"verde\"),\n       every 4s { keep(T) },\n       every 10s { act(LedIndicador, \"verde\") } }";
-    let (p, d) = parse(fonte);
+    let (p, d) = parse(source);
     assert!(!d.has_errors(), "{d}");
     let main = p.main.as_ref().unwrap();
     assert_eq!(main.statements.len(), 4);
 }
 
 #[test]
-fn producao_main_statement_desconhecido_e_keep_inexistente() {
-    assert!(contem("main { voar() }", "statement_desconhecido"));
-    assert!(contem(
+fn production_main_statement_unknown_and_missing_keep() {
+    assert!(contains("main { voar() }", "statement_desconhecido"));
+    assert!(contains(
         "event X { value: \"v\", horizon: 3s }\nmain { every 1s { keep(Inexistente) } }",
         "keep_forma_inexistente"
     ));
     // keep de forma declarada não produz diagnóstico
-    sem_erros("event X { value: \"v\", horizon: 3s }\nmain { every 1s { keep(X) } }");
+    no_errors("event X { value: \"v\", horizon: 3s }\nmain { every 1s { keep(X) } }");
 }
 
 // ======================================================================
 // Produções auxiliares: expression / duration / time_unit / number
 // ======================================================================
 #[test]
-fn producao_duration_unidades_de_tempo_e_decimais() {
+fn production_duration_time_units_and_decimals() {
     let casos = [
         ("3s", 3.0, TimeUnit::S),
         ("500ms", 0.5, TimeUnit::Ms),
@@ -476,29 +476,29 @@ fn producao_duration_unidades_de_tempo_e_decimais() {
         ("100ns", 0.0000001, TimeUnit::Ns),
         ("2.5s", 2.5, TimeUnit::S),
     ];
-    for (txt, seg, unit) in casos {
-        let fonte = format!("event X {{ value: \"v\", horizon: {txt} }}");
-        let (p, d) = parse(&fonte);
+    for (txt, secs, unit) in casos {
+        let source = format!("event X {{ value: \"v\", horizon: {txt} }}");
+        let (p, d) = parse(&source);
         assert!(!d.has_errors(), "{txt}: {d}");
         let h = &p.forms().next().unwrap().horizon;
-        assert!((h.segundos() - seg).abs() < 1e-12, "{txt} -> {}", h.segundos());
+        assert!((h.seconds() - secs).abs() < 1e-12, "{txt} -> {}", h.seconds());
         assert_eq!(h.unit, unit);
     }
     // duração inválida
-    assert!(contem("event X { value: \"v\", horizon: 3 }", "duracao_invalida"));
-    assert!(contem("event X { value: \"v\", horizon: 3 parsecs }", "duracao_invalida"));
+    assert!(contains("event X { value: \"v\", horizon: 3 }", "duracao_invalida"));
+    assert!(contains("event X { value: \"v\", horizon: 3 parsecs }", "duracao_invalida"));
 }
 
 #[test]
-fn producao_number_inteiro_e_decimal() {
+fn production_number_integer_and_decimal() {
     // decimal em threshold
     let (p, d) = parse(
         "event A { value: \"v\", horizon: 3s }\nreview A { when cpu_temp > 85.5°C -> dissolve }",
     );
     assert!(!d.has_errors());
-    assert_eq!(p.reviews().next().unwrap().rules[0].threshold.valor, 85.5);
+    assert_eq!(p.reviews().next().unwrap().rules[0].threshold.value, 85.5);
     // decimal inválido no lexer (ponto sem dígito)
-    assert!(contem(
+    assert!(contains(
         "event A { value: \"v\", horizon: 3s }\nreview A { when cpu_temp > 85. °C -> dissolve }",
         "lexema_invalido"
     ));
@@ -508,34 +508,34 @@ fn producao_number_inteiro_e_decimal() {
 // FORMAL §2 — unidades léxicas e comentários
 // ======================================================================
 #[test]
-fn lexico_comentarios_de_linha_e_bloco() {
-    sem_erros(
+fn lexical_line_and_block_comments() {
+    no_errors(
         "// comentário de linha\nevent X { /* bloco\n multilinha */ value: \"v\", horizon: 3s }",
     );
     // comentário de bloco sem fechamento é erro
-    assert!(contem("event X { /* sem fim", "comentario_nao_fechado"));
+    assert!(contains("event X { /* sem fim", "comentario_nao_fechado"));
 }
 
 #[test]
-fn lexico_strings_escapes_e_limite_de_256_bytes() {
+fn lexical_strings_escapes_and_256_byte_limit() {
     let (p, d) = parse("event X { value: \"aspas\\\" barra\\\\ quebra\\n tab\\t\", horizon: 3s }");
     assert!(!d.has_errors(), "{d}");
     match &p.forms().next().unwrap().value.kind {
         ExprKind::Str(s) => assert_eq!(s, "aspas\" barra\\ quebra\n tab\t"),
-        outro => panic!("{outro:?}"),
+        other => panic!("{other:?}"),
     }
     // 257 bytes → string_muito_longa (FORMAL §2)
-    let longa = "x".repeat(257);
-    assert!(contem(&format!("event X {{ value: \"{longa}\", horizon: 3s }}"), "string_muito_longa"));
+    let long = "x".repeat(257);
+    assert!(contains(&format!("event X {{ value: \"{long}\", horizon: 3s }}"), "string_muito_longa"));
     // 256 bytes passa
     let ok = "x".repeat(256);
-    sem_erros(&format!("event X {{ value: \"{ok}\", horizon: 3s }}"));
+    no_errors(&format!("event X {{ value: \"{ok}\", horizon: 3s }}"));
     // string não terminada
-    assert!(contem("event X { value: \"sem fim }", "string_nao_terminada"));
+    assert!(contains("event X { value: \"sem fim }", "string_nao_terminada"));
 }
 
 #[test]
-fn lexico_lexema_invalido_com_linha_e_coluna() {
+fn lexical_invalid_lexeme_with_line_and_column() {
     let (_, d) = parse("event X {\n  value: \"v\"\n  @\n  horizon: 3s }");
     let diag = d.items.iter().find(|i| i.code == "lexema_invalido").expect("lexema_invalido");
     assert_eq!(diag.span.line, 3);
@@ -546,8 +546,8 @@ fn lexico_lexema_invalido_com_linha_e_coluna() {
 // Exemplos canônicos da FORMAL §5 — todos validam sem erros
 // ======================================================================
 #[test]
-fn exemplos_canonicos_da_formal_validam() {
-    sem_erros(
+fn canonical_examples_from_formal_validate() {
+    no_errors(
         "nonequilibrium PensarLivre {\n\
          \x20   value: \"consciencia_anteneoliberal_ativa\",\n\
          \x20   horizon: 60s,\n\
@@ -557,7 +557,7 @@ fn exemplos_canonicos_da_formal_validam() {
          }\n\
          review PensarLivre { when attention < 30% -> reclassify_as_equilibrium }",
     );
-    sem_erros(
+    no_errors(
         "nonequilibrium TradingEspeculativo {\n\
          \x20   value: \"lucro_arbitragem_alta_frequencia\",\n\
          \x20   horizon: 7s,\n\
@@ -570,14 +570,14 @@ fn exemplos_canonicos_da_formal_validam() {
          \x20                           act(CpuPowerCap, 50)\n\
          }",
     );
-    sem_erros(
+    no_errors(
         "event Piscada {\n    value: \"impulso_curto\",\n    horizon: 2s\n}\n\
          review Piscada { when cpu_temp > 90°C -> dissolve }",
     );
-    sem_erros(
+    no_errors(
         "equilibrium Registro {\n    value: \"documento_persistente\",\n    horizon: 86400s,\n    cost_bytes: 4096\n}",
     );
-    sem_erros(
+    no_errors(
         "nonequilibrium TarefaImportante {\n\
          \x20   value: \"dados_sensiveis\",\n    horizon: 30s,\n    source_path: \"cpu_power\",\n\
          \x20   maintenance_deadline: 5s,\n    exchange_mode: \"cooperation\"\n}\n\
@@ -586,34 +586,34 @@ fn exemplos_canonicos_da_formal_validam() {
 }
 
 #[test]
-fn nota_regra_sem_seta_ou_com_estrutura_quebrada() {
-    assert!(contem(
+fn note_rule_without_arrow_or_broken_structure() {
+    assert!(contains(
         "event A { value: \"v\", horizon: 3s }\nreview A { when cpu_temp > 90°C dissolve }",
         "regra_mal_formada"
     ));
-    assert!(contem(
+    assert!(contains(
         "event A { value: \"v\", horizon: 3s }\nreview A { when cpu_temp > 90°C -> act(SemValor) }",
         "regra_mal_formada"
     ));
 }
 
 #[test]
-fn producao_statement_every_muito_profundo_e_rejeitado() {
+fn production_statement_every_too_deep_and_rejected() {
     // 8 níveis aninhados são aceitos; o 9º gera `every_muito_profundo`
-    let aninhado = |prof: usize| {
-        let mut fonte = String::from(
+    let nested = |depth: usize| {
+        let mut source = String::from(
             "nonequilibrium T { value: \"v\", horizon: 30s, source_path: \"cpu_power\", maintenance_deadline: 5s }\nmain { ",
         );
-        for _ in 0..prof {
-            fonte.push_str("every 1s { ");
+        for _ in 0..depth {
+            source.push_str("every 1s { ");
         }
-        fonte.push_str("keep(T)");
-        for _ in 0..prof {
-            fonte.push_str(" }");
+        source.push_str("keep(T)");
+        for _ in 0..depth {
+            source.push_str(" }");
         }
-        fonte.push_str(" }");
-        fonte
+        source.push_str(" }");
+        source
     };
-    sem_erros(&aninhado(8));
-    assert!(contem(&aninhado(9), "every_muito_profundo"));
+    no_errors(&nested(8));
+    assert!(contains(&nested(9), "every_muito_profundo"));
 }

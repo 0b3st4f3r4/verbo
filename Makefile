@@ -96,7 +96,7 @@ rust-test:
 > @cd core && $(CARGO) test
 
 # E2E da Etapa 4 (PLAN §4.2): interpretador integrado + FXP + Caderno de
-# produção, com verificação externa dos logs (vbl caderno-verify)
+# produção, com verificação externa dos logs (vbl ledger-verify)
 rust-e2e:
 > @cd core && $(CARGO) test -p vbl-cli --test e2e
 
@@ -110,7 +110,7 @@ rust-asan:
 rust-check: rust-lint rust-test
 
 rust-bench:
-> @cd core && $(CARGO) bench --bench transition --bench scheduler --bench fxp --bench notebook
+> @cd core && $(CARGO) bench --bench transition --bench scheduler --bench fxp --bench ledger
 
 rust-coverage:
 > @cd core && $(CARGO) +$(NIGHTLY) llvm-cov --workspace --html --output-dir target/coverage
@@ -124,7 +124,7 @@ rust-memoria:
 # parede. Sessão/CI: `make rust-soak SEGUNDOS=60` ou `TICKS=5000`.
 rust-soak:
 > @cd core && $(CARGO) build --release --bin vbl-soak
-> @core/target/release/vbl-soak --vivas $${VIVAS:-1000} --ticks $${TICKS:-100000000} --segundos $${SEGUNDOS:-86400} --relatorio $${RELATORIO:-100000}
+> @core/target/release/vbl-soak --alive-forms $${VIVAS:-1000} --ticks $${TICKS:-100000000} --seconds $${SEGUNDOS:-86400} --report $${RELATORIO:-100000}
 
 rust-clean:
 > @cd core && $(CARGO) clean

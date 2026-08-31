@@ -6,7 +6,7 @@
 //!   em µJ → W por diferença finita; comando em W → µW. O registro declara a
 //!   unidade canônica (FORMAL §6) e o parser/runtime só veem esse valor.
 //! - **Nada é fabricado**: arquivo ausente, ilegível ou amostra insuficiente
-//!   ⇒ [`FalhaSensor::Inacessivel`] / [`ErroAtor`] — nunca `0.0` (FORMAL §4.7).
+//!   ⇒ [`SensorFailure::Inaccessible`] / [`ActorError`] — nunca `0.0` (FORMAL §4.7).
 //! - **Fallback atua na rota de I/O** (endpoint alternativo), nunca falsifica
 //!   leitura (AGENTS §1.2 EIF).
 //! - Endpoints de teste: qualquer caminho pode apontar para uma árvore sysfs
@@ -15,57 +15,57 @@
 
 use std::path::{Path, PathBuf};
 
-use vbl_runtime::fxp::{FalhaSensor, Value};
+use vbl_runtime::fxp::{SensorFailure, Value};
 
 /// Escrita de atuação **sem `O_CREAT`**: endpoint que sumiu (driver
-/// desvinculado, sysfs recompilado) ⇒ [`ErroAtor::EscritaFalhou`] registrado
+/// desvinculado, sysfs recompilado) ⇒ [`ActorError::WriteFailed`] registrado
 /// — nunca a recriação silenciosa de um arquivo regular que `fs::write`
 /// produziria (honestidade de I/O, FORMAL §4.7).
-fn escrever_endpoint(path: &Path, conteudo: &str) -> Result<(), ErroAtor> {
+fn write_endpoint(path: &Path, content: &str) -> Result<(), ActorError> {
     use std::io::Write;
     let mut f = std::fs::OpenOptions::new()
         .write(true)
         .truncate(true)
         .open(path)
-        .map_err(|e| ErroAtor::EscritaFalhou(format!("{}: {e}", path.display())))?;
-    f.write_all(conteudo.as_bytes())
-        .map_err(|e| ErroAtor::EscritaFalhou(format!("{}: {e}", path.display())))
+        .map_err(|e| ActorError::WriteFailed(format!("{}: {e}", path.display())))?;
+    f.write_all(content.as_bytes())
+        .map_err(|e| ActorError::WriteFailed(format!("{}: {e}", path.display())))
 }
 
 /// Leitura de sensor convertida para a unidade canônica do registro.
 pub trait SensorDriver {
-    /// Falha → [`FalhaSensor`] (nunca leitura 0.0 — §4.7).
-    fn read(&mut self) -> Result<f64, FalhaSensor>;
+    /// Falha → [`SensorFailure`] (nunca leitura 0.0 — §4.7).
+    fn read(&mut self) -> Result<f64, SensorFailure>;
 
     /// Descrição do endpoint (Caderno, `vbl fxp-probe`).
-    fn descricao(&self) -> String;
+    fn description(&self) -> String;
 }
 
 /// Erro de atuação no endpoint.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ErroAtor {
+pub enum ActorError {
     /// Escrita/heartbeat falhou no endpoint.
-    EscritaFalhou(String),
+    WriteFailed(String),
     /// Valor fora do domínio do ator (ex.: cor inexistente; texto em ator
-    /// numérico) — vira `ACT_ACK.ValorInvalido`, nunca entrega silenciosa.
-    ValorInvalido(String),
+    /// numérico) — vira `ACT_ACK.InvalidValue`, nunca entrega silenciosa.
+    InvalidValue(String),
 }
 
-impl std::fmt::Display for ErroAtor {
+impl std::fmt::Display for ActorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ErroAtor::EscritaFalhou(m) => write!(f, "escrita falhou: {m}"),
-            ErroAtor::ValorInvalido(m) => write!(f, "valor inválido: {m}"),
+            ActorError::WriteFailed(m) => write!(f, "escrita falhou: {m}"),
+            ActorError::InvalidValue(m) => write!(f, "valor inválido: {m}"),
         }
     }
 }
 
 /// Atuação no endpoint + heartbeat (BDD Caso 3).
 pub trait ActorDriver {
-    fn apply(&mut self, valor: &Value) -> Result<(), ErroAtor>;
+    fn apply(&mut self, value: &Value) -> Result<(), ActorError>;
     /// O ator responde? (endpoints de arquivo: caminho existe e é gravável)
     fn heartbeat(&mut self) -> bool;
-    fn descricao(&self) -> String;
+    fn description(&self) -> String;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,20 +79,20 @@ pub struct ThermalZoneSensor {
 }
 
 impl ThermalZoneSensor {
-    pub fn novo(dir: impl Into<PathBuf>) -> Self {
+    pub fn new(dir: impl Into<PathBuf>) -> Self {
         Self { dir: dir.into() }
     }
 }
 
 impl SensorDriver for ThermalZoneSensor {
-    fn read(&mut self) -> Result<f64, FalhaSensor> {
+    fn read(&mut self) -> Result<f64, SensorFailure> {
         let bruto = std::fs::read_to_string(self.dir.join("temp"))
-            .map_err(|_| FalhaSensor::Inacessivel)?;
-        let mili: f64 = bruto.trim().parse().map_err(|_| FalhaSensor::Inacessivel)?;
+            .map_err(|_| SensorFailure::Inaccessible)?;
+        let mili: f64 = bruto.trim().parse().map_err(|_| SensorFailure::Inaccessible)?;
         Ok(mili / 1000.0)
     }
 
-    fn descricao(&self) -> String {
+    fn description(&self) -> String {
         format!("thermal_zone:{}", self.dir.display())
     }
 }
@@ -105,20 +105,20 @@ pub struct HwmonTempSensor {
 }
 
 impl HwmonTempSensor {
-    pub fn novo(file: impl Into<PathBuf>) -> Self {
+    pub fn new(file: impl Into<PathBuf>) -> Self {
         Self { file: file.into() }
     }
 }
 
 impl SensorDriver for HwmonTempSensor {
-    fn read(&mut self) -> Result<f64, FalhaSensor> {
+    fn read(&mut self) -> Result<f64, SensorFailure> {
         let bruto =
-            std::fs::read_to_string(&self.file).map_err(|_| FalhaSensor::Inacessivel)?;
-        let mili: f64 = bruto.trim().parse().map_err(|_| FalhaSensor::Inacessivel)?;
+            std::fs::read_to_string(&self.file).map_err(|_| SensorFailure::Inaccessible)?;
+        let mili: f64 = bruto.trim().parse().map_err(|_| SensorFailure::Inaccessible)?;
         Ok(mili / 1000.0)
     }
 
-    fn descricao(&self) -> String {
+    fn description(&self) -> String {
         format!("hwmon_temp:{}", self.file.display())
     }
 }
@@ -127,30 +127,30 @@ impl SensorDriver for HwmonTempSensor {
 /// O backend **simulado é obrigatório** como fallback em CI; EEG/eye tracking
 /// são extensões opcionais que plugam nesta mesma trait.
 pub trait AttentionSource {
-    fn read(&mut self) -> Result<f64, FalhaSensor>;
+    fn read(&mut self) -> Result<f64, SensorFailure>;
 }
 
 /// Backend simulado padrão: valor roteirizado pelo bus/simulador (0–100%).
 #[derive(Debug, Clone, Default)]
 pub struct SimulatedAttention {
-    pub valor_pct: f64,
+    pub value_pct: f64,
 }
 
 impl AttentionSource for SimulatedAttention {
-    fn read(&mut self) -> Result<f64, FalhaSensor> {
-        Ok(self.valor_pct.clamp(0.0, 100.0))
+    fn read(&mut self) -> Result<f64, SensorFailure> {
+        Ok(self.value_pct.clamp(0.0, 100.0))
     }
 }
 
 /// Relógio injetável (segundos arbitrários) — testes determinísticos do RAPL.
 pub type Clock = Box<dyn Fn() -> f64 + Send>;
 
-pub fn relogio_parede() -> Clock {
+pub fn wall_clock() -> Clock {
     // Base capturada UMA vez: `Instant::now().elapsed()` sobre um instante
     // recém-criado mediria ~0 ns em toda chamada (bug latente que produzia
     // W absurdos — ΔE/Δt com Δt nanosegundos). elapsed() é monotônico.
-    let inicio = std::time::Instant::now();
-    Box::new(move || inicio.elapsed().as_secs_f64())
+    let start = std::time::Instant::now();
+    Box::new(move || start.elapsed().as_secs_f64())
 }
 
 /// `cpu_power` — RAPL (`energy_uj` em µJ) via diferença finita entre amostras:
@@ -159,23 +159,23 @@ pub fn relogio_parede() -> Clock {
 /// (§4.7). Wrap do contador tratado com `max_energy_range_uj`.
 pub struct RaplEnergySensor {
     dir: PathBuf,
-    agora: Clock,
-    anterior: Option<(f64, u64)>,
+    now: Clock,
+    previous: Option<(f64, u64)>,
 }
 
 impl RaplEnergySensor {
-    pub fn novo(dir: impl Into<PathBuf>) -> Self {
-        Self { dir: dir.into(), agora: relogio_parede(), anterior: None }
+    pub fn new(dir: impl Into<PathBuf>) -> Self {
+        Self { dir: dir.into(), now: wall_clock(), previous: None }
     }
 
-    pub fn com_relogio(dir: impl Into<PathBuf>, agora: Clock) -> Self {
-        Self { dir: dir.into(), agora, anterior: None }
+    pub fn with_clock(dir: impl Into<PathBuf>, now: Clock) -> Self {
+        Self { dir: dir.into(), now, previous: None }
     }
 
-    fn ler_uj(&self, arquivo: &str) -> Result<u64, FalhaSensor> {
+    fn read_uj(&self, arquivo: &str) -> Result<u64, SensorFailure> {
         let bruto = std::fs::read_to_string(self.dir.join(arquivo))
-            .map_err(|_| FalhaSensor::Inacessivel)?;
-        bruto.trim().parse::<u64>().map_err(|_| FalhaSensor::Inacessivel)
+            .map_err(|_| SensorFailure::Inaccessible)?;
+        bruto.trim().parse::<u64>().map_err(|_| SensorFailure::Inaccessible)
     }
 }
 
@@ -186,34 +186,34 @@ impl RaplEnergySensor {
 const MIN_DT_S: f64 = 1e-3;
 
 impl SensorDriver for RaplEnergySensor {
-    fn read(&mut self) -> Result<f64, FalhaSensor> {
-        let energia = self.ler_uj("energy_uj")?;
-        let t = (self.agora)();
-        let Some((t0, e0)) = self.anterior else {
-            self.anterior = Some((t, energia));
-            return Err(FalhaSensor::Inacessivel); // amostra de aquecimento
+    fn read(&mut self) -> Result<f64, SensorFailure> {
+        let energy = self.read_uj("energy_uj")?;
+        let t = (self.now)();
+        let Some((t0, e0)) = self.previous else {
+            self.previous = Some((t, energy));
+            return Err(SensorFailure::Inaccessible); // amostra de aquecimento
         };
         let dt = t - t0;
         if dt < MIN_DT_S {
-            // Par degenerado: mantém `anterior` — a próxima amostra válida
+            // Par degenerado: mantém `previous` — a próxima amostra válida
             // cobre a janela inteira (sem update, sem invenção de potência).
-            return Err(FalhaSensor::Inacessivel);
+            return Err(SensorFailure::Inaccessible);
         }
-        let delta_e = if energia >= e0 {
-            energia - e0
+        let delta_e = if energy >= e0 {
+            energy - e0
         } else {
             // Wrap: e1 + range − e0 (range do contador, não inventado).
-            let range = self.ler_uj("max_energy_range_uj")?;
+            let range = self.read_uj("max_energy_range_uj")?;
             if range == 0 {
-                return Err(FalhaSensor::Inacessivel);
+                return Err(SensorFailure::Inaccessible);
             }
-            range - e0 + energia
+            range - e0 + energy
         };
-        self.anterior = Some((t, energia));
+        self.previous = Some((t, energy));
         Ok(delta_e as f64 / 1e6 / dt)
     }
 
-    fn descricao(&self) -> String {
+    fn description(&self) -> String {
         format!("rapl_energy:{}", self.dir.display())
     }
 }
@@ -229,65 +229,65 @@ pub struct RaplPowerCapActor {
 }
 
 impl RaplPowerCapActor {
-    pub fn novo(file: impl Into<PathBuf>) -> Self {
+    pub fn new(file: impl Into<PathBuf>) -> Self {
         Self { file: file.into() }
     }
 }
 
 impl ActorDriver for RaplPowerCapActor {
-    fn apply(&mut self, valor: &Value) -> Result<(), ErroAtor> {
-        let Some(w) = valor.as_num() else {
-            return Err(ErroAtor::ValorInvalido(format!(
-                "CpuPowerCap espera valor numérico em W, recebeu {valor}"
+    fn apply(&mut self, value: &Value) -> Result<(), ActorError> {
+        let Some(w) = value.as_num() else {
+            return Err(ActorError::InvalidValue(format!(
+                "CpuPowerCap espera valor numérico em W, recebeu {value}"
             )));
         };
         if !(0.0..).contains(&w) {
-            return Err(ErroAtor::ValorInvalido(format!("potência negativa: {w} W")));
+            return Err(ActorError::InvalidValue(format!("potência negativa: {w} W")));
         }
         let uw = format!("{}", (w * 1e6) as u64);
-        escrever_endpoint(&self.file, &uw)
+        write_endpoint(&self.file, &uw)
     }
 
     fn heartbeat(&mut self) -> bool {
         self.file.exists()
     }
 
-    fn descricao(&self) -> String {
+    fn description(&self) -> String {
         format!("rapl_constraint:{}", self.file.display())
     }
 }
 
-/// `Ventoinha` — PWM via hwmon (`/sys/class/hwmon/hwmon*/pwmN`, 0–255).
+/// `Fan` — PWM via hwmon (`/sys/class/hwmon/hwmon*/pwmN`, 0–255).
 pub struct HwmonPwmActor {
     file: PathBuf,
 }
 
 impl HwmonPwmActor {
-    pub fn novo(file: impl Into<PathBuf>) -> Self {
+    pub fn new(file: impl Into<PathBuf>) -> Self {
         Self { file: file.into() }
     }
 }
 
 impl ActorDriver for HwmonPwmActor {
-    fn apply(&mut self, valor: &Value) -> Result<(), ErroAtor> {
-        let Some(v) = valor.as_num() else {
-            return Err(ErroAtor::ValorInvalido(format!(
-                "Ventoinha espera PWM numérico 0–255, recebeu {valor}"
+    fn apply(&mut self, value: &Value) -> Result<(), ActorError> {
+        let Some(v) = value.as_num() else {
+            return Err(ActorError::InvalidValue(format!(
+                "Ventoinha espera PWM numérico 0–255, recebeu {value}"
             )));
         };
         if !(0.0..=255.0).contains(&v) || v.fract() != 0.0 {
-            return Err(ErroAtor::ValorInvalido(format!(
+            return Err(ActorError::InvalidValue(format!(
                 "PWM fora do domínio inteiro 0–255: {v}"
             )));
         }
-        escrever_endpoint(&self.file, &format!("{}", v as u8))
+        write_endpoint(&self.file, &format!("{}", v as u8))
     }
 
     fn heartbeat(&mut self) -> bool {
         self.file.exists()
     }
 
-    fn descricao(&self) -> String {
+    fn description(&self) -> String {
         format!("hwmon_pwm:{}", self.file.display())
     }
 }
@@ -303,7 +303,7 @@ pub struct LedClassActor {
 }
 
 impl LedClassActor {
-    pub fn novo(dir: impl Into<PathBuf>) -> Self {
+    pub fn new(dir: impl Into<PathBuf>) -> Self {
         let dir = dir.into();
         let max = std::fs::read_to_string(dir.join("max_brightness"))
             .ok()
@@ -319,23 +319,23 @@ impl LedClassActor {
         Self { dir, mapa, max }
     }
 
-    pub fn com_mapa(dir: impl Into<PathBuf>, mapa: std::collections::BTreeMap<String, u8>) -> Self {
-        let mut d = Self::novo(dir);
+    pub fn with_map(dir: impl Into<PathBuf>, mapa: std::collections::BTreeMap<String, u8>) -> Self {
+        let mut d = Self::new(dir);
         d.mapa = mapa;
         d
     }
 
-    pub fn max_brilho(&self) -> u8 {
+    pub fn max_brightness(&self) -> u8 {
         self.max
     }
 }
 
 impl ActorDriver for LedClassActor {
-    fn apply(&mut self, valor: &Value) -> Result<(), ErroAtor> {
-        let brilho = match valor {
+    fn apply(&mut self, value: &Value) -> Result<(), ActorError> {
+        let brightness = match value {
             Value::Str(s) | Value::Ident(s) => {
                 self.mapa.get(s.as_str()).copied().ok_or_else(|| {
-                    ErroAtor::ValorInvalido(format!(
+                    ActorError::InvalidValue(format!(
                         "cor '{s}' fora do mapa do LedIndicador ({:?})",
                         self.mapa.keys().collect::<Vec<_>>()
                     ))
@@ -343,25 +343,25 @@ impl ActorDriver for LedClassActor {
             }
             Value::Num(n) if (0.0..=255.0).contains(n) && n.fract() == 0.0 => *n as u8,
             Value::Num(n) => {
-                return Err(ErroAtor::ValorInvalido(format!(
+                return Err(ActorError::InvalidValue(format!(
                     "brilho fora do domínio inteiro 0–255: {n}"
                 )))
             }
         };
-        if brilho > self.max {
-            return Err(ErroAtor::ValorInvalido(format!(
-                "brilho {brilho} excede max_brightness = {}",
+        if brightness > self.max {
+            return Err(ActorError::InvalidValue(format!(
+                "brilho {brightness} excede max_brightness = {}",
                 self.max
             )));
         }
-        escrever_endpoint(&self.dir.join("brightness"), &format!("{brilho}"))
+        write_endpoint(&self.dir.join("brightness"), &format!("{brightness}"))
     }
 
     fn heartbeat(&mut self) -> bool {
         self.dir.join("brightness").exists()
     }
 
-    fn descricao(&self) -> String {
+    fn description(&self) -> String {
         format!("led:{}", self.dir.display())
     }
 }
@@ -374,48 +374,48 @@ impl ActorDriver for LedClassActor {
 /// `None` quando não há hardware correspondente — o dispositivo segue
 /// **registrado porém inacessível** (FORMAL §4.7), jamais simulado em modo
 /// real. `attention` não é descobrível: o backend simulado é o padrão.
-pub fn descobrir(nome: &str) -> Option<crate::registry::Endpoint> {
+pub fn discover(name: &str) -> Option<crate::registry::Endpoint> {
     use crate::registry::Endpoint;
-    match nome {
-        "cpu_temp" => descobrir_thermal_zone().map(|dir| Endpoint::ThermalZone { dir }),
-        "cpu_power" => descobrir_rapl_energy().map(|dir| Endpoint::RaplEnergy { dir }),
+    match name {
+        "cpu_temp" => discover_thermal_zone().map(|dir| Endpoint::ThermalZone { dir }),
+        "cpu_power" => discover_rapl_energy().map(|dir| Endpoint::RaplEnergy { dir }),
         "CpuPowerCap" => {
             let f = Path::new("/sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw");
             f.exists().then(|| Endpoint::RaplConstraint { file: f.into() })
         }
-        "Ventoinha" => descobrir_pwm().map(|file| Endpoint::HwmonPwm { file }),
-        "LedIndicador" => descobrir_led().map(|dir| Endpoint::LedClass { dir }),
+        "Ventoinha" => discover_pwm().map(|file| Endpoint::HwmonPwm { file }),
+        "LedIndicador" => discover_led().map(|dir| Endpoint::LedClass { dir }),
         _ => None,
     }
 }
 
 /// Primeira thermal_zone plausível: preferência `x86_pkg_temp`/`cpu_*`;
 /// caso nenhum `type` case, a primeira com `temp` legível.
-pub fn descobrir_thermal_zone() -> Option<PathBuf> {
+pub fn discover_thermal_zone() -> Option<PathBuf> {
     let mut fallback = None;
-    for zona in listar_dirs("/sys/class/thermal", "thermal_zone") {
-        if !zona.join("temp").exists() {
+    for zone in listar_dirs("/sys/class/thermal", "thermal_zone") {
+        if !zone.join("temp").exists() {
             continue;
         }
-        let tipo = std::fs::read_to_string(zona.join("type")).unwrap_or_default();
-        let tipo = tipo.to_lowercase();
-        if tipo.contains("x86_pkg_temp") || tipo.contains("cpu") || tipo.contains("acpitz") {
-            return Some(zona);
+        let kind = std::fs::read_to_string(zone.join("type")).unwrap_or_default();
+        let kind = kind.to_lowercase();
+        if kind.contains("x86_pkg_temp") || kind.contains("cpu") || kind.contains("acpitz") {
+            return Some(zone);
         }
-        fallback.get_or_insert(zona);
+        fallback.get_or_insert(zone);
     }
     fallback
 }
 
 /// Primeiro domínio RAPL com `energy_uj`.
-pub fn descobrir_rapl_energy() -> Option<PathBuf> {
+pub fn discover_rapl_energy() -> Option<PathBuf> {
     listar_dirs("/sys/class/powercap", "intel-rapl")
         .into_iter()
         .find(|d| d.join("energy_uj").exists())
 }
 
 /// Primeiro hwmon com PWM exportado.
-pub fn descobrir_pwm() -> Option<PathBuf> {
+pub fn discover_pwm() -> Option<PathBuf> {
     for hwmon in listar_dirs("/sys/class/hwmon", "hwmon") {
         for n in 1..=4 {
             let pwm = hwmon.join(format!("pwm{n}"));
@@ -428,15 +428,15 @@ pub fn descobrir_pwm() -> Option<PathBuf> {
 }
 
 /// Primeira LED class com brightness gravável.
-pub fn descobrir_led() -> Option<PathBuf> {
+pub fn discover_led() -> Option<PathBuf> {
     listar_dirs("/sys/class/leds", "").into_iter().find(|d| d.join("brightness").exists())
 }
 
-fn listar_dirs(base: &str, prefixo: &str) -> Vec<PathBuf> {
-    let Ok(ent) = std::fs::read_dir(base) else {
+fn listar_dirs(base: &str, prefix: &str) -> Vec<PathBuf> {
+    let Ok(entry) = std::fs::read_dir(base) else {
         return Vec::new();
     };
-    let mut v: Vec<PathBuf> = ent
+    let mut v: Vec<PathBuf> = entry
         .flatten()
         .map(|e| e.path())
         .filter(|p| {
@@ -444,8 +444,8 @@ fn listar_dirs(base: &str, prefixo: &str) -> Vec<PathBuf> {
             p.is_dir()
                 && p.file_name()
                     .and_then(|n| n.to_str())
-                    .map(|n| n.starts_with(prefixo))
-                    .unwrap_or(prefixo.is_empty())
+                    .map(|n| n.starts_with(prefix))
+                    .unwrap_or(prefix.is_empty())
         })
         .collect();
     v.sort();
@@ -457,26 +457,26 @@ fn listar_dirs(base: &str, prefixo: &str) -> Vec<PathBuf> {
 // ---------------------------------------------------------------------------
 
 /// Driver de sensor para endpoint real (ou `None` para endpoint sem driver
-/// de leitura — `Simulado` é do bus, `Remote` é do transporte).
-pub fn sensor_de(
+/// de leitura — `Simulated` é do bus, `Remote` é do transporte).
+pub fn sensor_from(
     endpoint: &crate::registry::Endpoint,
 ) -> Option<Box<dyn SensorDriver + Send>> {
     use crate::registry::Endpoint;
     match endpoint {
-        Endpoint::ThermalZone { dir } => Some(Box::new(ThermalZoneSensor::novo(dir.clone()))),
-        Endpoint::HwmonTemp { file } => Some(Box::new(HwmonTempSensor::novo(file.clone()))),
-        Endpoint::RaplEnergy { dir } => Some(Box::new(RaplEnergySensor::novo(dir.clone()))),
+        Endpoint::ThermalZone { dir } => Some(Box::new(ThermalZoneSensor::new(dir.clone()))),
+        Endpoint::HwmonTemp { file } => Some(Box::new(HwmonTempSensor::new(file.clone()))),
+        Endpoint::RaplEnergy { dir } => Some(Box::new(RaplEnergySensor::new(dir.clone()))),
         _ => None,
     }
 }
 
 /// Driver de ator para endpoint real.
-pub fn ator_de(endpoint: &crate::registry::Endpoint) -> Option<Box<dyn ActorDriver + Send>> {
+pub fn actor_from(endpoint: &crate::registry::Endpoint) -> Option<Box<dyn ActorDriver + Send>> {
     use crate::registry::Endpoint;
     match endpoint {
-        Endpoint::RaplConstraint { file } => Some(Box::new(RaplPowerCapActor::novo(file.clone()))),
-        Endpoint::HwmonPwm { file } => Some(Box::new(HwmonPwmActor::novo(file.clone()))),
-        Endpoint::LedClass { dir } => Some(Box::new(LedClassActor::novo(dir.clone()))),
+        Endpoint::RaplConstraint { file } => Some(Box::new(RaplPowerCapActor::new(file.clone()))),
+        Endpoint::HwmonPwm { file } => Some(Box::new(HwmonPwmActor::new(file.clone()))),
+        Endpoint::LedClass { dir } => Some(Box::new(LedClassActor::new(dir.clone()))),
         _ => None,
     }
 }

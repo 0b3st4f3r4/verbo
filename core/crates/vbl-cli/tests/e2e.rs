@@ -3,7 +3,7 @@
 //!
 //! Cada cenário roda o binário de verdade, exporta o log do Caderno
 //! (binário + JSONL), verifica a integridade da cadeia SHA-256 com o
-//! verificador externo (`vbl caderno-verify`) e audita as atuações
+//! verificador externo (`vbl ledger-verify`) e audita as atuações
 //! registradas (valor solicitado/aplicado, latência, custo) — critérios de
 //! "Pronto" da Etapa 4 (AGENTS §2.2).
 
@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 /// Diretório por cenário (isolado por PID; limpeza best-effort no fim).
-fn cenario(nome: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("vbl-e2e-{nome}-{}", std::process::id()));
+fn scenario(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("vbl-e2e-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -31,42 +31,42 @@ fn stdout(out: &Output) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
-fn escrever(dir: &Path, nome: &str, conteudo: &str) -> String {
-    let caminho = dir.join(nome);
-    std::fs::write(&caminho, conteudo).unwrap();
-    caminho.display().to_string()
+fn write(dir: &Path, name: &str, content: &str) -> String {
+    let path = dir.join(name);
+    std::fs::write(&path, content).unwrap();
+    path.display().to_string()
 }
 
 /// Linha de comando completa: programa + extras + persistência + Caderno.
-fn args_run(dir: &Path, programa: &str, caderno: &str, extras: &[&str]) -> Vec<String> {
-    let mut args: Vec<String> = ["run", programa].iter().map(|s| s.to_string()).collect();
+fn args_run(dir: &Path, program: &str, ledger: &str, extras: &[&str]) -> Vec<String> {
+    let mut args: Vec<String> = ["run", program].iter().map(|s| s.to_string()).collect();
     for e in extras {
         args.push(e.to_string());
     }
     args.push("--persist-dir".into());
     args.push(dir.join("persistencia").display().to_string());
-    args.push("--caderno".into());
-    args.push(dir.join(caderno).display().to_string());
+    args.push("--ledger".into());
+    args.push(dir.join(ledger).display().to_string());
     args
 }
 
-fn rodar(dir: &Path, args: &[String]) -> (Output, String) {
+fn run(dir: &Path, args: &[String]) -> (Output, String) {
     let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     let out = vbl(dir, &refs);
-    let texto = stdout(&out);
-    (out, texto)
+    let text = stdout(&out);
+    (out, text)
 }
 
 /// Verificação externa do Caderno do cenário (deve sair ÍNTEGRA).
-fn verificar_externo(dir: &Path, caderno: &str) -> String {
-    let verify = vbl(dir, &["caderno-verify", dir.join(caderno).to_str().unwrap()]);
-    let relatorio = stdout(&verify);
-    assert!(verify.status.success(), "caderno-verify falhou:\n{relatorio}");
-    assert!(relatorio.contains("ÍNTEGRA"), "cadeia corrompida:\n{relatorio}");
-    relatorio
+fn verify_external(dir: &Path, ledger: &str) -> String {
+    let verify = vbl(dir, &["ledger-verify", dir.join(ledger).to_str().unwrap()]);
+    let report = stdout(&verify);
+    assert!(verify.status.success(), "ledger-verify falhou:\n{report}");
+    assert!(report.contains("ÍNTEGRA"), "cadeia corrompida:\n{report}");
+    report
 }
 
-fn limpar(dir: &Path) {
+fn clear(dir: &Path) {
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -75,9 +75,9 @@ fn limpar(dir: &Path) {
 // ======================================================================
 
 #[test]
-fn e2e_subversao_termica_atua_no_ator_e_audita() {
-    let dir = cenario("subversao");
-    let programa = escrever(
+fn e2e_thermal_subversion_acts_on_actor_and_audits() {
+    let dir = scenario("subversao");
+    let program = write(
         &dir,
         "trading.vl",
         "nonequilibrium TradingEspeculativo {\n\
@@ -92,21 +92,21 @@ fn e2e_subversao_termica_atua_no_ator_e_audita() {
          \x20                         act(CpuPowerCap, 50)\n\
          }",
     );
-    let (out, texto) = rodar(
+    let (out, text) = run(
         &dir,
-        &args_run(&dir, &programa, "caderno.vcad", &["--ticks", "5", "--at", "3:cpu_temp=86.5"]),
+        &args_run(&dir, &program, "caderno.vcad", &["--ticks", "5", "--at", "3:cpu_temp=86.5"]),
     );
-    assert!(out.status.success(), "vbl run falhou:\n{texto}\n{}", String::from_utf8_lossy(&out.stderr));
-    assert!(texto.contains("ÍNTEGRA"), "cadeia não íntegra:\n{texto}");
-    assert!(texto.contains("atuações 1/1 ok"), "atuação não confirmada:\n{texto}");
+    assert!(out.status.success(), "vbl run falhou:\n{text}\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(text.contains("ÍNTEGRA"), "cadeia não íntegra:\n{text}");
+    assert!(text.contains("atuações 1/1 ok"), "atuação não confirmada:\n{text}");
 
-    let relatorio = verificar_externo(&dir, "caderno.vcad");
-    assert!(relatorio.contains("ATUACAO: 1"), "atuação não registrada:\n{relatorio}");
+    let report = verify_external(&dir, "caderno.vcad");
+    assert!(report.contains("ATUACAO: 1"), "atuação não registrada:\n{report}");
 
     // atuação auditada: solicitado = aplicado = 50, no tick da condição
     let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
-    let atuacao = jsonl.lines().find(|l| l.contains("\"kind\":\"ATUACAO\"")).expect("ATUACAO no log");
-    for esperado in [
+    let actuation = jsonl.lines().find(|l| l.contains("\"kind\":\"ATUACAO\"")).expect("ATUACAO no log");
+    for expected in [
         "\"ator\":\"CpuPowerCap\"",
         "\"valor\":50",
         "\"aplicado\":50",
@@ -114,20 +114,20 @@ fn e2e_subversao_termica_atua_no_ator_e_audita() {
         "\"tick\":3",
         "\"t\":3",
     ] {
-        assert!(atuacao.contains(esperado), "ATUACAO sem {esperado}: {atuacao}");
+        assert!(actuation.contains(expected), "ATUACAO sem {expected}: {actuation}");
     }
     // no modo SIMULADO a fronteira é em processo: sem latência física ⇒ sem
     // custo estimado (honestidade §4.7); o custo (W × latência) é auditado
     // na rota real — ver testes de unidade do caderno de produção
     assert!(
-        !atuacao.contains("\"custo_estimado_joules\""),
-        "custo sem latência medida seria invenção: {atuacao}"
+        !actuation.contains("\"custo_estimado_joules\""),
+        "custo sem latência medida seria invenção: {actuation}"
     );
     // subversão dissolve no MESMO tick (≤ 1 tick virtual — FORMAL §4.5)
-    let dissolucao =
+    let dissolution =
         jsonl.lines().find(|l| l.contains("\"kind\":\"dissolve_subvert\"")).expect("dissolve_subvert");
-    assert!(dissolucao.contains("\"tick\":3"), "dissolução fora do tick da condição: {dissolucao}");
-    limpar(&dir);
+    assert!(dissolution.contains("\"tick\":3"), "dissolução fora do tick da condição: {dissolution}");
+    clear(&dir);
 }
 
 // ======================================================================
@@ -135,9 +135,9 @@ fn e2e_subversao_termica_atua_no_ator_e_audita() {
 // ======================================================================
 
 #[test]
-fn e2e_fadiga_de_atencao_reclassifica_e_persiste() {
-    let dir = cenario("atencao");
-    let programa = escrever(
+fn e2e_attention_fatigue_reclassifies_and_persists() {
+    let dir = scenario("atencao");
+    let program = write(
         &dir,
         "pensar.vl",
         "nonequilibrium PensarLivre {\n\
@@ -151,25 +151,25 @@ fn e2e_fadiga_de_atencao_reclassifica_e_persiste() {
          \x20 when attention < 30% -> reclassify_as_equilibrium\n\
          }",
     );
-    let (out, texto) = rodar(
+    let (out, text) = run(
         &dir,
-        &args_run(&dir, &programa, "caderno.vcad", &["--ticks", "4", "--at", "2:attention=15"]),
+        &args_run(&dir, &program, "caderno.vcad", &["--ticks", "4", "--at", "2:attention=15"]),
     );
-    assert!(out.status.success(), "vbl run falhou:\n{texto}");
-    assert!(texto.contains("ÍNTEGRA"), "{texto}");
+    assert!(out.status.success(), "vbl run falhou:\n{text}");
+    assert!(text.contains("ÍNTEGRA"), "{text}");
 
     // persistência como `.vl` canônico com SHA-256 registrado (FORMAL §4.1)
     let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
-    let transicao = jsonl.lines().find(|l| l.contains("\"kind\":\"transicao\"")).expect("transicao");
-    assert!(transicao.contains("\"para\":\"equilibrium\""), "{transicao}");
-    assert!(transicao.contains("\"tick\":2"), "transição fora do tick da fadiga: {transicao}");
-    let persistencia =
+    let transition = jsonl.lines().find(|l| l.contains("\"kind\":\"transicao\"")).expect("transicao");
+    assert!(transition.contains("\"para\":\"equilibrium\""), "{transition}");
+    assert!(transition.contains("\"tick\":2"), "transição fora do tick da fadiga: {transition}");
+    let persistence =
         jsonl.lines().find(|l| l.contains("\"kind\":\"persistencia\"")).expect("persistencia");
-    assert!(persistencia.contains("\"sha256\":\""), "SHA-256 não registrado: {persistencia}");
+    assert!(persistence.contains("\"sha256\":\""), "SHA-256 não registrado: {persistence}");
     // o arquivo canônico existe e é reparseável
-    let persistido = dir.join("persistencia").join("PensarLivre.vl");
-    assert!(persistido.exists(), "`.vl` canônico não gravado");
-    let check = vbl(&dir, &["check", persistido.to_str().unwrap(), "--sem-registro"]);
+    let persisted = dir.join("persistencia").join("PensarLivre.vl");
+    assert!(persisted.exists(), "`.vl` canônico não gravado");
+    let check = vbl(&dir, &["check", persisted.to_str().unwrap(), "--no-registry"]);
     assert!(check.status.success(), "`.vl` persistido não reparseia");
 
     // após a reclassificação: a forma SEGUE ativa (equilibrium) mas deixa de
@@ -185,12 +185,12 @@ fn e2e_fadiga_de_atencao_reclassifica_e_persiste() {
         "reclassificação em loop"
     );
     assert!(
-        texto.contains("PensarLivre") && texto.contains("equilibrium"),
-        "forma deve seguir ativa como equilibrium:\n{texto}"
+        text.contains("PensarLivre") && text.contains("equilibrium"),
+        "forma deve seguir ativa como equilibrium:\n{text}"
     );
 
-    verificar_externo(&dir, "caderno.vcad");
-    limpar(&dir);
+    verify_external(&dir, "caderno.vcad");
+    clear(&dir);
 }
 
 // ======================================================================
@@ -198,9 +198,9 @@ fn e2e_fadiga_de_atencao_reclassifica_e_persiste() {
 // ======================================================================
 
 #[test]
-fn e2e_falha_de_ator_aciona_fallback_do_registro() {
-    let dir = cenario("fallback");
-    let programa = escrever(
+fn e2e_actor_failure_triggers_registry_fallback() {
+    let dir = scenario("fallback");
+    let program = write(
         &dir,
         "servidor.vl",
         "nonequilibrium ServidorCritico {\n\
@@ -214,27 +214,27 @@ fn e2e_falha_de_ator_aciona_fallback_do_registro() {
          \x20 when cpu_temp > 70°C -> act(Ventoinha, 200)\n\
          }",
     );
-    let (out, texto) = rodar(
+    let (out, text) = run(
         &dir,
         &args_run(
             &dir,
-            &programa,
+            &program,
             "caderno.vcad",
             &[
                 "--ticks",
                 "4",
                 "--at",
                 "2:cpu_temp=75",
-                "--registrar-ator",
+                "--register-actor",
                 "VentoinhaReserva",
                 "--fallback",
                 "Ventoinha=VentoinhaReserva",
-                "--falhar-ator",
+                "--fail-actor",
                 "Ventoinha",
             ],
         ),
     );
-    assert!(out.status.success(), "vbl run falhou:\n{texto}");
+    assert!(out.status.success(), "vbl run falhou:\n{text}");
 
     let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
     // tentativa primária, falha e fallback executado — os três no Caderno
@@ -249,20 +249,20 @@ fn e2e_falha_de_ator_aciona_fallback_do_registro() {
     assert!(fallback.contains("\"alternativo\":\"VentoinhaReserva\""), "{fallback}");
     // a atuação efetiva foi no ALTERNATIVO, com valor aplicado — além do
     // registro da tentativa primária FALHA (a trilha completa fica no log)
-    let atuacao = jsonl
+    let actuation = jsonl
         .lines()
         .find(|l| l.contains("\"kind\":\"ATUACAO\"") && l.contains("VentoinhaReserva"))
         .expect("ATUACAO do fallback no log");
-    assert!(atuacao.contains("\"aplicado\":200"), "{atuacao}");
-    assert!(atuacao.contains("\"sucesso\":true"), "{atuacao}");
-    let primaria = jsonl
+    assert!(actuation.contains("\"aplicado\":200"), "{actuation}");
+    assert!(actuation.contains("\"sucesso\":true"), "{actuation}");
+    let primary = jsonl
         .lines()
         .find(|l| l.contains("\"kind\":\"ATUACAO\"") && l.contains("\"ator\":\"Ventoinha\""))
         .expect("ATUACAO da tentativa primária no log");
-    assert!(primaria.contains("\"sucesso\":false"), "{primaria}");
+    assert!(primary.contains("\"sucesso\":false"), "{primary}");
 
-    verificar_externo(&dir, "caderno.vcad");
-    limpar(&dir);
+    verify_external(&dir, "caderno.vcad");
+    clear(&dir);
 }
 
 // ======================================================================
@@ -271,9 +271,9 @@ fn e2e_falha_de_ator_aciona_fallback_do_registro() {
 // ======================================================================
 
 #[test]
-fn e2e_sensor_ausente_nao_dispara_regra_e_alerta() {
-    let dir = cenario("sensor-ausente");
-    let programa = escrever(
+fn e2e_missing_sensor_does_not_fire_rule_and_alerts() {
+    let dir = scenario("sensor-ausente");
+    let program = write(
         &dir,
         "fantasma.vl",
         "nonequilibrium Vigia {\n\
@@ -287,22 +287,22 @@ fn e2e_sensor_ausente_nao_dispara_regra_e_alerta() {
          \x20 when fantasma > 0°C -> dissolve\n\
          }",
     );
-    let (out, texto) =
-        rodar(&dir, &args_run(&dir, &programa, "caderno.vcad", &["--ticks", "3", "--permitir-sem-registro"]));
-    assert!(out.status.success(), "vbl run falhou:\n{texto}");
+    let (out, text) =
+        run(&dir, &args_run(&dir, &program, "caderno.vcad", &["--ticks", "3", "--allow-unregistered"]));
+    assert!(out.status.success(), "vbl run falhou:\n{text}");
 
     let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
     // alerta de falha de I/O (source_path + regra) por tick
-    let alertas = jsonl.lines().filter(|l| l.contains("sensor_nao_registrado")).count();
-    assert!(alertas >= 3, "alerta de §4.7 ausente: {alertas} ocorrência(s)");
+    let alerts = jsonl.lines().filter(|l| l.contains("sensor_nao_registrado")).count();
+    assert!(alerts >= 3, "alerta de §4.7 ausente: {alerts} ocorrência(s)");
     // sensor ausente nunca é 0.0: a regra NÃO pode disparar
     assert!(
         !jsonl.lines().any(|l| l.contains("\"kind\":\"dissolve_rule\"")),
         "falso disparo com sensor ausente!"
     );
-    let relatorio = verificar_externo(&dir, "caderno.vcad");
-    assert!(!relatorio.contains("dissolve_rule"), "dissolução indevida registrada:\n{relatorio}");
-    limpar(&dir);
+    let report = verify_external(&dir, "caderno.vcad");
+    assert!(!report.contains("dissolve_rule"), "dissolução indevida registrada:\n{report}");
+    clear(&dir);
 }
 
 // ======================================================================
@@ -310,9 +310,9 @@ fn e2e_sensor_ausente_nao_dispara_regra_e_alerta() {
 // ======================================================================
 
 #[test]
-fn e2e_main_com_keep_e_atuacao_periodica_audita_todos_os_comandos() {
-    let dir = cenario("main-keep");
-    let programa = escrever(
+fn e2e_main_with_keep_and_periodic_actuation_audits_all_commands() {
+    let dir = scenario("main-keep");
+    let program = write(
         &dir,
         "tarefa.vl",
         "nonequilibrium TarefaImportante {\n\
@@ -327,27 +327,27 @@ fn e2e_main_com_keep_e_atuacao_periodica_audita_todos_os_comandos() {
          \x20 every 10s { act(LedIndicador, \"verde\") }\n\
          }",
     );
-    let (out, texto) = rodar(&dir, &args_run(&dir, &programa, "caderno.vcad", &["--ticks", "12"]));
-    assert!(out.status.success(), "vbl run falhou:\n{texto}");
-    assert!(texto.contains("ÍNTEGRA"), "{texto}");
-    assert!(texto.contains("TarefaImportante"), "forma deve seguir ativa:\n{texto}");
+    let (out, text) = run(&dir, &args_run(&dir, &program, "caderno.vcad", &["--ticks", "12"]));
+    assert!(out.status.success(), "vbl run falhou:\n{text}");
+    assert!(text.contains("ÍNTEGRA"), "{text}");
+    assert!(text.contains("TarefaImportante"), "forma deve seguir ativa:\n{text}");
 
     let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
     // atuação textual aplicada no ator correto (tick 10 — every 10s)
-    let atuacao = jsonl
+    let actuation = jsonl
         .lines()
         .find(|l| l.contains("\"kind\":\"ATUACAO\"") && l.contains("LedIndicador"))
         .expect("ATUACAO do LedIndicador no log");
-    assert!(atuacao.contains("\"aplicado\":\"verde\""), "{atuacao}");
-    assert!(atuacao.contains("\"tick\":10"), "atuação fora do every 10s: {atuacao}");
+    assert!(actuation.contains("\"aplicado\":\"verde\""), "{actuation}");
+    assert!(actuation.contains("\"tick\":10"), "atuação fora do every 10s: {actuation}");
     // a forma sobreviveu 12 ticks graças ao keep (sem colapso)
     assert!(
         !jsonl.lines().any(|l| l.contains("collapse_maintenance")),
         "keep() não renovou a manutenção!"
     );
 
-    verificar_externo(&dir, "caderno.vcad");
-    limpar(&dir);
+    verify_external(&dir, "caderno.vcad");
+    clear(&dir);
 }
 
 // ======================================================================
@@ -356,9 +356,9 @@ fn e2e_main_com_keep_e_atuacao_periodica_audita_todos_os_comandos() {
 // ======================================================================
 
 #[test]
-fn e2e_recarga_de_equilibrium_persistida() {
-    let dir = cenario("recarga");
-    let programa = escrever(
+fn e2e_persisted_equilibrium_reload() {
+    let dir = scenario("recarga");
+    let program = write(
         &dir,
         "nota.vl",
         "nonequilibrium NotaViva {\n\
@@ -373,57 +373,57 @@ fn e2e_recarga_de_equilibrium_persistida() {
          }",
     );
     let persist = dir.join("persistencia").display().to_string();
-    let mut args1 = args_run(&dir, &programa, "caderno1.vcad", &["--ticks", "3", "--at", "1:attention=10"]);
+    let mut args1 = args_run(&dir, &program, "caderno1.vcad", &["--ticks", "3", "--at", "1:attention=10"]);
     let pos = args1.iter().position(|a| a == "--persist-dir").unwrap();
     args1[pos + 1] = persist.clone();
-    let (out1, texto1) = rodar(&dir, &args1);
-    assert!(out1.status.success(), "{texto1}");
+    let (out1, text1) = run(&dir, &args1);
+    assert!(out1.status.success(), "{text1}");
     assert!(dir.join("persistencia").join("NotaViva.vl").exists(), "`.vl` canônico não gravado");
 
     // 2ª execução: recarrega a equilibrium persistida (horizon não venceu)
-    let mut args2 = args_run(&dir, &programa, "caderno2.vcad", &["--ticks", "2"]);
+    let mut args2 = args_run(&dir, &program, "caderno2.vcad", &["--ticks", "2"]);
     let pos = args2.iter().position(|a| a == "--persist-dir").unwrap();
     args2[pos + 1] = persist;
-    let (out2, texto2) = rodar(&dir, &args2);
-    assert!(out2.status.success(), "{texto2}");
+    let (out2, text2) = run(&dir, &args2);
+    assert!(out2.status.success(), "{text2}");
     assert!(
-        texto2.contains("recarregada"),
-        "equilibrium não recarregada do suporte estável:\n{texto2}"
+        text2.contains("recarregada"),
+        "equilibrium não recarregada do suporte estável:\n{text2}"
     );
     let jsonl2 = std::fs::read_to_string(dir.join("caderno2.vcad.jsonl")).unwrap();
     assert!(
         jsonl2.lines().any(|l| l.contains("recarga") && l.contains("\"sha256\":\"")),
         "recarga não auditada com SHA-256"
     );
-    verificar_externo(&dir, "caderno2.vcad");
-    limpar(&dir);
+    verify_external(&dir, "caderno2.vcad");
+    clear(&dir);
 }
 
 // ======================================================================
-// Auditoria de adulteração: log corrompido falha o `caderno-verify`
+// Auditoria de adulteração: log corrompido falha o `ledger-verify`
 // (critério "logs íntegros verificados" — AGENTS §2.2 Etapa 4)
 // ======================================================================
 
 #[test]
-fn e2e_caderno_corrompido_falha_o_verificador() {
-    let dir = cenario("corrupcao");
-    let programa = escrever(&dir, "mini.vl", "event Piscada { value: \"impulso\", horizon: 2s }");
-    let (out, texto) = rodar(&dir, &args_run(&dir, &programa, "caderno.vcad", &["--ticks", "2"]));
-    assert!(out.status.success(), "{texto}");
+fn e2e_corrupted_ledger_fails_the_verifier() {
+    let dir = scenario("corrupcao");
+    let program = write(&dir, "mini.vl", "event Piscada { value: \"impulso\", horizon: 2s }");
+    let (out, text) = run(&dir, &args_run(&dir, &program, "caderno.vcad", &["--ticks", "2"]));
+    assert!(out.status.success(), "{text}");
 
     // adulteração retroativa no export JSONL: troca os Joules de um VAZAMENTO
     let jsonl = dir.join("caderno.vcad.jsonl");
-    let mut texto = std::fs::read_to_string(&jsonl).unwrap();
-    let pos = texto.find("\"kind\":\"VAZAMENTO\"").expect("VAZAMENTO no log");
-    let cauda = &texto[pos..];
-    let j = cauda.find("\"joules\":").expect("joules no VAZAMENTO");
-    let inicio = pos + j + "\"joules\":".len();
-    let fim = inicio
-        + cauda[j + "\"joules\":".len()..].find(',').unwrap_or(3);
-    texto.replace_range(inicio..fim, "999");
-    std::fs::write(dir.join("forjado.jsonl"), &texto).unwrap();
+    let mut text = std::fs::read_to_string(&jsonl).unwrap();
+    let pos = text.find("\"kind\":\"VAZAMENTO\"").expect("VAZAMENTO no log");
+    let tail = &text[pos..];
+    let j = tail.find("\"joules\":").expect("joules no VAZAMENTO");
+    let start = pos + j + "\"joules\":".len();
+    let end = start
+        + tail[j + "\"joules\":".len()..].find(',').unwrap_or(3);
+    text.replace_range(start..end, "999");
+    std::fs::write(dir.join("forjado.jsonl"), &text).unwrap();
 
-    let verify = vbl(&dir, &["caderno-verify", dir.join("forjado.jsonl").to_str().unwrap()]);
+    let verify = vbl(&dir, &["ledger-verify", dir.join("forjado.jsonl").to_str().unwrap()]);
     assert_eq!(
         verify.status.code(),
         Some(1),
@@ -431,5 +431,5 @@ fn e2e_caderno_corrompido_falha_o_verificador() {
         stdout(&verify)
     );
     assert!(stdout(&verify).contains("CORROMPIDA"));
-    limpar(&dir);
+    clear(&dir);
 }

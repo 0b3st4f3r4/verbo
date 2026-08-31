@@ -3,63 +3,63 @@
 //! mensagens malformadas (decodificador nunca devolve mensagem parcial).
 
 use vbl_fxp::schema::{
-    decode, encode_to_vec, peek_frame_len, AckAct, Corpo, DeviceDesc, ErroSchema, Mensagem,
+    decode, encode_to_vec, peek_frame_len, AckAct, Body, DeviceDesc, SchemaError, Message,
     WireValue, HEADER_LEN, MAGIC, MAX_NAME, MAX_PAYLOAD, MAX_STRING, VERSION,
 };
 
 /// Corpus representativo: toda opcode × corpo × valor-limite.
-fn corpus() -> Vec<Mensagem> {
+fn corpus() -> Vec<Message> {
     vec![
-        Mensagem::read("cpu_temp", 1, true),
-        Mensagem::read("human_attention", 0, false), // alias (FORMAL §6)
-        Mensagem {
+        Message::read("cpu_temp", 1, true),
+        Message::read("human_attention", 0, false), // alias (FORMAL §6)
+        Message {
             opcode: vbl_fxp::schema::op::ACT,
             flags: 0,
             seq: u32::MAX,
             name: "C".repeat(MAX_NAME),
-            corpo: Corpo::Act { valor: WireValue::Num(0.0) }, // 0.0 é leitura/comando válido
+            body: Body::Act { value: WireValue::Num(0.0) }, // 0.0 é leitura/comando válido
         },
-        Mensagem::act(
+        Message::act(
             "LedIndicador",
             WireValue::Str("verde".into()),
             42,
             true,
         ),
-        Mensagem::act("Ventoinha", WireValue::Ident("verde".into()), 43, true),
-        Mensagem::read_ok(-273.15, "cpu_temp", false, 7),
-        Mensagem::read_ok(f64::MIN_POSITIVE, "attention", true, 8),
-        Mensagem::read_err(0, 9),
-        Mensagem::read_err(3, 10),
-        Mensagem::act_ack(AckAct::Entregue, false, 11),
-        Mensagem::act_ack(AckAct::Rejeitado { limite: 2, valor_limite: 200.0 }, false, 12),
-        Mensagem::act_ack(AckAct::AtorInexistente, false, 13),
-        Mensagem::act_ack(AckAct::Indisponivel, false, 14),
-        Mensagem::act_ack(AckAct::FallbackExecutado { alternativo: "VentoinhaReserva".into() }, true, 15),
-        Mensagem::act_ack(AckAct::FallbackEsgotado, false, 16),
-        Mensagem::act_ack(AckAct::ValorInvalido { motivo: "cor desconhecida: 'roxo'".into() }, false, 17),
-        Mensagem::heartbeat("Ventoinha", 18),
-        Mensagem::heartbeat_ack(true, 19),
-        Mensagem::heartbeat_ack(false, 20),
-        Mensagem::hello(vec![], 21),
-        Mensagem::hello(
+        Message::act("Ventoinha", WireValue::Ident("verde".into()), 43, true),
+        Message::read_ok(-273.15, "cpu_temp", false, 7),
+        Message::read_ok(f64::MIN_POSITIVE, "attention", true, 8),
+        Message::read_err(0, 9),
+        Message::read_err(3, 10),
+        Message::act_ack(AckAct::Delivered, false, 11),
+        Message::act_ack(AckAct::Rejected { limit: 2, limit_value: 200.0 }, false, 12),
+        Message::act_ack(AckAct::MissingActor, false, 13),
+        Message::act_ack(AckAct::Unavailable, false, 14),
+        Message::act_ack(AckAct::FallbackExecuted { alternativo: "VentoinhaReserva".into() }, true, 15),
+        Message::act_ack(AckAct::FallbackExhausted, false, 16),
+        Message::act_ack(AckAct::InvalidValue { reason: "cor desconhecida: 'roxo'".into() }, false, 17),
+        Message::heartbeat("Ventoinha", 18),
+        Message::heartbeat_ack(true, 19),
+        Message::heartbeat_ack(false, 20),
+        Message::hello(vec![], 21),
+        Message::hello(
             vec![
                 DeviceDesc::Sensor {
                     name: "cpu_temp".into(),
                     min: Some(0.0), // mínimo legítimo 0 (não é "não declarado")
                     max: Some(120.0),
-                    grandeza: "temperatura".into(),
-                    unidade: "°C".into(),
-                    precisao_pct: 2.0,
+                    quantity: "temperatura".into(),
+                    unit: "°C".into(),
+                    precision_pct: 2.0,
                 },
                 DeviceDesc::Sensor {
                     name: "attention".into(),
                     min: None,
                     max: None,
-                    grandeza: "atenção".into(),
-                    unidade: "%".into(),
-                    precisao_pct: 0.0,
+                    quantity: "atenção".into(),
+                    unit: "%".into(),
+                    precision_pct: 0.0,
                 },
-                DeviceDesc::Ator {
+                DeviceDesc::Actor {
                     name: "CpuPowerCap".into(),
                     min: Some(10.0),
                     max: Some(250.0),
@@ -68,25 +68,25 @@ fn corpus() -> Vec<Mensagem> {
             ],
             22,
         ),
-        Mensagem::bye(23),
+        Message::bye(23),
     ]
 }
 
 #[test]
-fn roundtrip_e_identidade_bit_a_bit_para_o_corpus() {
+fn roundtrip_is_bit_for_bit_identity_for_corpus() {
     for msg in corpus() {
         let bytes = encode_to_vec(&msg).unwrap_or_else(|e| panic!("encode falhou: {e}"));
-        let (volta, consumido) = decode(&bytes).unwrap_or_else(|e| panic!("decode falhou: {e}"));
-        assert_eq!(consumido, bytes.len(), "frame deve ser consumido por inteiro");
+        let (volta, consumed) = decode(&bytes).unwrap_or_else(|e| panic!("decode falhou: {e}"));
+        assert_eq!(consumed, bytes.len(), "frame deve ser consumido por inteiro");
         assert_eq!(volta, msg, "roundtrip alterou a mensagem");
     }
 }
 
 #[test]
-fn f64_preserva_todos_os_64_bits() {
+fn f64_preserves_all_64_bits() {
     // Amostragem de padrões de bits finitos (inclui negativos, subnormais,
     // épsilon, extremos) — nenhum pode perder um bit no roundtrip.
-    let padroes = [
+    let defaults = [
         0u64, 1, 0x8000_0000_0000_0001, // -menor subnormal
         0x0000_0000_0000_0001, // menor subnormal
         0x7FEF_FFFF_FFFF_FFFF, // maior finito
@@ -97,24 +97,24 @@ fn f64_preserva_todos_os_64_bits() {
         0x408F_4000_0000_0000, // 1000.75
         u64::from_le_bytes(86.5f64.to_le_bytes()), // limite térmico da FORMAL
     ];
-    for bits in padroes {
+    for bits in defaults {
         let v = f64::from_bits(bits);
         assert!(v.is_finite(), "corpus de teste deve ser finito");
-        let msg = Mensagem::read_ok(v, "cpu_power", false, 1);
+        let msg = Message::read_ok(v, "cpu_power", false, 1);
         let bytes = encode_to_vec(&msg).unwrap();
         let (back, _) = decode(&bytes).unwrap();
-        let Corpo::ReadOk { valor, .. } = back.corpo else {
+        let Body::ReadOk { value, .. } = back.body else {
             panic!("corpo errado");
         };
-        assert_eq!(valor.to_bits(), bits, "bit {bits:#018x} alterado no roundtrip");
+        assert_eq!(value.to_bits(), bits, "bit {bits:#018x} alterado no roundtrip");
     }
 }
 
 #[test]
-fn utf8_multibyte_sobra_exato() {
-    let nomes = ["temperatura_çãã", "cpu_temp_🔥", "grandeza_αβγ_°C_W_%"];
-    for (i, s) in nomes.iter().enumerate() {
-        let msg = Mensagem::act(
+fn utf8_multibyte_exact_remainder() {
+    let names = ["temperatura_çãã", "cpu_temp_🔥", "grandeza_αβγ_°C_W_%"];
+    for (i, s) in names.iter().enumerate() {
+        let msg = Message::act(
             "LedIndicador",
             WireValue::Str((*s).into()),
             i as u32,
@@ -122,14 +122,14 @@ fn utf8_multibyte_sobra_exato() {
         );
         let bytes = encode_to_vec(&msg).unwrap();
         let (back, _) = decode(&bytes).unwrap();
-        let Corpo::Act { valor } = back.corpo else { panic!() };
-        assert_eq!(valor, WireValue::Str((*s).to_string()));
+        let Body::Act { value } = back.body else { panic!() };
+        assert_eq!(value, WireValue::Str((*s).to_string()));
     }
 }
 
 #[test]
-fn string_e_nome_em_seus_limites_maximos() {
-    let msg = Mensagem::act("A".repeat(MAX_NAME).as_str(), WireValue::Str("x".repeat(MAX_STRING)), 1, true);
+fn string_and_name_at_max_limits() {
+    let msg = Message::act("A".repeat(MAX_NAME).as_str(), WireValue::Str("x".repeat(MAX_STRING)), 1, true);
     let bytes = encode_to_vec(&msg).unwrap();
     assert!(bytes.len() <= 4 + MAX_PAYLOAD);
     let (back, _) = decode(&bytes).unwrap();
@@ -137,52 +137,52 @@ fn string_e_nome_em_seus_limites_maximos() {
 }
 
 #[test]
-fn rejeicoes_de_encode() {
+fn rejections_of_encode() {
     // NaN/inf são falha de I/O, nunca valor no fio (FORMAL §4.7).
     for v in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert_eq!(
-            encode_to_vec(&Mensagem::read_ok(v, "s", false, 1)),
-            Err(ErroSchema::ValorNaoFinito)
+            encode_to_vec(&Message::read_ok(v, "s", false, 1)),
+            Err(SchemaError::NonFiniteValue)
         );
     }
     // Nome acima de 255 bytes.
     assert_eq!(
-        encode_to_vec(&Mensagem::read(&"n".repeat(MAX_NAME + 1), 1, true)),
-        Err(ErroSchema::StringExcedida)
+        encode_to_vec(&Message::read(&"n".repeat(MAX_NAME + 1), 1, true)),
+        Err(SchemaError::StringTooLong)
     );
     // String acima de 1024 bytes.
     assert_eq!(
-        encode_to_vec(&Mensagem::act("a", WireValue::Str("s".repeat(MAX_STRING + 1)), 1, true)),
-        Err(ErroSchema::StringExcedida)
+        encode_to_vec(&Message::act("a", WireValue::Str("s".repeat(MAX_STRING + 1)), 1, true)),
+        Err(SchemaError::StringTooLong)
     );
     // Flags reservadas devem ser 0 no encode.
-    let mut msg = Mensagem::read("s", 1, true);
+    let mut msg = Message::read("s", 1, true);
     msg.flags |= 0b0001_0000;
-    assert_eq!(encode_to_vec(&msg), Err(ErroSchema::FlagReservada));
+    assert_eq!(encode_to_vec(&msg), Err(SchemaError::ReservedFlag));
     // Payload acima de 8192: HELLO com muitos descritores transborda o guard.
     let flood: Vec<DeviceDesc> = (0..500)
         .map(|i| DeviceDesc::Sensor {
             name: format!("s{i}"),
             min: None,
             max: None,
-            grandeza: "g".into(),
-            unidade: "u".into(),
-            precisao_pct: 1.0,
+            quantity: "g".into(),
+            unit: "u".into(),
+            precision_pct: 1.0,
         })
         .collect();
     assert!(matches!(
-        encode_to_vec(&Mensagem::hello(flood, 1)),
-        Err(ErroSchema::FrameExcedido { .. })
+        encode_to_vec(&Message::hello(flood, 1)),
+        Err(SchemaError::FrameExceeded { .. })
     ));
 }
 
 #[test]
-fn rejeicoes_de_decode_nunca_devolvem_mensagem_parcial() {
-    let validos = encode_to_vec(&Mensagem::read_ok(42.0, "cpu_temp", true, 5)).unwrap();
+fn decode_rejections_never_return_partial_message() {
+    let valid = encode_to_vec(&Message::read_ok(42.0, "cpu_temp", true, 5)).unwrap();
 
     // Truncamento em cada byte do frame.
-    for n in 0..validos.len() {
-        let trunc = &validos[..n];
+    for n in 0..valid.len() {
+        let trunc = &valid[..n];
         assert!(
             decode(trunc).is_err(),
             "truncado em {n} bytes não pode decodificar"
@@ -190,56 +190,56 @@ fn rejeicoes_de_decode_nunca_devolvem_mensagem_parcial() {
     }
 
     // Magic inválido.
-    let mut bad = validos.clone();
+    let mut bad = valid.clone();
     bad[4] = b'X';
-    assert_eq!(decode(&bad).unwrap_err(), ErroSchema::MagicInvalido);
+    assert_eq!(decode(&bad).unwrap_err(), SchemaError::InvalidMagic);
 
     // Versão desconhecida.
-    let mut bad = validos.clone();
+    let mut bad = valid.clone();
     bad[3 + 4] = 2;
-    assert_eq!(decode(&bad).unwrap_err(), ErroSchema::VersaoDesconhecida { recebida: 2 });
+    assert_eq!(decode(&bad).unwrap_err(), SchemaError::UnknownVersion { received: 2 });
 
     // Opcode desconhecido.
-    let mut bad = validos.clone();
+    let mut bad = valid.clone();
     bad[4 + 4] = 0x7F;
-    assert_eq!(decode(&bad).unwrap_err(), ErroSchema::OpcodeDesconhecido { recebido: 0x7F });
+    assert_eq!(decode(&bad).unwrap_err(), SchemaError::UnknownOpcode { received: 0x7F });
 
     // Header direto (sem o prefixo de comprimento): magic vira "length" absurdo.
-    let cabecalho = &validos[4..];
+    let header = &valid[4..];
     assert!(matches!(
-        decode(cabecalho),
-        Err(ErroSchema::FrameExcedido { .. })
+        decode(header),
+        Err(SchemaError::FrameExceeded { .. })
     ));
 
     // Payload declarado menor que o header fixo.
-    let mut curto = Vec::new();
-    curto.extend_from_slice(&8u32.to_le_bytes());
-    curto.extend_from_slice(&[0u8; 8]);
-    assert_eq!(decode(&curto).unwrap_err(), ErroSchema::PayloadCurto { length: 8 });
+    let mut short = Vec::new();
+    short.extend_from_slice(&8u32.to_le_bytes());
+    short.extend_from_slice(&[0u8; 8]);
+    assert_eq!(decode(&short).unwrap_err(), SchemaError::PayloadTooShort { length: 8 });
 
     // NaN no fio é rejeitado no decode (READ_OK: f64 logo após header + nome vazio).
-    let msg = Mensagem::read_ok(1.0, "s", false, 1);
+    let msg = Message::read_ok(1.0, "s", false, 1);
     let mut bytes = encode_to_vec(&msg).unwrap();
     let off = 4 + HEADER_LEN;
     bytes[off..off + 8].copy_from_slice(&f64::NAN.to_bits().to_le_bytes());
-    assert_eq!(decode(&bytes).unwrap_err(), ErroSchema::ValorNaoFinito);
+    assert_eq!(decode(&bytes).unwrap_err(), SchemaError::NonFiniteValue);
 
     // Bytes sobrando após o corpo (length +1, byte extra no fim).
-    let mut extra = encode_to_vec(&Mensagem::read_err(1, 1)).unwrap();
+    let mut extra = encode_to_vec(&Message::read_err(1, 1)).unwrap();
     let len = u32::from_le_bytes([extra[0], extra[1], extra[2], extra[3]]);
-    let novo = len + 1;
-    extra[0..4].copy_from_slice(&novo.to_le_bytes());
+    let new = len + 1;
+    extra[0..4].copy_from_slice(&new.to_le_bytes());
     extra.push(0);
-    assert_eq!(decode(&extra).unwrap_err(), ErroSchema::PayloadExcedente);
+    assert_eq!(decode(&extra).unwrap_err(), SchemaError::PayloadTooLong);
 }
 
 #[test]
-fn peek_frame_len_e_framing_em_stream() {
-    let bytes = encode_to_vec(&Mensagem::read("cpu_temp", 1, true)).unwrap();
+fn peek_frame_len_and_framing_on_stream() {
+    let bytes = encode_to_vec(&Message::read("cpu_temp", 1, true)).unwrap();
     // Metade chegou: peek devolve o total do frame; decode ainda incompleto.
     let total = peek_frame_len(&bytes).unwrap();
     assert_eq!(total, bytes.len());
-    assert!(matches!(decode(&bytes[..total / 2]), Err(ErroSchema::CampoFaltante)));
+    assert!(matches!(decode(&bytes[..total / 2]), Err(SchemaError::MissingField)));
     // Prefixo completo, payload pela metade.
     assert!(decode(&bytes[..4]).is_err());
     // Frame acima do máximo é rejeitado no peek.
@@ -247,13 +247,13 @@ fn peek_frame_len_e_framing_em_stream() {
     bad.extend_from_slice(&(MAX_PAYLOAD as u32 + 1).to_le_bytes());
     assert!(matches!(
         peek_frame_len(&bad),
-        Err(ErroSchema::FrameExcedido { .. })
+        Err(SchemaError::FrameExceeded { .. })
     ));
 }
 
 #[test]
-fn header_v1_e_little_endian_conforme_doc() {
-    let msg = Mensagem::read("cpu_temp", 0x0102_0304, true);
+fn header_v1_is_little_endian_per_doc() {
+    let msg = Message::read("cpu_temp", 0x0102_0304, true);
     let b = encode_to_vec(&msg).unwrap();
     assert_eq!(&b[4..7], &MAGIC);
     assert_eq!(b[7], VERSION);

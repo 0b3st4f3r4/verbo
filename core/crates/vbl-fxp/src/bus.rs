@@ -16,17 +16,17 @@
 //! simulador embutido é sincronizado com ele, de modo que o backend simulado
 //! valide exatamente o mesmo registro.
 
-use crate::drivers::{ator_de, descobrir, sensor_de, ActorDriver, SensorDriver};
-use crate::queue::{Comando, FilaComandos};
-use crate::registry::{DeviceKind, DeviceMode, DeviceRegistry, Endpoint, ModoOperacao, RemoteAddr};
-use crate::schema::{flag, razao, AckAct, Corpo, Mensagem, WireValue};
-use crate::transport::{Conexao, ErroTransporte};
+use crate::drivers::{actor_from, discover, sensor_from, ActorDriver, SensorDriver};
+use crate::queue::{Command, CommandQueue};
+use crate::registry::{DeviceKind, DeviceMode, DeviceRegistry, Endpoint, OperationMode, RemoteAddr};
+use crate::schema::{flag, reason, AckAct, Body, Message, WireValue};
+use crate::transport::{Connection, TransportError};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
-use vbl_runtime::notebook::{kinds as rt_kinds, Atuacao, Caderno};
+use vbl_runtime::ledger::{kinds as rt_kinds, Actuation, Ledger};
 use vbl_runtime::fxp::{
-    ActOutcome, ActorLimits, FalhaSensor, Fxp, Limite, Registry as RuntimeRegistry, Value,
-    PRIORIDADE_NORMAL,
+    ActOutcome, ActorLimits, SensorFailure, Fxp, Limit, Registry as RuntimeRegistry, Value,
+    PRIORITY_NORMAL,
 };
 use vbl_runtime::json::Json;
 use vbl_runtime::sim::FxpSimulator;
@@ -43,27 +43,27 @@ pub mod kinds {
 
 /// Trilha de atuação com a latência medida (Etapa 4 — PLAN §4.1): o Caderno
 /// estima o custo energético como potência do tick × latência do ack.
-fn atuacao_com_latencia(
-    caderno: &mut dyn Caderno,
-    ator: &str,
-    valor: &Value,
-    latencia_us: u64,
-    sucesso: bool,
+fn actuation_with_latency(
+    ledger: &mut dyn Ledger,
+    actor: &str,
+    value: &Value,
+    latency_us: u64,
+    success: bool,
 ) {
-    caderno.actuator_action_detalhada(Atuacao {
-        ator: ator.to_owned(),
-        solicitado: valor.clone(),
-        aplicado: if sucesso { Some(valor.clone()) } else { None },
-        latencia_us: Some(latencia_us),
-        custo_joules: None,
-        sucesso,
+    ledger.actuator_action_detailed(Actuation {
+        actor: actor.to_owned(),
+        requested: value.clone(),
+        applied: if success { Some(value.clone()) } else { None },
+        latency_us: Some(latency_us),
+        joule_cost: None,
+        success,
     });
 }
 
 /// Parâmetros do barramento (defaults = docs/FXP-SCHEMA-v1.md §6).
 #[derive(Debug, Clone)]
 pub struct BusConfig {
-    pub modo: ModoOperacao,
+    pub mode: OperationMode,
     /// Cache de leitura de rotas reais/remotas (mitigação PLAN §3).
     pub cache_ttl: Duration,
     /// Prazo de ack de leitura remota (fio).
@@ -81,7 +81,7 @@ pub struct BusConfig {
 impl Default for BusConfig {
     fn default() -> Self {
         Self {
-            modo: ModoOperacao::Simulado,
+            mode: OperationMode::Simulated,
             cache_ttl: Duration::from_millis(100),
             read_timeout: Duration::from_millis(10),
             act_timeout_local: Duration::from_millis(50),
@@ -94,29 +94,29 @@ impl Default for BusConfig {
 
 /// Rota efetiva de um dispositivo (resolvida na construção).
 #[derive(Debug, Clone, PartialEq)]
-pub enum Rota {
+pub enum Route {
     /// Simulador embutido (modo simulado global ou dispositivo simulado).
-    Simulador,
+    Simulator,
     /// Driver de arquivo real (sysfs/hwmon/led).
     Real,
     /// Peer remoto falando schema v1.
-    Remota(RemoteAddr),
+    Remote(RemoteAddr),
     /// Registrado porém inacessível: modo real global proíbe a rota simulada
     /// e não há rota real (§4.7 — nunca simulado silencioso).
-    Inacessivel { motivo: String },
+    Inaccessible { reason: String },
 }
 
-impl Rota {
+impl Route {
     /// Descrição legível (probe/relatório).
-    pub fn descricao(&self) -> String {
+    pub fn description(&self) -> String {
         match self {
-            Rota::Simulador => "simulado (em processo)".into(),
-            Rota::Real => "real (driver de arquivo)".into(),
-            Rota::Remota(a) => match a {
+            Route::Simulator => "simulado (em processo)".into(),
+            Route::Real => "real (driver de arquivo)".into(),
+            Route::Remote(a) => match a {
                 RemoteAddr::Unix(p) => format!("remota (unix:{})", p.display()),
                 RemoteAddr::Tcp { host, port } => format!("remota (tcp:{host}:{port})"),
             },
-            Rota::Inacessivel { motivo } => format!("inacessível ({motivo})"),
+            Route::Inaccessible { reason } => format!("inacessível ({reason})"),
         }
     }
 }
@@ -127,26 +127,26 @@ pub struct FxpBus {
     rt_registry: RuntimeRegistry,
     config: BusConfig,
     sim: FxpSimulator,
-    rotas: BTreeMap<String, Rota>, // canônico → rota
-    sensores_reais: BTreeMap<String, Box<dyn SensorDriver + Send>>,
-    atores_reais: BTreeMap<String, Box<dyn ActorDriver + Send>>,
-    conexoes: BTreeMap<String, Conexao>, // canônico → transporte remoto
+    routes: BTreeMap<String, Route>, // canônico → rota
+    real_sensors: BTreeMap<String, Box<dyn SensorDriver + Send>>,
+    real_actors: BTreeMap<String, Box<dyn ActorDriver + Send>>,
+    connections: BTreeMap<String, Connection>, // canônico → transporte remoto
     cache: BTreeMap<String, (Instant, f64)>,
-    fila: FilaComandos,
+    queue: CommandQueue,
     seq: u32,
     disk_bytes: u64,
     /// Última leitura de `cpu_power` em rota real/remota (partilha P/N — §4.2).
-    potencia_conhecida: f64,
-    potencia_inacessivel: bool,
-    potencia_lida_em: Option<Instant>,
+    known_power: f64,
+    power_inaccessible: bool,
+    power_read_at: Option<Instant>,
 }
 
 impl std::fmt::Debug for FxpBus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FxpBus")
             .field("config", &self.config)
-            .field("rotas", &self.rotas)
-            .field("fila", &self.fila.len())
+            .field("rotas", &self.routes)
+            .field("fila", &self.queue.len())
             .finish()
     }
 }
@@ -155,12 +155,12 @@ impl FxpBus {
     /// Constrói o barramento com rotas resolvidas. Endpoints `Auto` tentam
     /// descoberta no host; falha de descoberta **não é erro de construção** —
     /// o dispositivo fica registrado porém inacessível (§4.7).
-    pub fn construir(registry: DeviceRegistry, mut config: BusConfig, mut sim: FxpSimulator) -> Self {
-        let mut rotas = BTreeMap::new();
-        let mut sensores_reais = BTreeMap::new();
-        let mut atores_reais = BTreeMap::new();
+    pub fn build(registry: DeviceRegistry, mut config: BusConfig, mut sim: FxpSimulator) -> Self {
+        let mut routes = BTreeMap::new();
+        let mut real_sensors = BTreeMap::new();
+        let mut real_actors = BTreeMap::new();
 
-        if config.modo == ModoOperacao::Simulado {
+        if config.mode == OperationMode::Simulated {
             // Simulador determinístico: sem cache (roteirização é imediata).
             config.cache_ttl = Duration::ZERO;
         }
@@ -169,67 +169,67 @@ impl FxpBus {
         // dispositivos que só existem nele (extensões). Dispositivos já
         // presentes no sim (roteirizados pelo CLI) são PRESERVADOS — estado
         // como "ator indisponível" do cenário não pode ser resetado.
-        for d in registry.dispositivos() {
+        for d in registry.devices() {
             match &d.kind {
-                DeviceKind::Sensor { grandeza, unidade, .. } => {
+                DeviceKind::Sensor { quantity, unit, .. } => {
                     if !sim.registry().sensores.contains_key(&d.name) {
-                        sim.registrar_sensor(
+                        sim.register_sensor(
                             &d.name,
                             vbl_runtime::fxp::SensorInfo {
-                                grandeza: grandeza.clone(),
-                                unidade: unidade.clone(),
+                                quantity: quantity.clone(),
+                                unit: unit.clone(),
                             },
                         );
                     }
                 }
                 DeviceKind::Actor { limits } => {
-                    if !sim.registry().atores.contains_key(&d.name) {
-                        sim.registrar_ator(&d.name, limits.clone());
+                    if !sim.registry().actors.contains_key(&d.name) {
+                        sim.register_actor(&d.name, limits.clone());
                     }
                 }
             }
         }
 
-        for d in registry.dispositivos() {
-            let rota = match rota_base(&config, d) {
-                RotaEspec::Simulador => Rota::Simulador,
-                RotaEspec::Inacessivel { motivo } => Rota::Inacessivel { motivo },
-                RotaEspec::Concreta => {
+        for d in registry.devices() {
+            let route = match base_route(&config, d) {
+                RouteSpec::Simulator => Route::Simulator,
+                RouteSpec::Inaccessible { reason } => Route::Inaccessible { reason },
+                RouteSpec::Concrete => {
                     let endpoint = match &d.endpoint {
-                        Endpoint::Auto => descobrir(&d.name),
+                        Endpoint::Auto => discover(&d.name),
                         e => Some(e.clone()),
                     };
                     match endpoint {
-                        None => Rota::Inacessivel {
-                            motivo: "auto-descoberta não encontrou hardware".into(),
+                        None => Route::Inaccessible {
+                            reason: "auto-descoberta não encontrou hardware".into(),
                         },
-                        Some(Endpoint::Remote { addr }) => Rota::Remota(addr),
-                        Some(Endpoint::Simulado) => Rota::Inacessivel {
-                            motivo: "modo real não roteia para simulador (dado sintético proibido)"
+                        Some(Endpoint::Remote { addr }) => Route::Remote(addr),
+                        Some(Endpoint::Simulated) => Route::Inaccessible {
+                            reason: "modo real não roteia para simulador (dado sintético proibido)"
                                 .into(),
                         },
                         Some(ep) => match &d.kind {
-                            DeviceKind::Sensor { .. } => match sensor_de(&ep) {
+                            DeviceKind::Sensor { .. } => match sensor_from(&ep) {
                                 Some(dr) => {
-                                    sensores_reais.insert(d.name.clone(), dr);
-                                    Rota::Real
+                                    real_sensors.insert(d.name.clone(), dr);
+                                    Route::Real
                                 }
-                                None => Rota::Inacessivel {
-                                    motivo: format!(
+                                None => Route::Inaccessible {
+                                    reason: format!(
                                         "endpoint sem driver de leitura: {}",
-                                        ep.descricao()
+                                        ep.description()
                                     ),
                                 },
                             },
-                            DeviceKind::Actor { .. } => match ator_de(&ep) {
+                            DeviceKind::Actor { .. } => match actor_from(&ep) {
                                 Some(dr) => {
-                                    atores_reais.insert(d.name.clone(), dr);
-                                    Rota::Real
+                                    real_actors.insert(d.name.clone(), dr);
+                                    Route::Real
                                 }
-                                None => Rota::Inacessivel {
-                                    motivo: format!(
+                                None => Route::Inaccessible {
+                                    reason: format!(
                                         "endpoint sem driver de atuação: {}",
-                                        ep.descricao()
+                                        ep.description()
                                     ),
                                 },
                             },
@@ -237,7 +237,7 @@ impl FxpBus {
                     }
                 }
             };
-            rotas.insert(d.name.clone(), rota);
+            routes.insert(d.name.clone(), route);
         }
 
         let rt_registry = registry.to_runtime_registry();
@@ -246,17 +246,17 @@ impl FxpBus {
             rt_registry,
             config,
             sim,
-            rotas,
-            sensores_reais,
-            atores_reais,
-            conexoes: BTreeMap::new(),
+            routes,
+            real_sensors,
+            real_actors,
+            connections: BTreeMap::new(),
             cache: BTreeMap::new(),
-            fila: FilaComandos::default(),
+            queue: CommandQueue::default(),
             seq: 0,
             disk_bytes: 0,
-            potencia_conhecida: 0.0,
-            potencia_inacessivel: false,
-            potencia_lida_em: None,
+            known_power: 0.0,
+            power_inaccessible: false,
+            power_read_at: None,
         }
     }
 
@@ -275,176 +275,176 @@ impl FxpBus {
     }
 
     /// Fila de comandos pendentes (observação de testes/probe).
-    pub fn fila_pendente(&self) -> usize {
-        self.fila.len()
+    pub fn pending_queue(&self) -> usize {
+        self.queue.len()
     }
 
     /// Rota efetiva de um nome simbólico (para `vbl fxp-probe`).
-    pub fn rota_de(&self, nome: &str) -> Option<&Rota> {
-        self.rotas.get(self.registry.canonical_de(nome))
+    pub fn route_of(&self, name: &str) -> Option<&Route> {
+        self.routes.get(self.registry.canonical_of(name))
     }
 
-    fn alerta_sensor(
+    fn sensor_alert(
         &mut self,
-        caderno: &mut dyn Caderno,
-        motivo: &str,
+        ledger: &mut dyn Ledger,
+        reason: &str,
         sensor: &str,
-        detalhe: &str,
+        detail: &str,
     ) {
-        caderno.alert(
+        ledger.alert(
             &format!(
-                "Sensor '{sensor}' — falha de I/O ({motivo}): {detalhe} Condição não avaliada neste tick."
+                "Sensor '{sensor}' — falha de I/O ({reason}): {detail} Condição não avaliada neste tick."
             ),
-            Json::obj([("motivo", Json::str(motivo)), ("sensor", Json::str(sensor))]),
+            Json::obj([("motivo", Json::str(reason)), ("sensor", Json::str(sensor))]),
         );
     }
 
-    fn proximo_seq(&mut self) -> u32 {
+    fn next_seq(&mut self) -> u32 {
         self.seq = self.seq.wrapping_add(1);
         self.seq
     }
 
-    fn cache_valido(&self, canonical: &str) -> Option<f64> {
+    fn cache_valid(&self, canonical: &str) -> Option<f64> {
         if self.config.cache_ttl.is_zero() {
             return None;
         }
         match self.cache.get(canonical) {
-            Some((quando, valor)) if quando.elapsed() < self.config.cache_ttl => Some(*valor),
+            Some((read_at, value)) if read_at.elapsed() < self.config.cache_ttl => Some(*value),
             _ => None,
         }
     }
 
     /// Leitura em rota real: cache TTL → driver → honestidade de falha.
-    fn ler_real(
+    fn read_real(
         &mut self,
         canonical: &str,
-        caderno: &mut dyn Caderno,
-    ) -> Result<f64, FalhaSensor> {
-        if let Some(v) = self.cache_valido(canonical) {
+        ledger: &mut dyn Ledger,
+    ) -> Result<f64, SensorFailure> {
+        if let Some(v) = self.cache_valid(canonical) {
             return Ok(v);
         }
-        let Some(dr) = self.sensores_reais.get_mut(canonical) else {
-            self.alerta_sensor(caderno, "sensor_inacessivel", canonical, "sem driver real.");
-            return Err(FalhaSensor::Inacessivel);
+        let Some(dr) = self.real_sensors.get_mut(canonical) else {
+            self.sensor_alert(ledger, "sensor_inacessivel", canonical, "sem driver real.");
+            return Err(SensorFailure::Inaccessible);
         };
         match dr.read() {
             Ok(v) => {
                 self.cache.insert(canonical.into(), (Instant::now(), v));
-                self.anotar_potencia(canonical, v);
+                self.note_power(canonical, v);
                 Ok(v)
             }
             Err(_) => {
                 if canonical == "cpu_power" {
-                    self.potencia_inacessivel = true;
+                    self.power_inaccessible = true;
                 }
-                let detalhe =
-                    format!("driver real ({}) falhou.", self.descricao_rota(canonical));
-                self.alerta_sensor(caderno, "sensor_inacessivel", canonical, &detalhe);
-                Err(FalhaSensor::Inacessivel)
+                let detail =
+                    format!("driver real ({}) falhou.", self.route_description(canonical));
+                self.sensor_alert(ledger, "sensor_inacessivel", canonical, &detail);
+                Err(SensorFailure::Inaccessible)
             }
         }
     }
 
     /// Leitura remota via schema v1 (READ → READ_OK/READ_ERR, ack por seq).
-    fn ler_remota(
+    fn read_remote(
         &mut self,
         canonical: &str,
-        caderno: &mut dyn Caderno,
-    ) -> Result<f64, FalhaSensor> {
-        if let Some(v) = self.cache_valido(canonical) {
+        ledger: &mut dyn Ledger,
+    ) -> Result<f64, SensorFailure> {
+        if let Some(v) = self.cache_valid(canonical) {
             return Ok(v);
         }
-        let Some(Rota::Remota(addr)) = self.rotas.get(canonical).cloned() else {
-            return Err(FalhaSensor::Inacessivel);
+        let Some(Route::Remote(addr)) = self.routes.get(canonical).cloned() else {
+            return Err(SensorFailure::Inaccessible);
         };
-        let seq = self.proximo_seq();
-        let pedido = Mensagem::read(canonical, seq, true);
-        match self.pedir_remoto(canonical, &addr, &pedido, self.config.read_timeout) {
+        let seq = self.next_seq();
+        let request = Message::read(canonical, seq, true);
+        match self.request_remote(canonical, &addr, &request, self.config.read_timeout) {
             Ok(resp) => {
-                let sintetico = resp.flags & flag::SINTETICO != 0;
-                match resp.corpo {
-                    Corpo::ReadOk { valor, canonical: can } => {
-                        if sintetico {
+                let synthetic = resp.flags & flag::SYNTHETIC != 0;
+                match resp.body {
+                    Body::ReadOk { value, canonical: can } => {
+                        if synthetic {
                             // §4.7: dado sintético sempre marcado no Caderno.
-                            caderno.warn(
+                            ledger.warn(
                                 &format!("Leitura remota de '{canonical}' é de origem simulada (measurement_status: simulado)."),
                                 Json::obj([
                                     ("motivo", Json::str("measurement_status_simulado")),
                                     ("sensor", Json::str(canonical)),
                                     ("canonical", Json::str(can)),
-                                    ("valor", Json::num(valor)),
+                                    ("valor", Json::num(value)),
                                 ]),
                             );
                         }
-                        self.cache.insert(canonical.into(), (Instant::now(), valor));
-                        self.anotar_potencia(canonical, valor);
-                        Ok(valor)
+                        self.cache.insert(canonical.into(), (Instant::now(), value));
+                        self.note_power(canonical, value);
+                        Ok(value)
                     }
-                    Corpo::ReadErr { reason } => {
-                        let (falha, motivo) = match reason {
-                            razao::NAO_REGISTRADO => {
-                                (FalhaSensor::NaoRegistrado, "sensor_nao_registrado")
+                    Body::ReadErr { reason } => {
+                        let (failure, reason) = match reason {
+                            reason::NOT_REGISTERED => {
+                                (SensorFailure::NotRegistered, "sensor_nao_registrado")
                             }
-                            _ => (FalhaSensor::Inacessivel, "sensor_inacessivel"),
+                            _ => (SensorFailure::Inaccessible, "sensor_inacessivel"),
                         };
-                        self.alerta_sensor(caderno, motivo, canonical, "peer respondeu erro.");
-                        Err(falha)
+                        self.sensor_alert(ledger, reason, canonical, "peer respondeu erro.");
+                        Err(failure)
                     }
                     _ => {
-                        self.alerta_sensor(
-                            caderno,
+                        self.sensor_alert(
+                            ledger,
                             "sensor_inacessivel",
                             canonical,
                             "resposta inesperada do peer.",
                         );
-                        Err(FalhaSensor::Inacessivel)
+                        Err(SensorFailure::Inaccessible)
                     }
                 }
             }
             Err(e) => {
-                self.conexoes.remove(canonical); // conexão suspeita: reconectar
-                self.alerta_sensor(
-                    caderno,
+                self.connections.remove(canonical); // conexão suspeita: reconectar
+                self.sensor_alert(
+                    ledger,
                     "sensor_inacessivel",
                     canonical,
                     &format!("transporte: {e}."),
                 );
-                Err(FalhaSensor::Inacessivel)
+                Err(SensorFailure::Inaccessible)
             }
         }
     }
 
-    fn anotar_potencia(&mut self, canonical: &str, valor: f64) {
+    fn note_power(&mut self, canonical: &str, value: f64) {
         if canonical == "cpu_power" {
-            self.potencia_conhecida = valor;
-            self.potencia_inacessivel = false;
-            self.potencia_lida_em = Some(Instant::now());
+            self.known_power = value;
+            self.power_inaccessible = false;
+            self.power_read_at = Some(Instant::now());
         }
     }
 
     /// Pedido-resposta remoto com reconexão preguiçosa.
-    fn pedir_remoto(
+    fn request_remote(
         &mut self,
         canonical: &str,
         addr: &RemoteAddr,
-        pedido: &Mensagem,
+        request: &Message,
         timeout: Duration,
-    ) -> Result<Mensagem, ErroTransporte> {
-        if !self.conexoes.contains_key(canonical) {
+    ) -> Result<Message, TransportError> {
+        if !self.connections.contains_key(canonical) {
             let c = match addr {
-                RemoteAddr::Unix(p) => Conexao::unix(p, timeout)?,
-                RemoteAddr::Tcp { host, port } => Conexao::tcp(host, *port, timeout)?,
+                RemoteAddr::Unix(p) => Connection::unix(p, timeout)?,
+                RemoteAddr::Tcp { host, port } => Connection::tcp(host, *port, timeout)?,
             };
-            self.conexoes.insert(canonical.into(), c);
+            self.connections.insert(canonical.into(), c);
         }
-        let c = self.conexoes.get_mut(canonical).expect("inserido acima");
-        c.pedir(pedido, timeout)
+        let c = self.connections.get_mut(canonical).expect("inserido acima");
+        c.request(request, timeout)
     }
 
-    fn descricao_rota(&self, canonical: &str) -> String {
-        self.rotas
+    fn route_description(&self, canonical: &str) -> String {
+        self.routes
             .get(canonical)
-            .map(|r| r.descricao())
+            .map(|r| r.description())
             .unwrap_or_else(|| "fora do registro".into())
     }
 
@@ -452,109 +452,109 @@ impl FxpBus {
     // Atuação: validação, rota, retry e fallback do registro (§4.3)
     // -----------------------------------------------------------------
 
-    fn violacao(&self, limits: &ActorLimits, valor: &Value) -> Option<(Limite, f64)> {
-        let v = valor.as_num()?;
+    fn violation(&self, limits: &ActorLimits, value: &Value) -> Option<(Limit, f64)> {
+        let v = value.as_num()?;
         // limites INCLUSIVOS: valor igual ao limite é aceito (FORMAL §4.3)
         if let Some(min) = limits.min {
             if v < min {
-                return Some((Limite::Min, min));
+                return Some((Limit::Min, min));
             }
         }
         if let Some(max) = limits.max {
             if v > max {
-                return Some((Limite::Max, max));
+                return Some((Limit::Max, max));
             }
         }
         if let Some(safety) = limits.safety_limit {
             if v > safety {
-                return Some((Limite::SafetyLimit, safety));
+                return Some((Limit::SafetyLimit, safety));
             }
         }
         None
     }
 
     /// Limites do registro para um ator (fonte única).
-    fn limites_de(&self, canonical: &str) -> ActorLimits {
+    fn limits_of(&self, canonical: &str) -> ActorLimits {
         match self.registry.get(canonical).map(|d| &d.kind) {
             Some(DeviceKind::Actor { limits }) => limits.clone(),
             _ => ActorLimits::default(),
         }
     }
 
-    fn rejeitar_por_limite(
+    fn reject_over_limit(
         &mut self,
         canonical: &str,
-        valor: &Value,
-        limite: Limite,
-        valor_limite: f64,
-        caderno: &mut dyn Caderno,
+        value: &Value,
+        limit: Limit,
+        limit_value: f64,
+        ledger: &mut dyn Ledger,
     ) -> ActOutcome {
-        caderno.record(
+        ledger.record(
             rt_kinds::ACTOR_REJECTED_VALUE,
             &format!(
-                "Comando a '{canonical}' rejeitado sem envio: valor viola {} = {valor_limite}.",
-                limite.nome()
+                "Comando a '{canonical}' rejeitado sem envio: valor viola {} = {limit_value}.",
+                limit.name()
             ),
             Json::obj([
                 ("ator", Json::str(canonical)),
-                ("valor", valor.to_json()),
-                ("limite", Json::str(limite.nome())),
-                ("limite_valor", Json::num(valor_limite)),
+                ("valor", value.to_json()),
+                ("limite", Json::str(limit.name())),
+                ("limite_valor", Json::num(limit_value)),
             ]),
         );
-        caderno.actuator_action(canonical, valor, false);
-        ActOutcome::Rejeitado { limite, valor_limite }
+        ledger.actuator_action(canonical, value, false);
+        ActOutcome::Rejected { limit, limit_value }
     }
 
     /// Tenta entregar na rota REAL do ator (sem fallback).
     /// `Ok(true)` = entregue; `Ok(false)` = indisponível (segue fallback);
     /// `Err(outcome)` = terminativo (rejeição/domínio — sem fallback).
-    fn entregar_real(
+    fn deliver_real(
         &mut self,
         canonical: &str,
-        valor: &Value,
-        caderno: &mut dyn Caderno,
+        value: &Value,
+        ledger: &mut dyn Ledger,
     ) -> Result<bool, ActOutcome> {
-        let Some(dr) = self.atores_reais.get_mut(canonical) else {
+        let Some(dr) = self.real_actors.get_mut(canonical) else {
             return Ok(false);
         };
         // tentativas = 1 + retries (PLAN §3: fila com retry e fallback)
-        let mut latencia_ultima_us = 0u64;
+        let mut last_latency_us = 0u64;
         for _ in 0..=self.config.retries {
             let t0 = Instant::now();
-            let resultado = dr.apply(valor);
-            latencia_ultima_us = t0.elapsed().as_micros() as u64;
-            match resultado {
+            let result = dr.apply(value);
+            last_latency_us = t0.elapsed().as_micros() as u64;
+            match result {
                 Ok(()) => {
                     // Etapa 4 (PLAN §4.1): valor aplicado + latência do ack;
                     // o custo energético é estimado pelo Caderno (W × latência).
-                    atuacao_com_latencia(caderno, canonical, valor, latencia_ultima_us, true);
+                    actuation_with_latency(ledger, canonical, value, last_latency_us, true);
                     return Ok(true);
                 }
-                Err(crate::drivers::ErroAtor::ValorInvalido(motivo)) => {
-                    atuacao_com_latencia(caderno, canonical, valor, latencia_ultima_us, false);
-                    caderno.record(
+                Err(crate::drivers::ActorError::InvalidValue(reason)) => {
+                    actuation_with_latency(ledger, canonical, value, last_latency_us, false);
+                    ledger.record(
                         rt_kinds::ACTOR_REJECTED_VALUE,
-                        &format!("Comando a '{canonical}' fora do domínio do ator: {motivo}."),
+                        &format!("Comando a '{canonical}' fora do domínio do ator: {reason}."),
                         Json::obj([
                             ("ator", Json::str(canonical)),
-                            ("valor", valor.to_json()),
-                            ("motivo", Json::str(motivo.clone())),
+                            ("valor", value.to_json()),
+                            ("motivo", Json::str(reason.clone())),
                         ]),
                     );
-                    return Err(ActOutcome::ValorInvalido { motivo });
+                    return Err(ActOutcome::InvalidValue { reason });
                 }
-                Err(crate::drivers::ErroAtor::EscritaFalhou(_)) => {
+                Err(crate::drivers::ActorError::WriteFailed(_)) => {
                     continue; // retry de transporte antes do fallback
                 }
             }
         }
-        atuacao_com_latencia(caderno, canonical, valor, latencia_ultima_us, false);
-        caderno.record(
+        actuation_with_latency(ledger, canonical, value, last_latency_us, false);
+        ledger.record(
             rt_kinds::ATOR_INDISPONIVEL,
             &format!(
                 "Heartbeat do ator '{canonical}' não respondeu (rota {}).",
-                self.descricao_rota(canonical)
+                self.route_description(canonical)
             ),
             Json::obj([("ator", Json::str(canonical))]),
         );
@@ -563,66 +563,66 @@ impl FxpBus {
 
     /// Entrega remota (ACT → ACT_ACK, §4.3). `Some` = terminativo;
     /// `None` = indisponível (segue fallback).
-    fn entregar_remota(
+    fn deliver_remote(
         &mut self,
         canonical: &str,
-        valor: &Value,
-        caderno: &mut dyn Caderno,
+        value: &Value,
+        ledger: &mut dyn Ledger,
     ) -> Option<ActOutcome> {
-        let Some(Rota::Remota(addr)) = self.rotas.get(canonical).cloned() else {
-            return Some(ActOutcome::AtorInexistente);
+        let Some(Route::Remote(addr)) = self.routes.get(canonical).cloned() else {
+            return Some(ActOutcome::MissingActor);
         };
-        let seq = self.proximo_seq();
-        let pedido = Mensagem::act(canonical, wire_de(valor), seq, true);
+        let seq = self.next_seq();
+        let request = Message::act(canonical, wire_of(value), seq, true);
         let timeout = if matches!(addr, RemoteAddr::Tcp { .. }) {
             self.config.act_timeout_remote
         } else {
             self.config.act_timeout_local
         };
         let t0 = Instant::now();
-        match self.pedir_remoto(canonical, &addr, &pedido, timeout) {
+        match self.request_remote(canonical, &addr, &request, timeout) {
             Ok(resp) => {
-                let latencia_us = t0.elapsed().as_micros() as u64;
-                match resp.corpo {
-                    Corpo::ActAck { status } => match status {
-                        AckAct::Entregue => {
-                            atuacao_com_latencia(caderno, canonical, valor, latencia_us, true);
-                            Some(ActOutcome::Entregue)
+                let latency_us = t0.elapsed().as_micros() as u64;
+                match resp.body {
+                    Body::ActAck { status } => match status {
+                        AckAct::Delivered => {
+                            actuation_with_latency(ledger, canonical, value, latency_us, true);
+                            Some(ActOutcome::Delivered)
                         }
-                        AckAct::Rejeitado { limite, valor_limite } => {
-                            let limite = match limite {
-                                0 => Limite::Min,
-                                1 => Limite::Max,
-                                _ => Limite::SafetyLimit,
+                        AckAct::Rejected { limit, limit_value } => {
+                            let limit = match limit {
+                                0 => Limit::Min,
+                                1 => Limit::Max,
+                                _ => Limit::SafetyLimit,
                             };
-                            Some(self.rejeitar_por_limite(canonical, valor, limite, valor_limite, caderno))
+                            Some(self.reject_over_limit(canonical, value, limit, limit_value, ledger))
                         }
-                        AckAct::AtorInexistente => {
-                            caderno.record(
+                        AckAct::MissingActor => {
+                            ledger.record(
                                 rt_kinds::ATOR_INEXISTENTE,
                                 &format!("Ator '{canonical}' não registrado no peer remoto."),
                                 Json::obj([("ator", Json::str(canonical))]),
                             );
-                            atuacao_com_latencia(caderno, canonical, valor, latencia_us, false);
-                            Some(ActOutcome::AtorInexistente)
+                            actuation_with_latency(ledger, canonical, value, latency_us, false);
+                            Some(ActOutcome::MissingActor)
                         }
-                        AckAct::ValorInvalido { motivo } => {
-                            atuacao_com_latencia(caderno, canonical, valor, latencia_us, false);
-                            Some(ActOutcome::ValorInvalido { motivo })
+                        AckAct::InvalidValue { reason } => {
+                            actuation_with_latency(ledger, canonical, value, latency_us, false);
+                            Some(ActOutcome::InvalidValue { reason })
                         }
-                        AckAct::Indisponivel | AckAct::FallbackEsgotado => {
-                            atuacao_com_latencia(caderno, canonical, valor, latencia_us, false);
-                            caderno.record(
+                        AckAct::Unavailable | AckAct::FallbackExhausted => {
+                            actuation_with_latency(ledger, canonical, value, latency_us, false);
+                            ledger.record(
                                 rt_kinds::ATOR_INDISPONIVEL,
                                 &format!("Heartbeat do ator '{canonical}' não respondeu (peer)."),
                                 Json::obj([("ator", Json::str(canonical))]),
                             );
                             None
                         }
-                        AckAct::FallbackExecutado { alternativo } => {
+                        AckAct::FallbackExecuted { alternativo } => {
                             // O peer executou o fallback do registro DELE (§4.3).
-                            atuacao_com_latencia(caderno, &alternativo, valor, latencia_us, true);
-                            caderno.record(
+                            actuation_with_latency(ledger, &alternativo, value, latency_us, true);
+                            ledger.record(
                                 rt_kinds::FALLBACK_EXECUTADO,
                                 &format!(
                                     "Fallback '{alternativo}' acionado após falha de '{canonical}'."
@@ -630,22 +630,22 @@ impl FxpBus {
                                 Json::obj([
                                     ("primario", Json::str(canonical)),
                                     ("alternativo", Json::str(alternativo.clone())),
-                                    ("valor", valor.to_json()),
+                                    ("valor", value.to_json()),
                                 ]),
                             );
-                            Some(ActOutcome::FallbackExecutado { alternativo })
+                            Some(ActOutcome::FallbackExecuted { alternativo })
                         }
                     },
                     _ => {
-                        atuacao_com_latencia(caderno, canonical, valor, latencia_us, false);
+                        actuation_with_latency(ledger, canonical, value, latency_us, false);
                         None
                     }
                 }
             }
             Err(e) => {
-                self.conexoes.remove(canonical);
-                atuacao_com_latencia(caderno, canonical, valor, t0.elapsed().as_micros() as u64, false);
-                caderno.record(
+                self.connections.remove(canonical);
+                actuation_with_latency(ledger, canonical, value, t0.elapsed().as_micros() as u64, false);
+                ledger.record(
                     rt_kinds::ATOR_INDISPONIVEL,
                     &format!("Heartbeat do ator '{canonical}' não respondeu (transporte: {e})."),
                     Json::obj([("ator", Json::str(canonical))]),
@@ -657,35 +657,35 @@ impl FxpBus {
 
     /// Entrega em um ator específico pela rota DELE (fallback e re-entrega).
     /// `None` = indisponível.
-    fn entregar_rota(
+    fn deliver_route(
         &mut self,
         canonical: &str,
-        valor: &Value,
-        caderno: &mut dyn Caderno,
+        value: &Value,
+        ledger: &mut dyn Ledger,
     ) -> Option<ActOutcome> {
-        let rota = self.rotas.get(canonical)?.clone();
-        match rota {
-            Rota::Simulador => Some(self.sim.act(canonical, valor.clone(), caderno)),
-            Rota::Real => {
+        let route = self.routes.get(canonical)?.clone();
+        match route {
+            Route::Simulator => Some(self.sim.act(canonical, value.clone(), ledger)),
+            Route::Real => {
                 // Limites do registro (inclusivos) ANTES do envio (§4.3).
-                let limits = self.limites_de(canonical);
-                if let Some((limite, valor_limite)) = self.violacao(&limits, valor) {
-                    return Some(self.rejeitar_por_limite(
-                        canonical, valor, limite, valor_limite, caderno,
+                let limits = self.limits_of(canonical);
+                if let Some((limit, limit_value)) = self.violation(&limits, value) {
+                    return Some(self.reject_over_limit(
+                        canonical, value, limit, limit_value, ledger,
                     ));
                 }
-                match self.entregar_real(canonical, valor, caderno) {
-                    Ok(true) => Some(ActOutcome::Entregue),
+                match self.deliver_real(canonical, value, ledger) {
+                    Ok(true) => Some(ActOutcome::Delivered),
                     Ok(false) => None,
                     Err(outcome) => Some(outcome),
                 }
             }
-            Rota::Remota(_) => self.entregar_remota(canonical, valor, caderno),
-            Rota::Inacessivel { motivo } => {
-                caderno.actuator_action(canonical, valor, false);
-                caderno.record(
+            Route::Remote(_) => self.deliver_remote(canonical, value, ledger),
+            Route::Inaccessible { reason } => {
+                ledger.actuator_action(canonical, value, false);
+                ledger.record(
                     rt_kinds::ATOR_INDISPONIVEL,
-                    &format!("Ator '{canonical}' indisponível ({motivo})."),
+                    &format!("Ator '{canonical}' indisponível ({reason})."),
                     Json::obj([("ator", Json::str(canonical))]),
                 );
                 None
@@ -695,59 +695,59 @@ impl FxpBus {
 
     /// Fallback do REGISTRO (FORMAL §4.3): primary → alternativos declarados
     /// no registro; o runtime não implementa fallback próprio.
-    fn tentar_fallback(
+    fn try_fallback(
         &mut self,
-        primario: &str,
-        valor: &Value,
-        caderno: &mut dyn Caderno,
+        primary: &str,
+        value: &Value,
+        ledger: &mut dyn Ledger,
     ) -> ActOutcome {
         let alternativos: Vec<String> = self
             .registry
-            .get(primario)
+            .get(primary)
             .map(|d| d.fallback.clone())
             .unwrap_or_default();
         for alt in alternativos {
             if !self.registry.contains(&alt) {
                 continue;
             }
-            if let Some(outcome) = self.entregar_rota(&alt, valor, caderno) {
+            if let Some(outcome) = self.deliver_route(&alt, value, ledger) {
                 if outcome.ok() {
-                    caderno.record(
+                    ledger.record(
                         rt_kinds::FALLBACK_EXECUTADO,
-                        &format!("Fallback '{alt}' acionado após falha de '{primario}'."),
+                        &format!("Fallback '{alt}' acionado após falha de '{primary}'."),
                         Json::obj([
-                            ("primario", Json::str(primario)),
+                            ("primario", Json::str(primary)),
                             ("alternativo", Json::str(alt.clone())),
-                            ("valor", valor.to_json()),
+                            ("valor", value.to_json()),
                         ]),
                     );
                     // Contrato da Etapa 1/2: atuação por fallback SEMPRE
                     // devolve FallbackExecutado { alternativo } (BDD Caso 3),
                     // independentemente da variante de entrega da rota.
-                    return ActOutcome::FallbackExecutado { alternativo: alt };
+                    return ActOutcome::FallbackExecuted { alternativo: alt };
                 }
             }
         }
-        caderno.alert(
-            &format!("Todos os fallbacks de '{primario}' falharam."),
+        ledger.alert(
+            &format!("Todos os fallbacks de '{primary}' falharam."),
             Json::obj([
                 ("motivo", Json::str("fallback_esgotado")),
-                ("ator", Json::str(primario)),
+                ("ator", Json::str(primary)),
             ]),
         );
-        ActOutcome::FallbackEsgotado
+        ActOutcome::FallbackExhausted
     }
 
-    fn enfileirar(&mut self, ator: &str, valor: &Value, prioridade: u8) {
-        let cmd = Comando {
-            seq: self.proximo_seq(),
-            ator: ator.into(),
-            valor: valor.clone(),
-            prioridade,
-            ticks_esperando: 0,
-            primario: None,
+    fn enqueue(&mut self, actor: &str, value: &Value, priority: u8) {
+        let cmd = Command {
+            seq: self.next_seq(),
+            actor: actor.into(),
+            value: value.clone(),
+            priority,
+            ticks_waiting: 0,
+            primary: None,
         };
-        if self.fila.empilhar(cmd).is_err() {
+        if self.queue.enqueue(cmd).is_err() {
             // Guarda anti-inchaço estourou: auditoria honesta do descarte.
             // (capacidade 256 torna isso improvável; o evento é obrigatório)
         }
@@ -755,55 +755,55 @@ impl FxpBus {
 
     /// Re-entrega da fila no relógio virtual (PLAN §3.4: prioridades e
     /// timeout), com trilha completa no Caderno.
-    fn bombear_fila(&mut self, caderno: &mut dyn Caderno) {
-        if self.fila.is_empty() {
+    fn pump_queue(&mut self, ledger: &mut dyn Ledger) {
+        if self.queue.is_empty() {
             return;
         }
-        let mut pendentes = Vec::new();
-        while let Some(cmd) = self.fila.proximo() {
-            pendentes.push(cmd);
+        let mut pending = Vec::new();
+        while let Some(cmd) = self.queue.dequeue() {
+            pending.push(cmd);
         }
-        for cmd in pendentes {
-            if cmd.ticks_esperando >= self.config.queue_timeout_ticks {
-                caderno.record(
+        for cmd in pending {
+            if cmd.ticks_waiting >= self.config.queue_timeout_ticks {
+                ledger.record(
                     kinds::COMANDO_EXPIRADO,
                     &format!(
                         "Comando a '{}' (seq {}) expirou na fila após {} tick(s).",
-                        cmd.ator, cmd.seq, cmd.ticks_esperando
+                        cmd.actor, cmd.seq, cmd.ticks_waiting
                     ),
                     Json::obj([
-                        ("ator", Json::str(cmd.ator.clone())),
-                        ("valor", cmd.valor.to_json()),
-                        ("ticks", Json::num(cmd.ticks_esperando as f64)),
+                        ("ator", Json::str(cmd.actor.clone())),
+                        ("valor", cmd.value.to_json()),
+                        ("ticks", Json::num(cmd.ticks_waiting as f64)),
                     ]),
                 );
-                caderno.alert(
-                    &format!("Comando a '{}' expirou na fila do FXP.", cmd.ator),
+                ledger.alert(
+                    &format!("Comando a '{}' expirou na fila do FXP.", cmd.actor),
                     Json::obj([
                         ("motivo", Json::str("comando_expirado")),
-                        ("ator", Json::str(cmd.ator.clone())),
+                        ("ator", Json::str(cmd.actor.clone())),
                     ]),
                 );
                 continue;
             }
-            match self.entregar_rota(&cmd.ator, &cmd.valor, caderno) {
+            match self.deliver_route(&cmd.actor, &cmd.value, ledger) {
                 Some(outcome) if outcome.ok() => {
-                    caderno.record(
+                    ledger.record(
                         kinds::COMANDO_REENTREGUE,
                         &format!(
                             "Comando a '{}' re-entregue após {} tick(s) na fila.",
-                            cmd.ator, cmd.ticks_esperando
+                            cmd.actor, cmd.ticks_waiting
                         ),
                         Json::obj([
-                            ("ator", Json::str(cmd.ator.clone())),
-                            ("valor", cmd.valor.to_json()),
-                            ("ticks", Json::num(cmd.ticks_esperando as f64)),
+                            ("ator", Json::str(cmd.actor.clone())),
+                            ("valor", cmd.value.to_json()),
+                            ("ticks", Json::num(cmd.ticks_waiting as f64)),
                         ]),
                     );
                 }
                 _ => {
                     // Falhou de novo: volta com +1 tick (expiração no topo).
-                    let _ = self.fila.devolver(cmd);
+                    let _ = self.queue.requeue(cmd);
                 }
             }
         }
@@ -812,53 +812,53 @@ impl FxpBus {
     /// Varredura silenciosa da potência real (sem Caderno); falha vira alerta
     /// na próxima operação com caderno. Rotas remotas atualizam só quando
     /// lidas pelas regras (on_tick não faz I/O remoto — plano determinístico).
-    fn atualizar_potencia(&mut self) {
-        if self.rotas.get("cpu_power") != Some(&Rota::Real) {
+    fn update_power(&mut self) {
+        if self.routes.get("cpu_power") != Some(&Route::Real) {
             return;
         }
-        if let Some(t) = self.potencia_lida_em {
+        if let Some(t) = self.power_read_at {
             if t.elapsed() < self.config.cache_ttl {
                 return;
             }
         }
-        if let Some(dr) = self.sensores_reais.get_mut("cpu_power") {
+        if let Some(dr) = self.real_sensors.get_mut("cpu_power") {
             match dr.read() {
                 Ok(v) => {
-                    self.potencia_conhecida = v;
-                    self.potencia_inacessivel = false;
+                    self.known_power = v;
+                    self.power_inaccessible = false;
                 }
-                Err(_) => self.potencia_inacessivel = true,
+                Err(_) => self.power_inaccessible = true,
             }
-            self.potencia_lida_em = Some(Instant::now());
+            self.power_read_at = Some(Instant::now());
         }
     }
 }
 
 /// Rota pré-driver: o modo global modula o modo do dispositivo.
-enum RotaEspec {
-    Simulador,
-    Concreta,
-    Inacessivel { motivo: String },
+enum RouteSpec {
+    Simulator,
+    Concrete,
+    Inaccessible { reason: String },
 }
 
-fn rota_base(config: &BusConfig, d: &crate::registry::DeviceEntry) -> RotaEspec {
-    let modo_dispositivo = match config.modo {
-        ModoOperacao::Simulado => DeviceMode::Simulado,
-        ModoOperacao::Real | ModoOperacao::Hibrido => d.mode,
+fn base_route(config: &BusConfig, d: &crate::registry::DeviceEntry) -> RouteSpec {
+    let device_mode = match config.mode {
+        OperationMode::Simulated => DeviceMode::Simulated,
+        OperationMode::Real | OperationMode::Hybrid => d.mode,
     };
-    match (config.modo, modo_dispositivo) {
+    match (config.mode, device_mode) {
         // Modo real global proíbe rota sintética — §4.7 (nunca simulado mudo).
-        (ModoOperacao::Real, DeviceMode::Simulado) => RotaEspec::Inacessivel {
-            motivo: "modo real não roteia para simulador (dado sintético proibido)".into(),
+        (OperationMode::Real, DeviceMode::Simulated) => RouteSpec::Inaccessible {
+            reason: "modo real não roteia para simulador (dado sintético proibido)".into(),
         },
         // Simulado explícito (global, ou por dispositivo no híbrido).
-        (_, DeviceMode::Simulado) => RotaEspec::Simulador,
+        (_, DeviceMode::Simulated) => RouteSpec::Simulator,
         // Dispositivo real: rota concreta (Auto/driver/remota).
-        (_, DeviceMode::Real) => RotaEspec::Concreta,
+        (_, DeviceMode::Real) => RouteSpec::Concrete,
     }
 }
 
-fn wire_de(v: &Value) -> WireValue {
+fn wire_of(v: &Value) -> WireValue {
     match v {
         Value::Num(n) => WireValue::Num(*n),
         Value::Str(s) => WireValue::Str(s.clone()),
@@ -869,128 +869,128 @@ fn wire_de(v: &Value) -> WireValue {
 impl Fxp for FxpBus {
     fn read_sensor(
         &mut self,
-        nome: &str,
-        caderno: &mut dyn Caderno,
-    ) -> Result<f64, FalhaSensor> {
-        let canonical = self.registry.canonical_de(nome).to_string();
+        name: &str,
+        ledger: &mut dyn Ledger,
+    ) -> Result<f64, SensorFailure> {
+        let canonical = self.registry.canonical_of(name).to_string();
         if !self.registry.contains(&canonical) {
-            self.alerta_sensor(
-                caderno,
+            self.sensor_alert(
+                ledger,
                 "sensor_nao_registrado",
-                nome,
+                name,
                 "fora do registro do FXP.",
             );
-            return Err(FalhaSensor::NaoRegistrado);
+            return Err(SensorFailure::NotRegistered);
         }
         // §6: leitura por alias é idêntica à do canônico; o Caderno registra
         // o nome usado (LEITURA do engine) e o canônico (este evento).
-        if canonical != nome {
-            caderno.info(
+        if canonical != name {
+            ledger.info(
                 &format!(
-                    "Leitura de '{nome}' resolvida para o dispositivo canônico '{canonical}'."
+                    "Leitura de '{name}' resolvida para o dispositivo canônico '{canonical}'."
                 ),
                 Json::obj([
                     ("motivo", Json::str("alias")),
-                    ("sensor", Json::str(nome)),
+                    ("sensor", Json::str(name)),
                     ("canonical", Json::str(canonical.clone())),
                 ]),
             );
         }
-        match self.rotas.get(&canonical).cloned() {
-            Some(Rota::Simulador) => self.sim.read_sensor(&canonical, caderno),
-            Some(Rota::Real) => self.ler_real(&canonical, caderno),
-            Some(Rota::Remota(_)) => self.ler_remota(&canonical, caderno),
-            Some(Rota::Inacessivel { motivo }) => {
-                self.alerta_sensor(
-                    caderno,
+        match self.routes.get(&canonical).cloned() {
+            Some(Route::Simulator) => self.sim.read_sensor(&canonical, ledger),
+            Some(Route::Real) => self.read_real(&canonical, ledger),
+            Some(Route::Remote(_)) => self.read_remote(&canonical, ledger),
+            Some(Route::Inaccessible { reason }) => {
+                self.sensor_alert(
+                    ledger,
                     "sensor_inacessivel",
                     &canonical,
-                    &format!("{motivo}."),
+                    &format!("{reason}."),
                 );
-                Err(FalhaSensor::Inacessivel)
+                Err(SensorFailure::Inaccessible)
             }
             None => {
-                self.alerta_sensor(caderno, "sensor_nao_registrado", &canonical, "sem rota.");
-                Err(FalhaSensor::NaoRegistrado)
+                self.sensor_alert(ledger, "sensor_nao_registrado", &canonical, "sem rota.");
+                Err(SensorFailure::NotRegistered)
             }
         }
     }
 
-    fn act(&mut self, ator: &str, valor: Value, caderno: &mut dyn Caderno) -> ActOutcome {
-        self.act_with_priority(ator, valor, PRIORIDADE_NORMAL, caderno)
+    fn act(&mut self, actor: &str, value: Value, ledger: &mut dyn Ledger) -> ActOutcome {
+        self.act_with_priority(actor, value, PRIORITY_NORMAL, ledger)
     }
 
     fn act_with_priority(
         &mut self,
-        ator: &str,
-        valor: Value,
-        prioridade: u8,
-        caderno: &mut dyn Caderno,
+        actor: &str,
+        value: Value,
+        priority: u8,
+        ledger: &mut dyn Ledger,
     ) -> ActOutcome {
-        let canonical = self.registry.canonical_de(ator).to_string();
+        let canonical = self.registry.canonical_of(actor).to_string();
         if !self.registry.contains(&canonical) {
-            caderno.record(
+            ledger.record(
                 rt_kinds::ATOR_INEXISTENTE,
-                &format!("Ator '{ator}' não registrado no FXP."),
-                Json::obj([("ator", Json::str(ator))]),
+                &format!("Ator '{actor}' não registrado no FXP."),
+                Json::obj([("ator", Json::str(actor))]),
             );
-            caderno.actuator_action(ator, &valor, false);
-            return ActOutcome::AtorInexistente;
+            ledger.actuator_action(actor, &value, false);
+            return ActOutcome::MissingActor;
         }
-        let rota = self.rotas.get(&canonical).cloned();
-        match rota {
-            Some(Rota::Simulador) => {
+        let route = self.routes.get(&canonical).cloned();
+        match route {
+            Some(Route::Simulator) => {
                 // Paridade com a Etapa 2: validação, efeitos e eventos do sim.
-                self.sim.act(&canonical, valor, caderno)
+                self.sim.act(&canonical, value, ledger)
             }
-            Some(Rota::Real) | Some(Rota::Remota(_)) | Some(Rota::Inacessivel { .. }) => {
+            Some(Route::Real) | Some(Route::Remote(_)) | Some(Route::Inaccessible { .. }) => {
                 // Limites do REGISTRO (inclusivos) antes do envio (§4.3).
-                let limits = self.limites_de(&canonical);
-                if let Some((limite, valor_limite)) = self.violacao(&limits, &valor) {
-                    return self.rejeitar_por_limite(
+                let limits = self.limits_of(&canonical);
+                if let Some((limit, limit_value)) = self.violation(&limits, &value) {
+                    return self.reject_over_limit(
                         &canonical,
-                        &valor,
-                        limite,
-                        valor_limite,
-                        caderno,
+                        &value,
+                        limit,
+                        limit_value,
+                        ledger,
                     );
                 }
-                match self.entregar_rota(&canonical, &valor, caderno) {
+                match self.deliver_route(&canonical, &value, ledger) {
                     Some(outcome) => outcome,
                     None => {
                         // Indisponível: fallback do registro; esgotado → fila
                         // prioritária (retry em ticks futuros — PLAN §3.4).
-                        let outcome = self.tentar_fallback(&canonical, &valor, caderno);
-                        if matches!(outcome, ActOutcome::FallbackEsgotado) {
-                            self.enfileirar(&canonical, &valor, prioridade);
+                        let outcome = self.try_fallback(&canonical, &value, ledger);
+                        if matches!(outcome, ActOutcome::FallbackExhausted) {
+                            self.enqueue(&canonical, &value, priority);
                         }
                         outcome
                     }
                 }
             }
             None => {
-                caderno.record(
+                ledger.record(
                     rt_kinds::ATOR_INEXISTENTE,
-                    &format!("Ator '{ator}' não registrado no FXP."),
-                    Json::obj([("ator", Json::str(ator))]),
+                    &format!("Ator '{actor}' não registrado no FXP."),
+                    Json::obj([("ator", Json::str(actor))]),
                 );
-                caderno.actuator_action(ator, &valor, false);
-                ActOutcome::AtorInexistente
+                ledger.actuator_action(actor, &value, false);
+                ActOutcome::MissingActor
             }
         }
     }
 
     fn cpu_power(&self) -> f64 {
-        match self.rotas.get("cpu_power") {
-            Some(Rota::Simulador) | None => self.sim.cpu_power(),
-            _ => self.potencia_conhecida,
+        match self.routes.get("cpu_power") {
+            Some(Route::Simulator) | None => self.sim.cpu_power(),
+            _ => self.known_power,
         }
     }
 
-    fn on_tick(&mut self, caderno: &mut dyn Caderno) {
-        self.sim.on_tick(caderno);
-        self.atualizar_potencia();
-        self.bombear_fila(caderno);
+    fn on_tick(&mut self, ledger: &mut dyn Ledger) {
+        self.sim.on_tick(ledger);
+        self.update_power();
+        self.pump_queue(ledger);
     }
 
     fn disk_bytes_used(&self) -> u64 {

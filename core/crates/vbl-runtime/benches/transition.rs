@@ -11,7 +11,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::path::PathBuf;
 use vbl_lang::parse;
-use vbl_runtime::{carregar, Engine, Fxp, FxpSimulator};
+use vbl_runtime::{load, Engine, Fxp, FxpSimulator};
 
 fn dir_temp(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!(
@@ -25,20 +25,20 @@ fn dir_temp(tag: &str) -> PathBuf {
 
 /// Latência de transição: 1 forma, 1 regra que dispara
 /// (reclassify_as_equilibrium + persistência) — cenário do ADR-001.
-fn bench_transicao_revisao(c: &mut Criterion) {
-    let mut grupo = c.benchmark_group("transicao");
-    grupo.throughput(Throughput::Elements(1));
-    grupo.bench_function("revisao_dispara_reclassify_1_forma", |b| {
+fn bench_transition_review(c: &mut Criterion) {
+    let mut group = c.benchmark_group("transicao");
+    group.throughput(Throughput::Elements(1));
+    group.bench_function("revisao_dispara_reclassify_1_forma", |b| {
         b.iter_batched(
             || {
-                let fonte = "\
+                let source = "\
 nonequilibrium P { value: \"v\", horizon: 60s, source_path: \"attention\", maintenance_deadline: 3s }
 review P { when attention < 30% -> reclassify_as_equilibrium }";
-                let (p, d) = parse(fonte);
+                let (p, d) = parse(source);
                 assert!(!d.has_errors());
                 let dir = dir_temp("revisao");
-                let mut engine = Engine::novo(FxpSimulator::novo(), 1.0, &dir);
-                carregar(&mut engine, &p);
+                let mut engine = Engine::new(FxpSimulator::new(), 1.0, &dir);
+                load(&mut engine, &p);
                 engine.fxp.set_sensor("attention", 15.0);
                 (engine, dir)
             },
@@ -49,28 +49,28 @@ review P { when attention < 30% -> reclassify_as_equilibrium }";
             criterion::BatchSize::PerIteration,
         );
     });
-    grupo.finish();
+    group.finish();
 }
 
 /// Custo do tick por escala — varredura O(N + vencidos).
-fn bench_tick_escalas(c: &mut Criterion) {
-    let mut grupo = c.benchmark_group("tick");
+fn bench_tick_scales(c: &mut Criterion) {
+    let mut group = c.benchmark_group("tick");
     for &n in &[1usize, 100, 1000] {
-        grupo.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
-            let mut formas = String::new();
+        group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
+            let mut forms = String::new();
             for i in 0..n {
-                formas.push_str(&format!("event F{i} {{ value: \"v{i}\", horizon: 1000000s }}\n"));
+                forms.push_str(&format!("event F{i} {{ value: \"v{i}\", horizon: 1000000s }}\n"));
             }
-            let (p, d) = parse(&formas);
+            let (p, d) = parse(&forms);
             assert!(!d.has_errors());
             let dir = dir_temp("tick");
-            let mut engine = Engine::novo(FxpSimulator::novo(), 1.0, &dir);
-            carregar(&mut engine, &p);
+            let mut engine = Engine::new(FxpSimulator::new(), 1.0, &dir);
+            load(&mut engine, &p);
             b.iter(|| engine.tick());
             let _ = std::fs::remove_dir_all(dir);
         });
     }
-    grupo.finish();
+    group.finish();
 }
 
 /// `subvert` — interrupção de prioridade máxima, dissolução no mesmo tick.
@@ -78,14 +78,14 @@ fn bench_subvert(c: &mut Criterion) {
     c.bench_function("subvert_mesmo_tick", |b| {
         b.iter_batched(
             || {
-                let fonte = "\
+                let source = "\
 nonequilibrium T { value: \"lucro\", horizon: 30s, source_path: \"cpu_temp\", maintenance_deadline: 10s }
 review T { when cpu_temp > 85°C -> subvert, act(CpuPowerCap, 50) }";
-                let (p, d) = parse(fonte);
+                let (p, d) = parse(source);
                 assert!(!d.has_errors());
                 let dir = dir_temp("subvert");
-                let mut engine = Engine::novo(FxpSimulator::novo(), 1.0, &dir);
-                carregar(&mut engine, &p);
+                let mut engine = Engine::new(FxpSimulator::new(), 1.0, &dir);
+                load(&mut engine, &p);
                 engine.fxp.set_sensor("cpu_temp", 86.5);
                 (engine, dir)
             },
@@ -104,14 +104,14 @@ fn bench_fxp_act(c: &mut Criterion) {
         b.iter_batched(
             || {
                 let dir = dir_temp("act");
-                let engine = Engine::novo(FxpSimulator::novo(), 1.0, &dir);
+                let engine = Engine::new(FxpSimulator::new(), 1.0, &dir);
                 (engine, dir)
             },
             |(mut engine, dir)| {
                 for _ in 0..100 {
                     engine
                         .fxp
-                        .act("Ventoinha", vbl_runtime::Value::Num(100.0), &mut engine.caderno);
+                        .act("Ventoinha", vbl_runtime::Value::Num(100.0), &mut engine.ledger);
                 }
                 let _ = std::fs::remove_dir_all(dir);
             },
@@ -120,5 +120,5 @@ fn bench_fxp_act(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_transicao_revisao, bench_tick_escalas, bench_subvert, bench_fxp_act);
+criterion_group!(benches, bench_transition_review, bench_tick_scales, bench_subvert, bench_fxp_act);
 criterion_main!(benches);

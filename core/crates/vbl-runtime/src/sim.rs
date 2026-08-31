@@ -1,7 +1,7 @@
 //! Simulador físico determinístico do FXP (esqueleto da Etapa 1, PLAN §6.5 —
 //! evolui para módulo próprio na Etapa 3).
 //!
-//! - Séries temporais roteirizadas (`programar`/`set_sensor`): determinismo
+//! - Séries temporais roteirizadas (`schedule`/`set_sensor`): determinismo
 //!   total, sem aleatoriedade;
 //! - Injeção de falhas: sensor ausente, registrado porém inacessível, ator
 //!   que não responde (heartbeat);
@@ -10,9 +10,9 @@
 //!   fallback próprio;
 //! - Mensagens FXP serializadas em processo (schema binário v1: Etapa 3).
 
-use crate::notebook::{kinds, Caderno};
+use crate::ledger::{kinds, Ledger};
 use crate::fxp::{
-    ActOutcome, ActorLimits, ActorState, EfeitoAtor, FalhaSensor, Fxp, Limite, Registry, SensorInfo,
+    ActOutcome, ActorLimits, ActorState, ActorEffect, SensorFailure, Fxp, Limit, Registry, SensorInfo,
     SensorState, Value,
 };
 use crate::json::Json;
@@ -20,34 +20,34 @@ use std::collections::BTreeMap;
 
 /// Mensagem FXP serializada (fronteira em processo, sem schema binário).
 #[derive(Debug, Clone, PartialEq)]
-pub struct Mensagem {
+pub struct Message {
     pub seq: u64,
     pub op: String,
-    pub ator: String,
-    pub valor: Value,
+    pub actor: String,
+    pub value: Value,
     pub tick: u64,
     /// Presente quando a entrega veio de um fallback.
-    pub fallback_de: Option<String>,
+    pub fallback_of: Option<String>,
 }
 
 #[derive(Debug, Clone)]
-pub struct SimuladorBuilder {
+pub struct SimulatorBuilder {
     registry: Registry,
-    valores: BTreeMap<String, f64>,
+    values: BTreeMap<String, f64>,
 }
 
-impl Default for SimuladorBuilder {
+impl Default for SimulatorBuilder {
     fn default() -> Self {
-        Self::novo()
+        Self::new()
     }
 }
 
-impl SimuladorBuilder {
+impl SimulatorBuilder {
     /// Registro mínimo (FORMAL §6) + valores iniciais plausíveis.
-    pub fn novo() -> Self {
+    pub fn new() -> Self {
         Self {
-            registry: Registry::minimo(),
-            valores: BTreeMap::from([
+            registry: Registry::minimum(),
+            values: BTreeMap::from([
                 ("cpu_temp".to_string(), 55.0),
                 ("cpu_power".to_string(), 150.0),
                 ("attention".to_string(), 100.0),
@@ -55,49 +55,49 @@ impl SimuladorBuilder {
         }
     }
 
-    pub fn com_sensor(mut self, nome: &str, info: SensorInfo, valor: f64) -> Self {
-        self.registry.sensores.insert(nome.into(), info);
-        self.valores.insert(nome.into(), valor);
+    pub fn with_sensor(mut self, name: &str, info: SensorInfo, value: f64) -> Self {
+        self.registry.sensores.insert(name.into(), info);
+        self.values.insert(name.into(), value);
         self
     }
 
-    pub fn com_ator(mut self, nome: &str, limits: ActorLimits) -> Self {
-        self.registry.atores.insert(nome.into(), limits);
+    pub fn with_actor(mut self, name: &str, limits: ActorLimits) -> Self {
+        self.registry.actors.insert(name.into(), limits);
         self
     }
 
-    pub fn com_valor(mut self, sensor: &str, valor: f64) -> Self {
-        self.valores.insert(sensor.into(), valor);
+    pub fn with_value(mut self, sensor: &str, value: f64) -> Self {
+        self.values.insert(sensor.into(), value);
         self
     }
 
-    pub fn construir(self) -> FxpSimulator {
+    pub fn build(self) -> FxpSimulator {
         let mut sim = FxpSimulator {
             registry: self.registry,
             sensores: BTreeMap::new(),
-            atores: BTreeMap::new(),
+            actors: BTreeMap::new(),
             outbox: Vec::new(),
-            entregues: Vec::new(),
+            delivered: Vec::new(),
             seq: 0,
             ticks: 0,
-            cronograma: BTreeMap::new(),
+            schedule: BTreeMap::new(),
             disk_bytes_used: 1024,
         };
-        for (nome, valor) in self.valores {
+        for (name, value) in self.values {
             sim.sensores
-                .insert(nome.clone(), SensorState { valor, acessivel: true });
+                .insert(name.clone(), SensorState { value, accessible: true });
         }
         // Atores com efeitos físicos determinísticos (PLAN §6.5)
-        for nome in ["CpuPowerCap", "Ventoinha", "LedIndicador"] {
-            if let Some(limits) = sim.registry.atores.get(nome).cloned() {
-                let efeito = match nome {
-                    "CpuPowerCap" => EfeitoAtor::PowerCap,
-                    "Ventoinha" => EfeitoAtor::Ventoinha,
-                    _ => EfeitoAtor::Nenhum,
+        for name in ["CpuPowerCap", "Ventoinha", "LedIndicador"] {
+            if let Some(limits) = sim.registry.actors.get(name).cloned() {
+                let effect = match name {
+                    "CpuPowerCap" => ActorEffect::PowerCap,
+                    "Ventoinha" => ActorEffect::Fan,
+                    _ => ActorEffect::NoEffect,
                 };
-                sim.atores.insert(
-                    nome.to_string(),
-                    ActorState { limits, atual: None, disponivel: true, fallback: Vec::new(), efeito },
+                sim.actors.insert(
+                    name.to_string(),
+                    ActorState { limits, current: None, available: true, fallback: Vec::new(), effect },
                 );
             }
         }
@@ -110,102 +110,102 @@ impl SimuladorBuilder {
 pub struct FxpSimulator {
     registry: Registry,
     sensores: BTreeMap<String, SensorState>,
-    pub atores: BTreeMap<String, ActorState>,
+    pub actors: BTreeMap<String, ActorState>,
     /// Mensagens serializadas (todo comando, mesmo rejeitado).
-    pub outbox: Vec<Mensagem>,
+    pub outbox: Vec<Message>,
     /// Entregas efetivadas (ator correto).
-    pub entregues: Vec<Mensagem>,
+    pub delivered: Vec<Message>,
     seq: u64,
     ticks: u64,
     /// Séries roteirizadas: tick (1-based) → valores absolutos de sensores.
-    cronograma: BTreeMap<u64, Vec<(String, f64)>>,
+    schedule: BTreeMap<u64, Vec<(String, f64)>>,
     disk_bytes_used: u64,
 }
 
 impl FxpSimulator {
-    pub fn novo() -> Self {
-        SimuladorBuilder::novo().construir()
+    pub fn new() -> Self {
+        SimulatorBuilder::new().build()
     }
 
     // ------------------------------------------------------------------
     // Roteirização do mundo e injeção de falhas (PLAN §6.5)
     // ------------------------------------------------------------------
-    pub fn set_sensor(&mut self, nome: &str, valor: f64) {
-        if let Some(s) = self.sensores.get_mut(nome) {
-            s.valor = valor;
-            s.acessivel = true;
+    pub fn set_sensor(&mut self, name: &str, value: f64) {
+        if let Some(s) = self.sensores.get_mut(name) {
+            s.value = value;
+            s.accessible = true;
         }
     }
 
     /// Sensor registrado porém inacessível (FORMAL §4.7).
-    pub fn falhar_sensor(&mut self, nome: &str) {
-        if let Some(s) = self.sensores.get_mut(nome) {
-            s.acessivel = false;
+    pub fn fail_sensor(&mut self, name: &str) {
+        if let Some(s) = self.sensores.get_mut(name) {
+            s.accessible = false;
         }
     }
 
-    pub fn recuperar_sensor(&mut self, nome: &str) {
-        if let Some(s) = self.sensores.get_mut(nome) {
-            s.acessivel = true;
+    pub fn recover_sensor(&mut self, name: &str) {
+        if let Some(s) = self.sensores.get_mut(name) {
+            s.accessible = true;
         }
     }
 
     /// Remove sensor do registro (falha `sensor_nao_registrado`).
-    pub fn desregistrar_sensor(&mut self, nome: &str) {
-        self.sensores.remove(nome);
-        self.registry.sensores.remove(nome);
+    pub fn unregister_sensor(&mut self, name: &str) {
+        self.sensores.remove(name);
+        self.registry.sensores.remove(name);
     }
 
     /// Agenda valor absoluto para um tick (1-based).
-    pub fn programar(&mut self, tick: u64, sensor: &str, valor: f64) {
-        self.cronograma.entry(tick).or_default().push((sensor.into(), valor));
+    pub fn schedule(&mut self, tick: u64, sensor: &str, value: f64) {
+        self.schedule.entry(tick).or_default().push((sensor.into(), value));
     }
 
     /// Ator para de responder (heartbeat falho — BDD Caso 3).
-    pub fn falhar_ator(&mut self, nome: &str) {
-        if let Some(a) = self.atores.get_mut(nome) {
-            a.disponivel = false;
+    pub fn fail_actor(&mut self, name: &str) {
+        if let Some(a) = self.actors.get_mut(name) {
+            a.available = false;
         }
     }
 
-    pub fn recuperar_ator(&mut self, nome: &str) {
-        if let Some(a) = self.atores.get_mut(nome) {
-            a.disponivel = true;
+    pub fn recover_actor(&mut self, name: &str) {
+        if let Some(a) = self.actors.get_mut(name) {
+            a.available = true;
         }
     }
 
     /// Política de fallback fica no REGISTRO do FXP (FORMAL §4.3).
-    pub fn definir_fallback(&mut self, primario: &str, alternativos: &[&str]) {
-        if let Some(a) = self.atores.get_mut(primario) {
+    pub fn set_fallback(&mut self, primary: &str, alternativos: &[&str]) {
+        if let Some(a) = self.actors.get_mut(primary) {
             a.fallback = alternativos.iter().map(|s| s.to_string()).collect();
         }
     }
 
     /// Registra ator extra (extensão opcional, ex.: `VentoinhaReserva`).
-    pub fn registrar_ator(&mut self, nome: &str, limits: ActorLimits) {
-        self.registry.atores.insert(nome.into(), limits.clone());
-        self.atores.insert(
-            nome.into(),
-            ActorState { limits, atual: None, disponivel: true, fallback: Vec::new(), efeito: EfeitoAtor::Nenhum },
+    pub fn register_actor(&mut self, name: &str, limits: ActorLimits) {
+        self.registry.actors.insert(name.into(), limits.clone());
+        self.actors.insert(
+            name.into(),
+            ActorState { limits, current: None, available: true, fallback: Vec::new(), effect: ActorEffect::NoEffect },
         );
     }
 
     /// Registra (ou substitui) um sensor no registro/simulador — usado pelo
     /// bus da Etapa 3 para sincronizar o `DeviceRegistry` (fonte única) com
     /// o backend simulado; valor inicial plausível é 0.0 até roteirização.
-    pub fn registrar_sensor(&mut self, nome: &str, info: SensorInfo) {
-        self.registry.sensores.insert(nome.into(), info);
+    pub fn register_sensor(&mut self, name: &str, info: SensorInfo) {
+        self.registry.sensores.insert(name.into(), info);
         self.sensores.insert(
-            nome.into(),
-            SensorState { valor: 0.0, acessivel: true },
+            name.into(),
+            SensorState { value: 0.0, accessible: true },
         );
     }
 
     // ------------------------------------------------------------------
     // Observação (testes/CLI)
     // ------------------------------------------------------------------
-    pub fn ator_atual(&self, nome: &str) -> Option<&Value> {
-        self.atores.get(nome).and_then(|a| a.atual.as_ref())
+    pub fn current_actor(&self, name: &str) -> Option<&Value> {
+        self.actors.get(name).and_then(|a| a.current.as_ref())
     }
 
     /// Registro atual (sensores/atores + limites) — FORMAL §6.
@@ -213,167 +213,167 @@ impl FxpSimulator {
         &self.registry
     }
 
-    pub fn sensor_valor(&self, nome: &str) -> Option<f64> {
-        self.sensores.get(nome).map(|s| s.valor)
+    pub fn sensor_value(&self, name: &str) -> Option<f64> {
+        self.sensores.get(name).map(|s| s.value)
     }
 
-    fn violacao_de_limite(limits: &ActorLimits, valor: f64) -> Option<(Limite, f64)> {
+    fn limit_violation(limits: &ActorLimits, value: f64) -> Option<(Limit, f64)> {
         // limites INCLUSIVOS: valor igual ao limite é aceito (FORMAL §4.3)
         if let Some(min) = limits.min {
-            if valor < min {
-                return Some((Limite::Min, min));
+            if value < min {
+                return Some((Limit::Min, min));
             }
         }
         if let Some(max) = limits.max {
-            if valor > max {
-                return Some((Limite::Max, max));
+            if value > max {
+                return Some((Limit::Max, max));
             }
         }
         if let Some(safety) = limits.safety_limit {
-            if valor > safety {
-                return Some((Limite::SafetyLimit, safety));
+            if value > safety {
+                return Some((Limit::SafetyLimit, safety));
             }
         }
         None
     }
 
-    fn entregar(&mut self, ator: &str, valor: &Value, msg: Mensagem, caderno: &mut dyn Caderno) {
-        let efeito = self.atores.get(ator).map(|a| a.efeito).unwrap_or_default();
-        match efeito {
-            EfeitoAtor::PowerCap => {
-                if let Some(v) = valor.as_num() {
-                    let atual = self.sensor_valor("cpu_power").unwrap_or(v);
-                    if v < atual {
+    fn deliver(&mut self, actor: &str, value: &Value, msg: Message, ledger: &mut dyn Ledger) {
+        let effect = self.actors.get(actor).map(|a| a.effect).unwrap_or_default();
+        match effect {
+            ActorEffect::PowerCap => {
+                if let Some(v) = value.as_num() {
+                    let current = self.sensor_value("cpu_power").unwrap_or(v);
+                    if v < current {
                         self.set_sensor("cpu_power", v);
                     }
                 }
             }
-            EfeitoAtor::Ventoinha => {
-                if let Some(v) = valor.as_num() {
-                    if let Some(t) = self.sensor_valor("cpu_temp") {
-                        let novo = (t - (v / 255.0) * 8.0).max(0.0);
-                        self.set_sensor("cpu_temp", novo);
+            ActorEffect::Fan => {
+                if let Some(v) = value.as_num() {
+                    if let Some(t) = self.sensor_value("cpu_temp") {
+                        let new = (t - (v / 255.0) * 8.0).max(0.0);
+                        self.set_sensor("cpu_temp", new);
                     }
                 }
             }
-            EfeitoAtor::Nenhum => {}
+            ActorEffect::NoEffect => {}
         }
-        if let Some(a) = self.atores.get_mut(ator) {
-            a.atual = Some(valor.clone());
+        if let Some(a) = self.actors.get_mut(actor) {
+            a.current = Some(value.clone());
         }
-        self.entregues.push(msg);
-        caderno.actuator_action(ator, valor, true);
+        self.delivered.push(msg);
+        ledger.actuator_action(actor, value, true);
     }
 }
 
 impl Default for FxpSimulator {
     fn default() -> Self {
-        Self::novo()
+        Self::new()
     }
 }
 
 impl Fxp for FxpSimulator {
     fn read_sensor(
         &mut self,
-        nome: &str,
-        caderno: &mut dyn Caderno,
-    ) -> Result<f64, FalhaSensor> {
-        let sensor = self.sensores.get(nome);
+        name: &str,
+        ledger: &mut dyn Ledger,
+    ) -> Result<f64, SensorFailure> {
+        let sensor = self.sensores.get(name);
         match sensor {
             None => {
-                caderno.alert(
+                ledger.alert(
                     &format!(
-                        "Sensor '{nome}' não registrado no FXP (falha de I/O). Condição não avaliada neste tick."
+                        "Sensor '{name}' não registrado no FXP (falha de I/O). Condição não avaliada neste tick."
                     ),
                     Json::obj([
                         ("motivo", Json::str("sensor_nao_registrado")),
-                        ("sensor", Json::str(nome)),
+                        ("sensor", Json::str(name)),
                     ]),
                 );
-                Err(FalhaSensor::NaoRegistrado)
+                Err(SensorFailure::NotRegistered)
             }
-            Some(s) if !s.acessivel => {
-                caderno.alert(
+            Some(s) if !s.accessible => {
+                ledger.alert(
                     &format!(
-                        "Sensor '{nome}' registrado porém inacessível (falha de leitura). Condição não avaliada neste tick."
+                        "Sensor '{name}' registrado porém inacessível (falha de leitura). Condição não avaliada neste tick."
                     ),
                     Json::obj([
                         ("motivo", Json::str("sensor_inacessivel")),
-                        ("sensor", Json::str(nome)),
+                        ("sensor", Json::str(name)),
                     ]),
                 );
-                Err(FalhaSensor::Inacessivel)
+                Err(SensorFailure::Inaccessible)
             }
-            Some(s) => Ok(arredondar2(s.valor)),
+            Some(s) => Ok(arredondar2(s.value)),
         }
     }
 
-    fn act(&mut self, ator: &str, valor: Value, caderno: &mut dyn Caderno) -> ActOutcome {
+    fn act(&mut self, actor: &str, value: Value, ledger: &mut dyn Ledger) -> ActOutcome {
         self.seq += 1;
-        let msg = Mensagem {
+        let msg = Message {
             seq: self.seq,
             op: "act".into(),
-            ator: ator.into(),
-            valor: valor.clone(),
+            actor: actor.into(),
+            value: value.clone(),
             tick: self.ticks,
-            fallback_de: None,
+            fallback_of: None,
         };
         self.outbox.push(msg);
 
-        let Some(estado) = self.atores.get(ator).cloned() else {
-            caderno.record(
+        let Some(state) = self.actors.get(actor).cloned() else {
+            ledger.record(
                 kinds::ATOR_INEXISTENTE,
-                &format!("Ator '{ator}' não registrado no FXP."),
-                Json::obj([("ator", Json::str(ator))]),
+                &format!("Ator '{actor}' não registrado no FXP."),
+                Json::obj([("ator", Json::str(actor))]),
             );
-            caderno.actuator_action(ator, &valor, false);
-            return ActOutcome::AtorInexistente;
+            ledger.actuator_action(actor, &value, false);
+            return ActOutcome::MissingActor;
         };
 
-        if !estado.disponivel {
-            caderno.actuator_action(ator, &valor, false);
-            caderno.record(
+        if !state.available {
+            ledger.actuator_action(actor, &value, false);
+            ledger.record(
                 kinds::ATOR_INDISPONIVEL,
-                &format!("Heartbeat do ator '{ator}' não respondeu."),
-                Json::obj([("ator", Json::str(ator))]),
+                &format!("Heartbeat do ator '{actor}' não respondeu."),
+                Json::obj([("ator", Json::str(actor))]),
             );
-            return self.tentar_fallback(ator, &valor, &estado.fallback, caderno);
+            return self.try_fallback(actor, &value, &state.fallback, ledger);
         }
 
-        if let Some(v) = valor.as_num() {
-            if let Some((limite, valor_limite)) = Self::violacao_de_limite(&estado.limits, v) {
-                caderno.record(
+        if let Some(v) = value.as_num() {
+            if let Some((limit, limit_value)) = Self::limit_violation(&state.limits, v) {
+                ledger.record(
                     kinds::ACTOR_REJECTED_VALUE,
                     &format!(
-                        "Comando a '{ator}' rejeitado sem envio: valor {v} viola {} = {valor_limite}.",
-                        limite.nome()
+                        "Comando a '{actor}' rejeitado sem envio: valor {v} viola {} = {limit_value}.",
+                        limit.name()
                     ),
                     Json::obj([
-                        ("ator", Json::str(ator)),
+                        ("ator", Json::str(actor)),
                         ("valor", Json::num(v)),
-                        ("limite", Json::str(limite.nome())),
-                        ("limite_valor", Json::num(valor_limite)),
+                        ("limite", Json::str(limit.name())),
+                        ("limite_valor", Json::num(limit_value)),
                     ]),
                 );
-                caderno.actuator_action(ator, &valor, false);
-                return ActOutcome::Rejeitado { limite, valor_limite };
+                ledger.actuator_action(actor, &value, false);
+                return ActOutcome::Rejected { limit, limit_value };
             }
         }
 
         let msg = self.outbox.last().unwrap().clone();
-        self.entregar(ator, &valor, msg, caderno);
-        ActOutcome::Entregue
+        self.deliver(actor, &value, msg, ledger);
+        ActOutcome::Delivered
     }
 
     fn cpu_power(&self) -> f64 {
-        self.sensores.get("cpu_power").map(|s| s.valor).unwrap_or(0.0)
+        self.sensores.get("cpu_power").map(|s| s.value).unwrap_or(0.0)
     }
 
-    fn on_tick(&mut self, _caderno: &mut dyn Caderno) {
+    fn on_tick(&mut self, _ledger: &mut dyn Ledger) {
         self.ticks += 1;
-        if let Some(valores) = self.cronograma.remove(&self.ticks) {
-            for (nome, valor) in valores {
-                self.set_sensor(&nome, valor);
+        if let Some(values) = self.schedule.remove(&self.ticks) {
+            for (name, value) in values {
+                self.set_sensor(&name, value);
             }
         }
     }
@@ -392,24 +392,24 @@ impl Fxp for FxpSimulator {
 }
 
 impl FxpSimulator {
-    fn tentar_fallback(
+    fn try_fallback(
         &mut self,
-        primario: &str,
-        valor: &Value,
+        primary: &str,
+        value: &Value,
         fallback: &[String],
-        caderno: &mut dyn Caderno,
+        ledger: &mut dyn Ledger,
     ) -> ActOutcome {
         for alt in fallback {
-            let Some(alt_limits) = self.registry.atores.get(alt).cloned() else {
+            let Some(alt_limits) = self.registry.actors.get(alt).cloned() else {
                 continue;
             };
-            let disponivel = self.atores.get(alt).map(|a| a.disponivel).unwrap_or(false);
-            if !disponivel {
+            let available = self.actors.get(alt).map(|a| a.available).unwrap_or(false);
+            if !available {
                 continue;
             }
-            if let Some(v) = valor.as_num() {
-                if Self::violacao_de_limite(&alt_limits, v).is_some() {
-                    caderno.alert(
+            if let Some(v) = value.as_num() {
+                if Self::limit_violation(&alt_limits, v).is_some() {
+                    ledger.alert(
                         &format!("Fallback '{alt}' rejeitou o valor {v} (limites)."),
                         Json::obj([
                             ("motivo", Json::str("fallback_rejeitado")),
@@ -419,35 +419,35 @@ impl FxpSimulator {
                     continue;
                 }
             }
-            let msg = Mensagem {
+            let msg = Message {
                 seq: self.seq,
                 op: "act".into(),
-                ator: alt.clone(),
-                valor: valor.clone(),
+                actor: alt.clone(),
+                value: value.clone(),
                 tick: self.ticks,
-                fallback_de: Some(primario.into()),
+                fallback_of: Some(primary.into()),
             };
             self.outbox.push(msg.clone());
-            self.entregar(alt, valor, msg, caderno);
-            caderno.record(
+            self.deliver(alt, value, msg, ledger);
+            ledger.record(
                 kinds::FALLBACK_EXECUTADO,
-                &format!("Fallback '{alt}' acionado após falha de '{primario}'."),
+                &format!("Fallback '{alt}' acionado após falha de '{primary}'."),
                 Json::obj([
-                    ("primario", Json::str(primario)),
+                    ("primario", Json::str(primary)),
                     ("alternativo", Json::str(alt)),
-                    ("valor", valor.to_json()),
+                    ("valor", value.to_json()),
                 ]),
             );
-            return ActOutcome::FallbackExecutado { alternativo: alt.clone() };
+            return ActOutcome::FallbackExecuted { alternativo: alt.clone() };
         }
-        caderno.alert(
-            &format!("Todos os fallbacks de '{primario}' falharam."),
+        ledger.alert(
+            &format!("Todos os fallbacks de '{primary}' falharam."),
             Json::obj([
                 ("motivo", Json::str("fallback_esgotado")),
-                ("ator", Json::str(primario)),
+                ("ator", Json::str(primary)),
             ]),
         );
-        ActOutcome::FallbackEsgotado
+        ActOutcome::FallbackExhausted
     }
 }
 

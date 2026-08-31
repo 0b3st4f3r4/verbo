@@ -7,52 +7,52 @@ use vbl_runtime::FxpSimulator;
 use std::collections::BTreeMap;
 
 #[derive(Default)]
-pub struct Roteiro {
-    iniciais: BTreeMap<String, f64>,
+pub struct Script {
+    initial: BTreeMap<String, f64>,
     /// tick (1-based) → [(sensor, valor absoluto)]
-    cronograma: BTreeMap<u64, Vec<(String, f64)>>,
+    schedule: BTreeMap<u64, Vec<(String, f64)>>,
     /// Atores que param de responder (heartbeat falho — BDD Caso 3).
-    atores_falhos: Vec<String>,
+    failed_actors: Vec<String>,
     /// Política de fallback do registro (FORMAL §4.3): primário → alternativo.
     fallbacks: BTreeMap<String, String>,
     /// Atores extras registrados (extensões opcionais, ex.: VentoinhaReserva).
-    atores_extras: Vec<String>,
+    extra_actors: Vec<String>,
 }
 
-impl Roteiro {
-    pub fn set(&mut self, sensor: &str, valor: f64) {
-        self.iniciais.insert(sensor.into(), valor);
+impl Script {
+    pub fn set(&mut self, sensor: &str, value: f64) {
+        self.initial.insert(sensor.into(), value);
     }
 
-    pub fn at(&mut self, tick: u64, sensor: &str, valor: f64) {
-        self.cronograma.entry(tick).or_default().push((sensor.into(), valor));
+    pub fn at(&mut self, tick: u64, sensor: &str, value: f64) {
+        self.schedule.entry(tick).or_default().push((sensor.into(), value));
     }
 
-    pub fn falhar_ator(&mut self, ator: &str) {
-        self.atores_falhos.push(ator.into());
+    pub fn fail_actor(&mut self, actor: &str) {
+        self.failed_actors.push(actor.into());
     }
 
-    pub fn fallback(&mut self, primario: &str, alternativo: &str) {
-        self.fallbacks.insert(primario.into(), alternativo.into());
+    pub fn fallback(&mut self, primary: &str, alternativo: &str) {
+        self.fallbacks.insert(primary.into(), alternativo.into());
     }
 
-    pub fn registrar_ator(&mut self, ator: &str) {
-        self.atores_extras.push(ator.into());
+    pub fn register_actor(&mut self, actor: &str) {
+        self.extra_actors.push(actor.into());
     }
 
-    pub fn construir_simulador(&self) -> FxpSimulator {
-        let mut fxp = FxpSimulator::novo();
-        for (sensor, valor) in &self.iniciais {
-            fxp.set_sensor(sensor, *valor);
+    pub fn build_simulator(&self) -> FxpSimulator {
+        let mut fxp = FxpSimulator::new();
+        for (sensor, value) in &self.initial {
+            fxp.set_sensor(sensor, *value);
         }
-        for (tick, valores) in &self.cronograma {
-            for (sensor, valor) in valores {
-                fxp.programar(*tick, sensor, *valor);
+        for (tick, values) in &self.schedule {
+            for (sensor, value) in values {
+                fxp.schedule(*tick, sensor, *value);
             }
         }
-        for ator in &self.atores_extras {
-            fxp.registrar_ator(
-                ator,
+        for actor in &self.extra_actors {
+            fxp.register_actor(
+                actor,
                 vbl_runtime::fxp::ActorLimits {
                     min: Some(0.0),
                     max: Some(255.0),
@@ -60,17 +60,17 @@ impl Roteiro {
                 },
             );
         }
-        for (primario, alternativo) in &self.fallbacks {
-            fxp.definir_fallback(primario, &[alternativo]);
+        for (primary, alternativo) in &self.fallbacks {
+            fxp.set_fallback(primary, &[alternativo]);
         }
-        for ator in &self.atores_falhos {
-            fxp.falhar_ator(ator);
+        for actor in &self.failed_actors {
+            fxp.fail_actor(actor);
         }
         fxp
     }
 
     /// O roteiro acabou? (nenhum tick futuro agendado)
-    pub fn terminou(&self, clock: u64) -> bool {
-        self.cronograma.keys().all(|t| *t <= clock)
+    pub fn finished(&self, clock: u64) -> bool {
+        self.schedule.keys().all(|t| *t <= clock)
     }
 }

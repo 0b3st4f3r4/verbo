@@ -44,7 +44,7 @@ pub struct Token {
 
 impl Token {
     /// Texto de exibição do token em mensagens de erro.
-    pub fn texto(&self) -> String {
+    pub fn text(&self) -> String {
         match &self.kind {
             TokenKind::Ident(s) => s.clone(),
             TokenKind::Int(n) => n.to_string(),
@@ -72,10 +72,10 @@ impl Token {
 
 /// Palavras-chave da linguagem (FORMAL §2) — o parser as reconhece pelo texto.
 pub mod kw {
-    pub const CONJUGACOES: [&str; 3] = ["event", "equilibrium", "nonequilibrium"];
-    pub const DECLARACOES: [&str; 2] = ["review", "main"];
+    pub const CONJUGATIONS: [&str; 3] = ["event", "equilibrium", "nonequilibrium"];
+    pub const DECLARATIONS: [&str; 2] = ["review", "main"];
     pub const CONTROLE: [&str; 4] = ["when", "keep", "every", "review"];
-    pub const ACOES: [&str; 6] = [
+    pub const ACTIONS: [&str; 6] = [
         "dissolve",
         "subvert",
         "reclassify_as_equilibrium",
@@ -83,7 +83,7 @@ pub mod kw {
         "notify_shutdown",
         "act",
     ];
-    pub const ATRIBUTOS: [&str; 8] = [
+    pub const ATTRIBUTES: [&str; 8] = [
         "value",
         "horizon",
         "source_path",
@@ -95,6 +95,6 @@ pub mod kw {
     ];
     /// Unidades de tempo e físicas são identificadores reservados no contexto
     /// de duração/threshold (o parser valida pela tabela).
-    pub const UNIDADES_TEMPO: [&str; 4] = ["s", "ms", "us", "ns"];
+    pub const TIME_UNITS: [&str; 4] = ["s", "ms", "us", "ns"];
     pub const W: &str = "W";
 }

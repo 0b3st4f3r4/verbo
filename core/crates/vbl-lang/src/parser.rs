@@ -22,14 +22,14 @@ const MAX_EVERY_DEPTH: usize = 8;
 
 /// Faz o parse do fonte `.vl`: devolve programa + diagnósticos.
 /// O programa só é considerado válido se `diags.has_errors() == false`.
-pub fn parse(fonte: &str) -> (Program, Diagnostics) {
-    let (tokens, mut diags) = tokenize(fonte);
+pub fn parse(source: &str) -> (Program, Diagnostics) {
+    let (tokens, mut diags) = tokenize(source);
     let mut p = Parser { toks: tokens, pos: 0, diags: Diagnostics::new() };
-    let programa = p.programa();
-    p.clausulas_cruzadas(&programa);
+    let program = p.program();
+    p.cross_clauses(&program);
     diags.extend(p.diags);
     diags.sort();
-    (programa, diags)
+    (program, diags)
 }
 
 struct Parser {
@@ -50,7 +50,7 @@ impl Parser {
         self.toks.get(self.pos).map(|t| &t.kind)
     }
 
-    fn avancar(&mut self) -> Option<Token> {
+    fn advance(&mut self) -> Option<Token> {
         let t = self.toks.get(self.pos).cloned();
         if t.is_some() {
             self.pos += 1;
@@ -58,92 +58,92 @@ impl Parser {
         t
     }
 
-    fn aqui(&self) -> Span {
+    fn here(&self) -> Span {
         self.toks.last().map(|t| t.span).unwrap_or_default()
     }
 
-    /// Consome o token esperado ou registra `codigo`.
-    fn esperar_punc(&mut self, kind: &TokenKind, codigo: &str, msg: &str) -> Option<Token> {
+    /// Consome o token esperado ou registra `code`.
+    fn expect_punct(&mut self, kind: &TokenKind, code: &str, msg: &str) -> Option<Token> {
         match self.peek() {
-            Some(t) if &t.kind == kind => self.avancar(),
+            Some(t) if &t.kind == kind => self.advance(),
             Some(t) => {
-                let found = t.texto();
+                let found = t.text();
                 let span = t.span;
                 self.diags
-                    .error(codigo, span, format!("{msg} (encontrado {found})"));
+                    .error(code, span, format!("{msg} (encontrado {found})"));
                 None
             }
             None => {
-                let span = self.aqui();
-                self.diags.error(codigo, span, format!("fim inesperado: {msg}"));
+                let span = self.here();
+                self.diags.error(code, span, format!("fim inesperado: {msg}"));
                 None
             }
         }
     }
 
     /// Consome `,` se presente; registra vírgula final antes de `}`.
-    fn consumir_virgula(&mut self, contexto: &str) {
-        if self.eh_punc(TokenKind::Comma) {
-            self.avancar();
-            if self.eh_punc(TokenKind::RBrace) {
+    fn consume_comma(&mut self, context: &str) {
+        if self.is_punct(TokenKind::Comma) {
+            self.advance();
+            if self.is_punct(TokenKind::RBrace) {
                 let span = self.peek().unwrap().span;
                 self.diags.error(
                     "virgula_final",
                     span,
-                    format!("vírgula final antes de '}}' em {contexto} (EBNF não permite)"),
+                    format!("vírgula final antes de '}}' em {context} (EBNF não permite)"),
                 );
             }
         }
     }
 
-    fn eh_punc(&self, kind: TokenKind) -> bool {
+    fn is_punct(&self, kind: TokenKind) -> bool {
         matches!(self.peek_kind(), Some(k) if *k == kind)
     }
 
     /// Descarta tokens até vírgula ou fechamento de bloco (recuperação).
-    fn consumir_ate_virgula_ou_fecha(&mut self) {
-        let mut profundeza = 0usize;
+    fn consume_until_comma_or_close(&mut self) {
+        let mut depth = 0usize;
         while let Some(t) = self.peek() {
             match t.kind {
-                TokenKind::LBrace | TokenKind::LParen => profundeza += 1,
+                TokenKind::LBrace | TokenKind::LParen => depth += 1,
                 TokenKind::RBrace => {
-                    if profundeza == 0 {
+                    if depth == 0 {
                         return;
                     }
-                    profundeza -= 1;
+                    depth -= 1;
                 }
                 TokenKind::RParen => {
-                    if profundeza == 0 {
+                    if depth == 0 {
                         return;
                     }
-                    profundeza -= 1;
+                    depth -= 1;
                 }
-                TokenKind::Comma if profundeza == 0 => return,
+                TokenKind::Comma if depth == 0 => return,
                 _ => {}
             }
-            self.avancar();
+            self.advance();
         }
     }
 
     // ------------------------------------------------------------------
     // program = { form_declaration | review_declaration } [ main_block ]
     // ------------------------------------------------------------------
-    fn programa(&mut self) -> Program {
-        let mut programa = Program::default();
+    fn program(&mut self) -> Program {
+        let mut program = Program::default();
         let mut main_visto: Option<Span> = None;
         while let Some(tok) = self.peek().cloned() {
-            let TokenKind::Ident(nome) = &tok.kind else {
-                let found = tok.texto();
+            let TokenKind::Ident(name) = &tok.kind else {
+                let found = tok.text();
                 let span = tok.span;
                 self.diags.error(
                     "topo_invalido",
                     span,
                     format!("esperada declaração (forma/review/main), encontrado {found}"),
                 );
-                self.avancar();
+                self.advance();
                 continue;
             };
-            match nome.as_str() {
+            match name.as_str() {
                 "event" | "equilibrium" | "nonequilibrium" => {
                     if main_visto.is_some() {
                         self.diags.error(
@@ -152,8 +152,8 @@ impl Parser {
                             "declaração após o bloco `main` (EBNF: main é o último item)",
                         );
                     }
-                    if let Some(f) = self.forma(tok.span) {
-                        programa.decls.push(Declaration::Form(Box::new(f)));
+                    if let Some(f) = self.form(tok.span) {
+                        program.decls.push(Declaration::Form(Box::new(f)));
                     }
                 }
                 "review" => {
@@ -165,64 +165,64 @@ impl Parser {
                         );
                     }
                     if let Some(r) = self.review(tok.span) {
-                        programa.decls.push(Declaration::Review(r));
+                        program.decls.push(Declaration::Review(r));
                     }
                 }
                 "main" => {
-                    if let Some(anterior) = main_visto {
+                    if let Some(previous) = main_visto {
                         self.diags.error(
                             "main_duplicado",
                             tok.span,
-                            format!("segundo bloco `main` (o primeiro está em {})", anterior),
+                            format!("segundo bloco `main` (o primeiro está em {})", previous),
                         );
-                        self.avancar();
-                        self.consumir_ate_virgula_ou_fecha();
+                        self.advance();
+                        self.consume_until_comma_or_close();
                         continue;
                     }
                     main_visto = Some(tok.span);
-                    if let Some(m) = self.bloco_main(tok.span) {
-                        programa.main = Some(m);
+                    if let Some(m) = self.main_block(tok.span) {
+                        program.main = Some(m);
                     }
                 }
-                outra => {
+                other => {
                     self.diags.error(
                         "topo_invalido",
                         tok.span,
-                        format!("declaração desconhecida '{outra}' (esperado forma, review ou main)"),
+                        format!("declaração desconhecida '{other}' (esperado forma, review ou main)"),
                     );
-                    self.avancar();
+                    self.advance();
                 }
             }
         }
-        programa
+        program
     }
 
     // ------------------------------------------------------------------
     // form_declaration = conjugation_kw identifier '{' form_body '}'
     // ------------------------------------------------------------------
-    fn forma(&mut self, kw_span: Span) -> Option<FormDecl> {
+    fn form(&mut self, kw_span: Span) -> Option<FormDecl> {
         let conjugation = match self.peek_kind() {
             Some(TokenKind::Ident(s)) => match s.as_str() {
                 "event" => {
-                    self.avancar();
+                    self.advance();
                     Conjugation::Event
                 }
                 "equilibrium" => {
-                    self.avancar();
+                    self.advance();
                     Conjugation::Equilibrium
                 }
                 "nonequilibrium" => {
-                    self.avancar();
+                    self.advance();
                     Conjugation::Nonequilibrium
                 }
                 _ => unreachable!("chamado apenas com conjugação"),
             },
             _ => unreachable!(),
         };
-        let nome = match self.avancar() {
+        let name = match self.advance() {
             Some(Token { kind: TokenKind::Ident(n), span }) => (n, span),
             Some(t) => {
-                let found = t.texto();
+                let found = t.text();
                 self.diags.error(
                     "estrutura_forma",
                     t.span,
@@ -239,22 +239,22 @@ impl Parser {
                 return None;
             }
         };
-        let (nome, nome_span) = nome;
-        if self.esperar_punc(&TokenKind::LBrace, "estrutura_forma", "'{' após o nome da forma")
+        let (name, name_span) = name;
+        if self.expect_punct(&TokenKind::LBrace, "estrutura_forma", "'{' após o nome da forma")
             .is_none()
         {
-            self.consumir_ate_virgula_ou_fecha();
+            self.consume_until_comma_or_close();
             return None;
         }
 
         let mut attrs = FormAttrs::default();
-        let mut ordem: Vec<String> = Vec::new();
+        let mut order: Vec<String> = Vec::new();
         let mut value_expr: Option<Expression> = None;
         let mut horizon: Option<Duration> = None;
 
         loop {
-            if self.eh_punc(TokenKind::RBrace) {
-                self.avancar();
+            if self.is_punct(TokenKind::RBrace) {
+                self.advance();
                 break;
             }
             match self.peek() {
@@ -262,59 +262,59 @@ impl Parser {
                     self.diags.error(
                         "bloco_nao_fechado",
                         kw_span,
-                        format!("forma '{nome}' sem '}}'"),
+                        format!("forma '{name}' sem '}}'"),
                     );
                     return None;
                 }
                 Some(Token { kind: TokenKind::Ident(atributo), span }) => {
                     let (atributo, span) = (atributo.clone(), *span);
-                    self.avancar();
+                    self.advance();
                     self.atributo(
-                        &nome,
+                        &name,
                         conjugation,
                         &atributo,
                         span,
                         &mut attrs,
-                        &mut ordem,
+                        &mut order,
                         &mut value_expr,
                         &mut horizon,
                     );
                 }
                 Some(t) => {
-                    let found = t.texto();
+                    let found = t.text();
                     let span = t.span;
                     self.diags.error(
                         "estrutura_forma",
                         span,
                         format!("esperado nome de atributo (encontrado {found})"),
                     );
-                    self.avancar();
-                    self.consumir_ate_virgula_ou_fecha();
+                    self.advance();
+                    self.consume_until_comma_or_close();
                 }
             }
         }
 
         // Cláusulas por forma (FORMAL §3; Lei 1 do MANIFESTO)
-        if !ordem.contains(&"value".to_string()) {
+        if !order.contains(&"value".to_string()) {
             self.diags.error(
                 "value_obrigatorio",
                 kw_span,
-                format!("forma '{nome}' sem 'value' — obrigatório em toda conjugação (Lei 1)"),
+                format!("forma '{name}' sem 'value' — obrigatório em toda conjugação (Lei 1)"),
             );
         }
-        if !ordem.contains(&"horizon".to_string()) {
+        if !order.contains(&"horizon".to_string()) {
             self.diags.error(
                 "horizon_obrigatorio",
                 kw_span,
-                format!("forma '{nome}' sem 'horizon' — obrigatório em toda conjugação (Lei 1)"),
+                format!("forma '{name}' sem 'horizon' — obrigatório em toda conjugação (Lei 1)"),
             );
         }
-        if let (Some(v), Some(h)) = (ordem.iter().position(|a| a == "value"), ordem.iter().position(|a| a == "horizon")) {
+        if let (Some(v), Some(h)) = (order.iter().position(|a| a == "value"), order.iter().position(|a| a == "horizon")) {
             if v > h {
                 self.diags.error(
                     "ordem_value_horizon",
                     kw_span,
-                    format!("forma '{nome}': 'value' deve preceder 'horizon' (EBNF: primeiros atributos)"),
+                    format!("forma '{name}': 'value' deve preceder 'horizon' (EBNF: primeiros atributos)"),
                 );
             }
         }
@@ -323,27 +323,27 @@ impl Parser {
                 "maintenance_deadline_ausente",
                 kw_span,
                 format!(
-                    "forma '{nome}': nonequilibrium exige maintenance_deadline — sem ele a forma jamais colapsaria"
+                    "forma '{name}': nonequilibrium exige maintenance_deadline — sem ele a forma jamais colapsaria"
                 ),
             );
         }
-        for (atributo, permitidas) in [
+        for (atributo, allowed) in [
             ("maintenance_deadline", Conjugation::Nonequilibrium),
             ("exchange_mode", Conjugation::Nonequilibrium),
             ("cost_bytes", Conjugation::Equilibrium),
         ] {
-            let presente = match atributo {
+            let present = match atributo {
                 "maintenance_deadline" => attrs.maintenance_deadline.is_some(),
                 "exchange_mode" => attrs.exchange_mode.is_some(),
                 _ => attrs.cost_bytes.is_some(),
             };
-            if presente && conjugation != permitidas {
+            if present && conjugation != allowed {
                 self.diags.error(
                     "atributo_nao_aplicavel",
                     kw_span,
                     format!(
-                        "'{atributo}' não se aplica a {} (forma '{nome}')",
-                        conjugation.nome()
+                        "'{atributo}' não se aplica a {} (forma '{name}')",
+                        conjugation.name()
                     ),
                 );
             }
@@ -351,12 +351,12 @@ impl Parser {
 
         let value = value_expr.unwrap_or(Expression::ident("_ausente", kw_span));
         let horizon = horizon.unwrap_or(Duration {
-            valor: 0.0,
+            value: 0.0,
             unit: TimeUnit::S,
             span: kw_span,
         });
 
-        Some(FormDecl { conjugation, name: nome, value, horizon, attrs, span: nome_span })
+        Some(FormDecl { conjugation, name, value, horizon, attrs, span: name_span })
     }
 
     // ------------------------------------------------------------------
@@ -365,52 +365,52 @@ impl Parser {
     #[allow(clippy::too_many_arguments)]
     fn atributo(
         &mut self,
-        nome_forma: &str,
+        form_name: &str,
         _conjugation: Conjugation,
-        nome: &str,
+        name: &str,
         span: Span,
         attrs: &mut FormAttrs,
-        ordem: &mut Vec<String>,
+        order: &mut Vec<String>,
         value_expr: &mut Option<Expression>,
         horizon: &mut Option<Duration>,
     ) {
-        if !kw::ATRIBUTOS.contains(&nome) {
+        if !kw::ATTRIBUTES.contains(&name) {
             self.diags.error(
                 "atributo_desconhecido",
                 span,
-                format!("atributo '{nome}' não existe na linguagem"),
+                format!("atributo '{name}' não existe na linguagem"),
             );
-            self.consumir_ate_virgula_ou_fecha();
-            self.consumir_virgula("corpo de forma");
+            self.consume_until_comma_or_close();
+            self.consume_comma("corpo de forma");
             return;
         }
-        if ordem.contains(&nome.to_string()) {
+        if order.contains(&name.to_string()) {
             self.diags.error(
                 "atributo_duplicado",
                 span,
-                format!("atributo '{nome}' repetido na forma '{nome_forma}'"),
+                format!("atributo '{name}' repetido na forma '{form_name}'"),
             );
-            self.consumir_ate_virgula_ou_fecha();
-            self.consumir_virgula("corpo de forma");
+            self.consume_until_comma_or_close();
+            self.consume_comma("corpo de forma");
             return;
         }
         if self
-            .esperar_punc(&TokenKind::Colon, "estrutura_forma", "':' após o nome do atributo")
+            .expect_punct(&TokenKind::Colon, "estrutura_forma", "':' após o nome do atributo")
             .is_none()
         {
-            self.consumir_ate_virgula_ou_fecha();
-            self.consumir_virgula("corpo de forma");
+            self.consume_until_comma_or_close();
+            self.consume_comma("corpo de forma");
             return;
         }
 
-        match nome {
+        match name {
             "value" => {
                 *value_expr = Some(self.expression("value"));
-                ordem.push("value".into());
+                order.push("value".into());
             }
             "horizon" => {
-                *horizon = Some(self.duracao());
-                ordem.push("horizon".into());
+                *horizon = Some(self.duration());
+                order.push("horizon".into());
             }
             "source_path" => {
                 let expr = self.expression("source_path");
@@ -436,11 +436,11 @@ impl Parser {
                         );
                     }
                 }
-                ordem.push("source_path".into());
+                order.push("source_path".into());
             }
             "maintenance_deadline" => {
-                attrs.maintenance_deadline = Some(self.duracao());
-                ordem.push("maintenance_deadline".into());
+                attrs.maintenance_deadline = Some(self.duration());
+                order.push("maintenance_deadline".into());
             }
             "exchange_mode" => {
                 let expr = self.expression("exchange_mode");
@@ -455,12 +455,12 @@ impl Parser {
                         );
                     }
                 }
-                ordem.push("exchange_mode".into());
+                order.push("exchange_mode".into());
             }
-            "cost_bytes" => match self.avancar() {
+            "cost_bytes" => match self.advance() {
                 Some(Token { kind: TokenKind::Int(n), span }) => {
                     attrs.cost_bytes = Some(n);
-                    ordem.push("cost_bytes".into());
+                    order.push("cost_bytes".into());
                     let _ = span;
                 }
                 Some(Token { kind: TokenKind::Decimal(_), span }) => {
@@ -469,10 +469,10 @@ impl Parser {
                         span,
                         "cost_bytes exige número inteiro (bytes)",
                     );
-                    ordem.push("cost_bytes".into());
+                    order.push("cost_bytes".into());
                 }
                 Some(t) => {
-                    let found = t.texto();
+                    let found = t.text();
                     self.diags.error(
                         "estrutura_forma",
                         t.span,
@@ -480,7 +480,7 @@ impl Parser {
                     );
                 }
                 None => {
-                    let span = self.aqui();
+                    let span = self.here();
                     self.diags
                         .error("estrutura_forma", span, "fim inesperado: cost_bytes exige inteiro");
                 }
@@ -498,7 +498,7 @@ impl Parser {
                         );
                     }
                 }
-                ordem.push("currency".into());
+                order.push("currency".into());
             }
             "classification" => {
                 let expr = self.expression("classification");
@@ -513,37 +513,37 @@ impl Parser {
                         );
                     }
                 }
-                ordem.push("classification".into());
+                order.push("classification".into());
             }
-            outro => unreachable!("atributo validado acima: {outro}"),
+            other => unreachable!("atributo validado acima: {other}"),
         }
-        self.consumir_virgula("corpo de forma");
+        self.consume_comma("corpo de forma");
     }
 
     // ------------------------------------------------------------------
     // expression = string | number | identifier
     // ------------------------------------------------------------------
-    fn expression(&mut self, contexto: &str) -> Expression {
-        match self.avancar() {
+    fn expression(&mut self, context: &str) -> Expression {
+        match self.advance() {
             Some(Token { kind: TokenKind::Str(s), span }) => Expression::str(s, span),
             Some(Token { kind: TokenKind::Int(n), span }) => Expression::num(n as f64, span),
             Some(Token { kind: TokenKind::Decimal(x), span }) => Expression::num(x, span),
             Some(Token { kind: TokenKind::Ident(id), span }) => Expression::ident(id, span),
             Some(t) => {
-                let found = t.texto();
+                let found = t.text();
                 self.diags.error(
                     "estrutura_forma",
                     t.span,
-                    format!("expression inválida para {contexto} (encontrado {found})"),
+                    format!("expression inválida para {context} (encontrado {found})"),
                 );
                 Expression::ident("_invalido", t.span)
             }
             None => {
-                let span = self.aqui();
+                let span = self.here();
                 self.diags.error(
                     "estrutura_forma",
                     span,
-                    format!("fim inesperado: expression exigida em {contexto}"),
+                    format!("fim inesperado: expression exigida em {context}"),
                 );
                 Expression::ident("_invalido", span)
             }
@@ -553,55 +553,55 @@ impl Parser {
     // ------------------------------------------------------------------
     // duration = number time_unit
     // ------------------------------------------------------------------
-    fn duracao(&mut self) -> Duration {
+    fn duration(&mut self) -> Duration {
         let span_num = self.peek().map(|t| t.span).unwrap_or_default();
-        let valor = match self.avancar() {
+        let value = match self.advance() {
             Some(Token { kind: TokenKind::Int(n), .. }) => n as f64,
             Some(Token { kind: TokenKind::Decimal(x), .. }) => x,
             Some(t) => {
-                let found = t.texto();
+                let found = t.text();
                 self.diags.error(
                     "duracao_invalida",
                     t.span,
                     format!("duração esperada: NUM[s|ms|us|ns] (encontrado {found})"),
                 );
-                self.consumir_ate_virgula_ou_fecha();
-                return Duration { valor: 0.0, unit: TimeUnit::S, span: span_num };
+                self.consume_until_comma_or_close();
+                return Duration { value: 0.0, unit: TimeUnit::S, span: span_num };
             }
             None => {
-                let span = self.aqui();
+                let span = self.here();
                 self.diags
                     .error("duracao_invalida", span, "fim inesperado: duração esperada");
-                return Duration { valor: 0.0, unit: TimeUnit::S, span };
+                return Duration { value: 0.0, unit: TimeUnit::S, span };
             }
         };
-        match self.avancar() {
-            Some(Token { kind: TokenKind::Ident(u), span }) if kw::UNIDADES_TEMPO.contains(&u.as_str()) => {
+        match self.advance() {
+            Some(Token { kind: TokenKind::Ident(u), span }) if kw::TIME_UNITS.contains(&u.as_str()) => {
                 let unit = match u.as_str() {
                     "s" => TimeUnit::S,
                     "ms" => TimeUnit::Ms,
                     "us" => TimeUnit::Us,
                     _ => TimeUnit::Ns,
                 };
-                Duration { valor, unit, span }
+                Duration { value, unit, span }
             }
             Some(t) => {
-                let found = t.texto();
+                let found = t.text();
                 self.diags.error(
                     "duracao_invalida",
                     t.span,
                     format!("unidade de tempo esperada: s|ms|us|ns (encontrado {found})"),
                 );
-                Duration { valor, unit: TimeUnit::S, span: span_num }
+                Duration { value, unit: TimeUnit::S, span: span_num }
             }
             None => {
-                let span = self.aqui();
+                let span = self.here();
                 self.diags.error(
                     "duracao_invalida",
                     span,
                     "fim inesperado: unidade de tempo esperada (s|ms|us|ns)",
                 );
-                Duration { valor, unit: TimeUnit::S, span: span_num }
+                Duration { value, unit: TimeUnit::S, span: span_num }
             }
         }
     }
@@ -610,11 +610,11 @@ impl Parser {
     // review_declaration = 'review' identifier '{' review_rule {',' rule} '}'
     // ------------------------------------------------------------------
     fn review(&mut self, kw_span: Span) -> Option<ReviewDecl> {
-        self.avancar(); // 'review'
-        let nome = match self.avancar() {
+        self.advance(); // 'review'
+        let name = match self.advance() {
             Some(Token { kind: TokenKind::Ident(n), span }) => (n, span),
             Some(t) => {
-                let found = t.texto();
+                let found = t.text();
                 self.diags.error(
                     "estrutura_review",
                     t.span,
@@ -631,58 +631,58 @@ impl Parser {
                 return None;
             }
         };
-        let (nome, _) = nome;
+        let (name, _) = name;
         if self
-            .esperar_punc(&TokenKind::LBrace, "estrutura_review", "'{' após o nome da review")
+            .expect_punct(&TokenKind::LBrace, "estrutura_review", "'{' após o nome da review")
             .is_none()
         {
-            self.consumir_ate_virgula_ou_fecha();
+            self.consume_until_comma_or_close();
             return None;
         }
         let mut rules = Vec::new();
         loop {
-            if self.eh_punc(TokenKind::RBrace) {
-                self.avancar();
+            if self.is_punct(TokenKind::RBrace) {
+                self.advance();
                 break;
             }
             match self.peek() {
                 None => {
-                    self.diags.error("bloco_nao_fechado", kw_span, format!("review '{nome}' sem '}}'"));
+                    self.diags.error("bloco_nao_fechado", kw_span, format!("review '{name}' sem '}}'"));
                     return None;
                 }
                 Some(Token { kind: TokenKind::Ident(s), .. }) if s == "when" => {
-                    match self.regra() {
+                    match self.rule() {
                         Some(r) => rules.push(r),
-                        None => self.consumir_ate_virgula_ou_fecha(),
+                        None => self.consume_until_comma_or_close(),
                     }
-                    self.consumir_virgula("review");
+                    self.consume_comma("review");
                 }
                 Some(t) => {
-                    let found = t.texto();
+                    let found = t.text();
                     let span = t.span;
                     self.diags.error(
                         "regra_mal_formada",
                         span,
                         format!("regra deve começar com 'when' (encontrado {found})"),
                     );
-                    self.avancar();
-                    self.consumir_ate_virgula_ou_fecha();
-                    self.consumir_virgula("review");
+                    self.advance();
+                    self.consume_until_comma_or_close();
+                    self.consume_comma("review");
                 }
             }
         }
-        Some(ReviewDecl { form: nome, rules, span: kw_span })
+        Some(ReviewDecl { form: name, rules, span: kw_span })
     }
 
     /// review_rule = 'when' sensor_ref comparison_op threshold '->' action_list
-    fn regra(&mut self) -> Option<Rule> {
+    fn rule(&mut self) -> Option<Rule> {
         let when_span = self.peek().unwrap().span;
-        self.avancar(); // 'when'
-        let sensor = match self.avancar() {
-            Some(Token { kind: TokenKind::Ident(s), span }) => SensorRef { nome: s, span },
-            Some(Token { kind: TokenKind::Str(s), span }) => SensorRef { nome: s, span },
+        self.advance(); // 'when'
+        let sensor = match self.advance() {
+            Some(Token { kind: TokenKind::Ident(s), span }) => SensorRef { name: s, span },
+            Some(Token { kind: TokenKind::Str(s), span }) => SensorRef { name: s, span },
             Some(t) => {
-                let found = t.texto();
+                let found = t.text();
                 self.diags.error(
                     "regra_mal_formada",
                     t.span,
@@ -699,7 +699,7 @@ impl Parser {
                 return None;
             }
         };
-        let op = match self.avancar() {
+        let op = match self.advance() {
             Some(Token { kind: TokenKind::Lt, .. }) => CmpOp::Lt,
             Some(Token { kind: TokenKind::Gt, .. }) => CmpOp::Gt,
             Some(Token { kind: TokenKind::Le, .. }) => CmpOp::Le,
@@ -707,7 +707,7 @@ impl Parser {
             Some(Token { kind: TokenKind::EqEq, .. }) => CmpOp::Eq,
             Some(Token { kind: TokenKind::NotEq, .. }) => CmpOp::Ne,
             Some(t) => {
-                let found = t.texto();
+                let found = t.text();
                 self.diags.error(
                     "operador_invalido",
                     t.span,
@@ -725,18 +725,18 @@ impl Parser {
             }
         };
         let threshold = self.threshold()?;
-        self.esperar_punc(&TokenKind::Arrow, "regra_mal_formada", "'->' antes das ações")?;
-        let actions = self.acoes()?;
+        self.expect_punct(&TokenKind::Arrow, "regra_mal_formada", "'->' antes das ações")?;
+        let actions = self.actions()?;
         Some(Rule { sensor, op, threshold, actions, span: when_span })
     }
 
     /// threshold = number | percentage | physical_quantity
     fn threshold(&mut self) -> Option<Threshold> {
-        let (valor, _span) = match self.avancar() {
+        let (value, _span) = match self.advance() {
             Some(Token { kind: TokenKind::Int(n), span }) => (n as f64, span),
             Some(Token { kind: TokenKind::Decimal(x), span }) => (x, span),
             Some(t) => {
-                let found = t.texto();
+                let found = t.text();
                 self.diags.error(
                     "regra_mal_formada",
                     t.span,
@@ -747,7 +747,7 @@ impl Parser {
             None => {
                 self.diags.error(
                     "regra_mal_formada",
-                    self.aqui(),
+                    self.here(),
                     "fim inesperado: threshold deve ser número",
                 );
                 return None;
@@ -756,27 +756,27 @@ impl Parser {
         // Unidade opcional: `%` e `°C` têm token próprio; `W` é identificador.
         let unit = match self.peek_kind() {
             Some(TokenKind::Percent) => {
-                self.avancar();
+                self.advance();
                 Some(PhysicalUnit::Percent)
             }
             Some(TokenKind::DegC) => {
-                self.avancar();
+                self.advance();
                 Some(PhysicalUnit::DegC)
             }
             Some(TokenKind::Ident(s)) if s == kw::W => {
-                self.avancar();
+                self.advance();
                 Some(PhysicalUnit::W)
             }
             _ => None,
         };
-        Some(Threshold { valor, unit })
+        Some(Threshold { value, unit })
     }
 
     /// action_list = action { ',' action }
-    fn acoes(&mut self) -> Option<Vec<Action>> {
-        let mut acoes = Vec::new();
+    fn actions(&mut self) -> Option<Vec<Action>> {
+        let mut actions = Vec::new();
         loop {
-            let acao = match self.avancar() {
+            let action = match self.advance() {
                 Some(Token { kind: TokenKind::Ident(s), span }) => match s.as_str() {
                     "dissolve" => Action::Dissolve,
                     "subvert" => Action::Subvert,
@@ -784,12 +784,12 @@ impl Parser {
                     "reclassify_as_nonequilibrium" => Action::ReclassifyAsNonequilibrium,
                     "notify_shutdown" => Action::NotifyShutdown,
                     "act" => {
-                        self.esperar_punc(&TokenKind::LParen, "regra_mal_formada", "'(' no act")?;
-                        let (actor, actor_span) = match self.avancar() {
+                        self.expect_punct(&TokenKind::LParen, "regra_mal_formada", "'(' no act")?;
+                        let (actor, actor_span) = match self.advance() {
                             Some(Token { kind: TokenKind::Ident(n), span }) => (n, span),
                             Some(Token { kind: TokenKind::Str(n), span }) => (n, span),
                             Some(t) => {
-                                let found = t.texto();
+                                let found = t.text();
                                 self.diags.error(
                                     "regra_mal_formada",
                                     t.span,
@@ -800,54 +800,54 @@ impl Parser {
                             None => {
                                 self.diags.error(
                                     "regra_mal_formada",
-                                    self.aqui(),
+                                    self.here(),
                                     "fim inesperado: ator esperado no act",
                                 );
                                 return None;
                             }
                         };
-                        self.esperar_punc(&TokenKind::Comma, "regra_mal_formada", "',' no act")?;
+                        self.expect_punct(&TokenKind::Comma, "regra_mal_formada", "',' no act")?;
                         let value = self.expression("act");
                         self
-                            .esperar_punc(&TokenKind::RParen, "regra_mal_formada", "')' no act")?;
+                            .expect_punct(&TokenKind::RParen, "regra_mal_formada", "')' no act")?;
                         Action::Act { actor, value, actor_span }
                     }
-                    outra => {
+                    other => {
                         self.diags.error(
                             "acao_desconhecida",
                             span,
-                            format!("ação '{outra}' desconhecida na action_list"),
+                            format!("ação '{other}' desconhecida na action_list"),
                         );
-                        self.consumir_ate_virgula_ou_fecha();
+                        self.consume_until_comma_or_close();
                         return None;
                     }
                 },
                 Some(t) => {
-                    let found = t.texto();
+                    let found = t.text();
                     self.diags.error(
                         "acao_desconhecida",
                         t.span,
                         format!("ação desconhecida na action_list (encontrado {found})"),
                     );
-                    self.consumir_ate_virgula_ou_fecha();
+                    self.consume_until_comma_or_close();
                     return None;
                 }
                 None => {
                     self.diags.error(
                         "acao_desconhecida",
-                        self.aqui(),
+                        self.here(),
                         "fim inesperado: action_list vazia",
                     );
                     return None;
                 }
             };
-            acoes.push(acao);
-            if self.eh_punc(TokenKind::Comma) {
+            actions.push(action);
+            if self.is_punct(TokenKind::Comma) {
                 // vírgula entre ações; se o próximo token não é outra ação,
                 // devolve o controle (vírgula final/vírgula entre regras)
-                self.avancar();
+                self.advance();
                 match self.peek_kind() {
-                    Some(TokenKind::Ident(s)) if kw::ACOES.contains(&s.as_str()) => continue,
+                    Some(TokenKind::Ident(s)) if kw::ACTIONS.contains(&s.as_str()) => continue,
                     Some(TokenKind::RBrace) => {
                         let span = self.peek().unwrap().span;
                         self.diags.error(
@@ -855,28 +855,28 @@ impl Parser {
                             span,
                             "vírgula final antes de '}' em review (EBNF não permite)",
                         );
-                        return Some(acoes);
+                        return Some(actions);
                     }
-                    _ => return Some(acoes),
+                    _ => return Some(actions),
                 }
             }
-            return Some(acoes);
+            return Some(actions);
         }
     }
 
     // ------------------------------------------------------------------
     // main_block = 'main' '{' statement {',' statement} '}'
     // ------------------------------------------------------------------
-    fn bloco_main(&mut self, kw_span: Span) -> Option<MainBlock> {
-        self.avancar(); // 'main'
-        if self.esperar_punc(&TokenKind::LBrace, "estrutura_main", "'{' após 'main'").is_none() {
-            self.consumir_ate_virgula_ou_fecha();
+    fn main_block(&mut self, kw_span: Span) -> Option<MainBlock> {
+        self.advance(); // 'main'
+        if self.expect_punct(&TokenKind::LBrace, "estrutura_main", "'{' após 'main'").is_none() {
+            self.consume_until_comma_or_close();
             return None;
         }
         let mut statements = Vec::new();
         loop {
-            if self.eh_punc(TokenKind::RBrace) {
-                self.avancar();
+            if self.is_punct(TokenKind::RBrace) {
+                self.advance();
                 break;
             }
             match self.peek() {
@@ -887,9 +887,9 @@ impl Parser {
                 Some(_) => {
                     match self.statement(0) {
                         Some(s) => statements.push(s),
-                        None => self.consumir_ate_virgula_ou_fecha(),
+                        None => self.consume_until_comma_or_close(),
                     }
-                    self.consumir_virgula("main");
+                    self.consume_comma("main");
                 }
             }
         }
@@ -898,15 +898,15 @@ impl Parser {
 
     /// statement = keep '(' identifier ')' | act '(' ator ',' expression ')'
     ///           | every duration '{' statement {',' statement} '}'
-    fn statement(&mut self, profundeza: usize) -> Option<Statement> {
-        match self.avancar()? {
+    fn statement(&mut self, depth: usize) -> Option<Statement> {
+        match self.advance()? {
             Token { kind: TokenKind::Ident(s), span } => match s.as_str() {
                 "keep" => {
-                    self.esperar_punc(&TokenKind::LParen, "estrutura_main", "'(' no keep")?;
-                    let forma = match self.avancar() {
+                    self.expect_punct(&TokenKind::LParen, "estrutura_main", "'(' no keep")?;
+                    let form = match self.advance() {
                         Some(Token { kind: TokenKind::Ident(n), .. }) => n,
                         Some(t) => {
-                            let found = t.texto();
+                            let found = t.text();
                             self.diags.error(
                                 "estrutura_main",
                                 t.span,
@@ -917,22 +917,22 @@ impl Parser {
                         None => {
                             self.diags.error(
                                 "estrutura_main",
-                                self.aqui(),
+                                self.here(),
                                 "fim inesperado: forma esperada no keep",
                             );
                             return None;
                         }
                     };
-                    self.esperar_punc(&TokenKind::RParen, "estrutura_main", "')' no keep")?;
-                    Some(Statement::Keep(forma))
+                    self.expect_punct(&TokenKind::RParen, "estrutura_main", "')' no keep")?;
+                    Some(Statement::Keep(form))
                 }
                 "act" => {
-                    self.esperar_punc(&TokenKind::LParen, "estrutura_main", "'(' no act")?;
-                    let actor = match self.avancar() {
+                    self.expect_punct(&TokenKind::LParen, "estrutura_main", "'(' no act")?;
+                    let actor = match self.advance() {
                         Some(Token { kind: TokenKind::Ident(n), .. })
                         | Some(Token { kind: TokenKind::Str(n), .. }) => n,
                         Some(t) => {
-                            let found = t.texto();
+                            let found = t.text();
                             self.diags.error(
                                 "estrutura_main",
                                 t.span,
@@ -943,19 +943,19 @@ impl Parser {
                         None => {
                             self.diags.error(
                                 "estrutura_main",
-                                self.aqui(),
+                                self.here(),
                                 "fim inesperado: ator esperado no act",
                             );
                             return None;
                         }
                     };
-                    self.esperar_punc(&TokenKind::Comma, "estrutura_main", "',' no act")?;
+                    self.expect_punct(&TokenKind::Comma, "estrutura_main", "',' no act")?;
                     let value = self.expression("act");
-                    self.esperar_punc(&TokenKind::RParen, "estrutura_main", "')' no act")?;
+                    self.expect_punct(&TokenKind::RParen, "estrutura_main", "')' no act")?;
                     Some(Statement::Act { actor, value })
                 }
                 "every" => {
-                    if profundeza >= MAX_EVERY_DEPTH {
+                    if depth >= MAX_EVERY_DEPTH {
                         self.diags.error(
                             "every_muito_profundo",
                             span,
@@ -963,13 +963,13 @@ impl Parser {
                         );
                         return None;
                     }
-                    let period = self.duracao();
+                    let period = self.duration();
                     self
-                        .esperar_punc(&TokenKind::LBrace, "estrutura_main", "'{' no every")?;
+                        .expect_punct(&TokenKind::LBrace, "estrutura_main", "'{' no every")?;
                     let mut body = Vec::new();
                     loop {
-                        if self.eh_punc(TokenKind::RBrace) {
-                            self.avancar();
+                        if self.is_punct(TokenKind::RBrace) {
+                            self.advance();
                             break;
                         }
                         match self.peek() {
@@ -982,28 +982,28 @@ impl Parser {
                                 return None;
                             }
                             Some(_) => {
-                                if let Some(st) = self.statement(profundeza + 1) {
+                                if let Some(st) = self.statement(depth + 1) {
                                     body.push(st);
                                 } else {
-                                    self.consumir_ate_virgula_ou_fecha();
+                                    self.consume_until_comma_or_close();
                                 }
-                                self.consumir_virgula("every");
+                                self.consume_comma("every");
                             }
                         }
                     }
                     Some(Statement::Every { period, body })
                 }
-                outra => {
+                other => {
                     self.diags.error(
                         "statement_desconhecido",
                         span,
-                        format!("statement '{outra}' não existe no main (keep|act|every)"),
+                        format!("statement '{other}' não existe no main (keep|act|every)"),
                     );
                     None
                 }
             },
             t => {
-                let found = t.texto();
+                let found = t.text();
                 self.diags.error(
                     "statement_desconhecido",
                     t.span,
@@ -1017,16 +1017,16 @@ impl Parser {
     // ------------------------------------------------------------------
     // Cláusulas cruzadas entre declarações (FORMAL §3)
     // ------------------------------------------------------------------
-    fn clausulas_cruzadas(&mut self, programa: &Program) {
-        let mut formas: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
-        let mut reviews_vistas: std::collections::BTreeMap<&str, u32> =
+    fn cross_clauses(&mut self, program: &Program) {
+        let mut forms: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+        let mut reviews_seen: std::collections::BTreeMap<&str, u32> =
             std::collections::BTreeMap::new();
 
         // 1ª passada: conjunto de formas declaradas (a ligação review→forma
         // é independente da ordem das declarações — EBNF permite intercalar)
-        for decl in &programa.decls {
+        for decl in &program.decls {
             if let Declaration::Form(f) = decl {
-                if !formas.insert(f.name.as_str()) {
+                if !forms.insert(f.name.as_str()) {
                     self.diags.error(
                         "forma_duplicada",
                         f.span,
@@ -1037,9 +1037,9 @@ impl Parser {
         }
 
         // 2ª passada: reviews órfãs/duplicadas
-        for decl in &programa.decls {
+        for decl in &program.decls {
             if let Declaration::Review(r) = decl {
-                if !formas.contains(r.form.as_str()) {
+                if !forms.contains(r.form.as_str()) {
                     self.diags.error(
                         "review_orfa",
                         r.span,
@@ -1049,9 +1049,9 @@ impl Parser {
                         ),
                     );
                 }
-                let vistas = reviews_vistas.entry(r.form.as_str()).or_insert(0);
-                *vistas += 1;
-                if *vistas > 1 {
+                let seen = reviews_seen.entry(r.form.as_str()).or_insert(0);
+                *seen += 1;
+                if *seen > 1 {
                     self.diags.error(
                         "review_duplicada",
                         r.span,
@@ -1065,27 +1065,27 @@ impl Parser {
         }
 
         // keep de forma inexistente (cláusula de erro — AGENTS.md §2.2)
-        if let Some(main) = &programa.main {
-            fn passe(stmts: &[Statement], formas: &std::collections::BTreeSet<&str>, diags: &mut Diagnostics, main_span: Span) {
+        if let Some(main) = &program.main {
+            fn pass(stmts: &[Statement], forms: &std::collections::BTreeSet<&str>, diags: &mut Diagnostics, main_span: Span) {
                 for st in stmts {
                     match st {
-                        Statement::Keep(nome) => {
-                            if !formas.contains(nome.as_str()) {
+                        Statement::Keep(name) => {
+                            if !forms.contains(name.as_str()) {
                                 diags.error(
                                     "keep_forma_inexistente",
                                     main_span,
                                     format!(
-                                        "keep('{nome}') não aponta para forma declarada — cláusula de erro"
+                                        "keep('{name}') não aponta para forma declarada — cláusula de erro"
                                     ),
                                 );
                             }
                         }
-                        Statement::Every { body, .. } => passe(body, formas, diags, main_span),
+                        Statement::Every { body, .. } => pass(body, forms, diags, main_span),
                         Statement::Act { .. } => {}
                     }
                 }
             }
-            passe(&main.statements, &formas, &mut self.diags, main.span);
+            pass(&main.statements, &forms, &mut self.diags, main.span);
         }
     }
 }

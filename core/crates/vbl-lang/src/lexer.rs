@@ -8,7 +8,7 @@
 use crate::diag::{Diagnostics, Span};
 use crate::token::{Token, TokenKind};
 
-pub const LIMITE_STRING_BYTES: usize = 256;
+pub const LIMIT_STRING_BYTES: usize = 256;
 
 pub struct Lexer {
     src: Vec<char>,
@@ -19,9 +19,9 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    pub fn new(fonte: &str) -> Self {
+    pub fn new(source: &str) -> Self {
         Self {
-            src: fonte.chars().collect(),
+            src: source.chars().collect(),
             pos: 0,
             line: 1,
             col: 1,
@@ -37,11 +37,11 @@ impl Lexer {
                 continue;
             }
             if *c == '/' && self.peek2() == Some(&'/') {
-                self.pular_linha();
+                self.skip_line();
                 continue;
             }
             if *c == '/' && self.peek2() == Some(&'*') {
-                self.pular_bloco();
+                self.skip_block();
                 continue;
             }
             let span = self.here();
@@ -52,7 +52,7 @@ impl Lexer {
                     }
                 }
                 '0'..='9' => {
-                    let kind = self.numero();
+                    let kind = self.number();
                     tokens.push(Token { kind, span });
                 }
                 '°' => {
@@ -123,16 +123,16 @@ impl Lexer {
                     }
                 }
                 c if c.is_ascii_alphabetic() || *c == '_' => {
-                    let nome = self.identificador();
-                    tokens.push(Token { kind: TokenKind::Ident(nome), span });
+                    let name = self.identifier();
+                    tokens.push(Token { kind: TokenKind::Ident(name), span });
                 }
                 _ => {
-                    let outro = *c;
+                    let other = *c;
                     self.bump();
                     self.diags.error(
                         "lexema_invalido",
                         span,
-                        format!("lexema {outro:?} não existe na linguagem"),
+                        format!("lexema {other:?} não existe na linguagem"),
                     );
                 }
             }
@@ -169,8 +169,8 @@ impl Lexer {
         Some(c)
     }
 
-    fn consume(&mut self, esperado: char) -> bool {
-        if self.peek() == Some(&esperado) {
+    fn consume(&mut self, expected: char) -> bool {
+        if self.peek() == Some(&expected) {
             self.bump();
             true
         } else {
@@ -182,7 +182,7 @@ impl Lexer {
         Span::new(self.line, self.col)
     }
 
-    fn pular_linha(&mut self) {
+    fn skip_line(&mut self) {
         while let Some(c) = self.peek() {
             if *c == '\n' {
                 break;
@@ -191,8 +191,8 @@ impl Lexer {
         }
     }
 
-    fn pular_bloco(&mut self) {
-        let inicio = self.here();
+    fn skip_block(&mut self) {
+        let start = self.here();
         self.bump(); // '/'
         self.bump(); // '*'
         while self.pos < self.src.len() {
@@ -203,10 +203,10 @@ impl Lexer {
             }
             self.bump();
         }
-        self.diags.error("comentario_nao_fechado", inicio, "comentário de bloco sem '*/'");
+        self.diags.error("comentario_nao_fechado", start, "comentário de bloco sem '*/'");
     }
 
-    fn identificador(&mut self) -> String {
+    fn identifier(&mut self) -> String {
         let mut s = String::new();
         while let Some(c) = self.peek() {
             if c.is_ascii_alphanumeric() || *c == '_' {
@@ -219,11 +219,11 @@ impl Lexer {
         s
     }
 
-    fn numero(&mut self) -> TokenKind {
-        let mut texto = String::new();
+    fn number(&mut self) -> TokenKind {
+        let mut text = String::new();
         while let Some(c) = self.peek() {
             if c.is_ascii_digit() {
-                texto.push(*c);
+                text.push(*c);
                 self.bump();
             } else {
                 break;
@@ -231,11 +231,11 @@ impl Lexer {
         }
         // decimal: dígito seguido de '.' e pelo menos um dígito (FORMAL §2)
         if self.peek() == Some(&'.') && self.peek2().is_some_and(|c| c.is_ascii_digit()) {
-            texto.push('.');
+            text.push('.');
             self.bump();
             while let Some(c) = self.peek() {
                 if c.is_ascii_digit() {
-                    texto.push(*c);
+                    text.push(*c);
                     self.bump();
                 } else {
                     break;
@@ -243,13 +243,13 @@ impl Lexer {
             }
             // f64 cobre os valores da linguagem (thresholds/durações);
             // inteiros além de i128 caem aqui, o que a EBNF não produz.
-            return TokenKind::Decimal(texto.parse::<f64>().unwrap_or(f64::INFINITY));
+            return TokenKind::Decimal(text.parse::<f64>().unwrap_or(f64::INFINITY));
         }
-        match texto.parse::<i128>() {
+        match text.parse::<i128>() {
             Ok(n) => TokenKind::Int(n),
             Err(_) => {
                 // inteiro gigante: preserva como decimal (com aviso)
-                TokenKind::Decimal(texto.parse::<f64>().unwrap_or(f64::INFINITY))
+                TokenKind::Decimal(text.parse::<f64>().unwrap_or(f64::INFINITY))
             }
         }
     }
@@ -257,7 +257,7 @@ impl Lexer {
     fn string(&mut self) -> Option<TokenKind> {
         let span = self.here();
         self.bump(); // '"'
-        let mut valor = String::new();
+        let mut value = String::new();
         loop {
             match self.bump() {
                 None => {
@@ -275,13 +275,13 @@ impl Lexer {
                     return None;
                 }
                 Some('\\') => match self.bump() {
-                    Some('"') => valor.push('"'),
-                    Some('\\') => valor.push('\\'),
-                    Some('n') => valor.push('\n'),
-                    Some('t') => valor.push('\t'),
+                    Some('"') => value.push('"'),
+                    Some('\\') => value.push('\\'),
+                    Some('n') => value.push('\n'),
+                    Some('t') => value.push('\t'),
                     // escapes não canônicos preservam o caractere (contrato
                     // do validador de superfície da Etapa 1)
-                    Some(outro) => valor.push(outro),
+                    Some(other) => value.push(other),
                     None => {
                         self.diags.error(
                             "string_nao_terminada",
@@ -291,22 +291,22 @@ impl Lexer {
                         return None;
                     }
                 },
-                Some(c) => valor.push(c),
+                Some(c) => value.push(c),
             }
         }
-        let bytes = valor.len();
-        if bytes > LIMITE_STRING_BYTES {
+        let bytes = value.len();
+        if bytes > LIMIT_STRING_BYTES {
             self.diags.error(
                 "string_muito_longa",
                 span,
-                format!("string excede {LIMITE_STRING_BYTES} bytes (tem {bytes})"),
+                format!("string excede {LIMIT_STRING_BYTES} bytes (tem {bytes})"),
             );
         }
-        Some(TokenKind::Str(valor))
+        Some(TokenKind::Str(value))
     }
 }
 
 /// Tokeniza o fonte, devolvendo tokens e diagnósticos.
-pub fn tokenize(fonte: &str) -> (Vec<Token>, Diagnostics) {
-    Lexer::new(fonte).tokenize()
+pub fn tokenize(source: &str) -> (Vec<Token>, Diagnostics) {
+    Lexer::new(source).tokenize()
 }

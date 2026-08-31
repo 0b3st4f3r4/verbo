@@ -28,9 +28,9 @@ pub mod registry;
 pub mod schema;
 pub mod transport;
 
-pub use bus::{BusConfig, FxpBus, Rota};
+pub use bus::{BusConfig, FxpBus, Route};
 pub use drivers::{ActorDriver, AttentionSource, SensorDriver, SimulatedAttention};
-pub use queue::{Comando, ErroFila, FilaComandos, PRIORIDADE_NORMAL, PRIORIDADE_SUBVERT};
-pub use registry::{DeviceEntry, DeviceKind, DeviceMode, DeviceRegistry, Endpoint, ErroRegistro, FxpConfig, ModoOperacao, RemoteAddr};
-pub use schema::{AckAct, Corpo, DeviceDesc, ErroSchema, Mensagem, WireValue};
-pub use transport::{ErroTransporte, Servidor};
+pub use queue::{Command, QueueError, CommandQueue, PRIORITY_NORMAL, PRIORITY_SUBVERT};
+pub use registry::{DeviceEntry, DeviceKind, DeviceMode, DeviceRegistry, Endpoint, RegistryError, FxpConfig, OperationMode, RemoteAddr};
+pub use schema::{AckAct, Body, DeviceDesc, SchemaError, Message, WireValue};
+pub use transport::{TransportError, Server};

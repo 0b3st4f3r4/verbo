@@ -34,7 +34,7 @@ pub fn fmt_string_literal(s: &str) -> String {
             '"' => out.push_str("\\\""),
             '\n' => out.push_str("\\n"),
             '\t' => out.push_str("\\t"),
-            outro => out.push(outro),
+            other => out.push(other),
         }
     }
     out.push('"');
@@ -44,18 +44,18 @@ pub fn fmt_string_literal(s: &str) -> String {
 /// Serializa uma duração canônica (ex.: `60s`, `2.5s`, `500ms`).
 pub fn fmt_duration(d: &Duration) -> String {
     // normaliza sub-secondo para a menor unidade integral quando possível
-    let seg = d.segundos();
-    if seg.fract() == 0.0 && seg.is_finite() && d.unit == TimeUnit::S {
-        format!("{}s", fmt_num(seg))
+    let secs = d.seconds();
+    if secs.fract() == 0.0 && secs.is_finite() && d.unit == TimeUnit::S {
+        format!("{}s", fmt_num(secs))
     } else {
-        format!("{}{}", fmt_num(d.valor), d.unit.sufixo())
+        format!("{}{}", fmt_num(d.value), d.unit.suffix())
     }
 }
 
 /// Serializa a forma em texto `.vl` canônico reparseável (FORMAL §4.1).
 pub fn form_to_vl(f: &FormDecl) -> String {
-    let mut linhas = vec![format!("{} {} {{", f.conjugation.nome(), f.name)];
-    linhas.push(format!("    value: {},", fmt_expression(&f.value)));
+    let mut lines = vec![format!("{} {} {{", f.conjugation.name(), f.name)];
+    lines.push(format!("    value: {},", fmt_expression(&f.value)));
     let mut extras: Vec<String> = Vec::new();
     if let Some(sp) = &f.attrs.source_path {
         extras.push(format!("source_path: {}", fmt_string_literal(sp)));
@@ -64,8 +64,8 @@ pub fn form_to_vl(f: &FormDecl) -> String {
         if let Some(dl) = &f.attrs.maintenance_deadline {
             extras.push(format!("maintenance_deadline: {}", fmt_duration(dl)));
         }
-        let modo = f.attrs.exchange_mode.clone().unwrap_or_else(|| "cooperation".into());
-        extras.push(format!("exchange_mode: {}", fmt_string_literal(&modo)));
+        let mode = f.attrs.exchange_mode.clone().unwrap_or_else(|| "cooperation".into());
+        extras.push(format!("exchange_mode: {}", fmt_string_literal(&mode)));
     }
     if f.conjugation == Conjugation::Equilibrium {
         if let Some(cb) = f.attrs.cost_bytes {
@@ -73,7 +73,7 @@ pub fn form_to_vl(f: &FormDecl) -> String {
         }
     }
     if let Some(cur) = &f.attrs.currency {
-        if cur != f.conjugation.currency_padrao() {
+        if cur != f.conjugation.default_currency() {
             extras.push(format!("currency: {}", fmt_string_literal(cur)));
         }
     }
@@ -81,14 +81,14 @@ pub fn form_to_vl(f: &FormDecl) -> String {
         extras.push(format!("classification: {}", fmt_string_literal(cl)));
     }
     if extras.is_empty() {
-        linhas.push(format!("    horizon: {}", fmt_duration(&f.horizon)));
+        lines.push(format!("    horizon: {}", fmt_duration(&f.horizon)));
     } else {
-        linhas.push(format!("    horizon: {},", fmt_duration(&f.horizon)));
+        lines.push(format!("    horizon: {},", fmt_duration(&f.horizon)));
         for extra in &extras[..extras.len() - 1] {
-            linhas.push(format!("    {extra},"));
+            lines.push(format!("    {extra},"));
         }
-        linhas.push(format!("    {}", extras[extras.len() - 1]));
+        lines.push(format!("    {}", extras[extras.len() - 1]));
     }
-    linhas.push("}".into());
-    linhas.join("\n") + "\n"
+    lines.push("}".into());
+    lines.join("\n") + "\n"
 }

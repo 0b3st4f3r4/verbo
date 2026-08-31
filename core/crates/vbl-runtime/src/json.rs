@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Json {
-    Nulo,
+    Null,
     Bool(bool),
     Num(f64),
     Str(String),
@@ -19,8 +19,8 @@ pub enum Json {
 }
 
 impl Json {
-    pub fn obj(campos: impl IntoIterator<Item = (&'static str, Json)>) -> Json {
-        Json::Obj(campos.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+    pub fn obj(fields: impl IntoIterator<Item = (&'static str, Json)>) -> Json {
+        Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
     }
 
     pub fn str(s: impl Into<String>) -> Json {
@@ -35,43 +35,43 @@ impl Json {
         Json::Bool(b)
     }
 
-    pub fn serializar(&self) -> String {
+    pub fn serialize(&self) -> String {
         let mut out = String::new();
-        self.escrever(&mut out);
+        self.write(&mut out);
         out
     }
 
     /// Serializa diretamente no buffer (Etapa 5 — caminho quente do Caderno
-    /// reutiliza a string; mesmo output de [`Json::serializar`]).
-    pub fn serializar_em(&self, out: &mut String) {
-        self.escrever(out);
+    /// reutiliza a string; mesmo output de [`Json::serialize`]).
+    pub fn serialize_into(&self, out: &mut String) {
+        self.write(out);
     }
 
-    fn escrever(&self, out: &mut String) {
+    fn write(&self, out: &mut String) {
         match self {
-            Json::Nulo => out.push_str("null"),
+            Json::Null => out.push_str("null"),
             Json::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-            Json::Num(n) => escrever_numero(*n, out),
-            Json::Str(s) => escrever_string(s, out),
-            Json::Arr(itens) => {
+            Json::Num(n) => write_number(*n, out),
+            Json::Str(s) => write_string(s, out),
+            Json::Arr(items) => {
                 out.push('[');
-                for (i, item) in itens.iter().enumerate() {
+                for (i, item) in items.iter().enumerate() {
                     if i > 0 {
                         out.push(',');
                     }
-                    item.escrever(out);
+                    item.write(out);
                 }
                 out.push(']');
             }
-            Json::Obj(campos) => {
+            Json::Obj(fields) => {
                 out.push('{');
-                for (i, (k, v)) in campos.iter().enumerate() {
+                for (i, (k, v)) in fields.iter().enumerate() {
                     if i > 0 {
                         out.push(',');
                     }
-                    escrever_string(k, out);
+                    write_string(k, out);
                     out.push(':');
-                    v.escrever(out);
+                    v.write(out);
                 }
                 out.push('}');
             }
@@ -83,7 +83,7 @@ impl Json {
 /// alocação intermediária). Etapa 5: formatter ÚNICO da composição canônica —
 /// o caminho direto do Caderno de produção escreve por aqui para garantir
 /// linhas byte a byte idênticas às do serializador geral.
-pub(crate) fn escrever_string(s: &str, out: &mut String) {
+pub(crate) fn write_string(s: &str, out: &mut String) {
     out.push('"');
     for c in s.chars() {
         match c {
@@ -101,8 +101,8 @@ pub(crate) fn escrever_string(s: &str, out: &mut String) {
 
 /// Escreve um número no formato canônico do Caderno (integrais sem casa
 /// decimal; NaN/∞ como `null`) — mesma regra do braço `Json::Num` de
-/// [`Json::escrever`], extraída para o caminho direto reutilizar.
-pub(crate) fn escrever_numero(n: f64, out: &mut String) {
+/// [`Json::write`], extraída para o caminho direto reutilizar.
+pub(crate) fn write_number(n: f64, out: &mut String) {
     if n.fract() == 0.0 && n.is_finite() && n.abs() < 9.0e15 {
         let _ = std::fmt::Write::write_fmt(out, format_args!("{}", n as i64));
     } else if n.is_finite() {
@@ -120,59 +120,59 @@ impl Json {
     /// Analisa um documento JSON (apenas o necessário para a auditoria do
     /// Caderno: objetos, arrays, strings com escapes, números, bool, null).
     /// Zero dependências; determinístico.
-    pub fn analisar(texto: &str) -> Option<Json> {
-        let bytes = texto.as_bytes();
+    pub fn parse(text: &str) -> Option<Json> {
+        let bytes = text.as_bytes();
         let mut pos = 0usize;
-        let valor = analisar_valor(bytes, &mut pos)?;
-        pular_espaco(bytes, &mut pos);
+        let value = parse_value(bytes, &mut pos)?;
+        skip_space(bytes, &mut pos);
         if pos != bytes.len() {
             return None; // sobra de conteúdo — documento inválido
         }
-        Some(valor)
+        Some(value)
     }
 }
 
-fn pular_espaco(b: &[u8], pos: &mut usize) {
+fn skip_space(b: &[u8], pos: &mut usize) {
     while *pos < b.len() && matches!(b[*pos], b' ' | b'\t' | b'\n' | b'\r') {
         *pos += 1;
     }
 }
 
-fn analisar_valor(b: &[u8], pos: &mut usize) -> Option<Json> {
-    pular_espaco(b, pos);
+fn parse_value(b: &[u8], pos: &mut usize) -> Option<Json> {
+    skip_space(b, pos);
     match *b.get(*pos)? {
-        b'{' => analisar_objeto(b, pos),
-        b'[' => analisar_array(b, pos),
-        b'"' => analisar_string(b, pos).map(Json::Str),
-        b't' => analisar_literal(b, pos, "true", Json::Bool(true)),
-        b'f' => analisar_literal(b, pos, "false", Json::Bool(false)),
-        b'n' => analisar_literal(b, pos, "null", Json::Nulo),
-        _ => analisar_numero(b, pos),
+        b'{' => parse_object(b, pos),
+        b'[' => parse_array(b, pos),
+        b'"' => parse_string(b, pos).map(Json::Str),
+        b't' => parse_literal(b, pos, "true", Json::Bool(true)),
+        b'f' => parse_literal(b, pos, "false", Json::Bool(false)),
+        b'n' => parse_literal(b, pos, "null", Json::Null),
+        _ => parse_number(b, pos),
     }
 }
 
-fn analisar_literal(b: &[u8], pos: &mut usize, literal: &str, valor: Json) -> Option<Json> {
+fn parse_literal(b: &[u8], pos: &mut usize, literal: &str, value: Json) -> Option<Json> {
     if b.get(*pos..*pos + literal.len())? == literal.as_bytes() {
         *pos += literal.len();
-        Some(valor)
+        Some(value)
     } else {
         None
     }
 }
 
-fn analisar_numero(b: &[u8], pos: &mut usize) -> Option<Json> {
-    let inicio = *pos;
+fn parse_number(b: &[u8], pos: &mut usize) -> Option<Json> {
+    let start = *pos;
     if b.get(*pos) == Some(&b'-') {
         *pos += 1;
     }
     while matches!(b.get(*pos), Some(c) if c.is_ascii_digit() || matches!(c, b'.' | b'e' | b'E' | b'+' | b'-')) {
         *pos += 1;
     }
-    let texto = std::str::from_utf8(b.get(inicio..*pos)?).ok()?;
-    texto.parse::<f64>().ok().map(Json::Num)
+    let text = std::str::from_utf8(b.get(start..*pos)?).ok()?;
+    text.parse::<f64>().ok().map(Json::Num)
 }
 
-fn analisar_string(b: &[u8], pos: &mut usize) -> Option<String> {
+fn parse_string(b: &[u8], pos: &mut usize) -> Option<String> {
     if b.get(*pos) != Some(&b'"') {
         return None;
     }
@@ -207,64 +207,64 @@ fn analisar_string(b: &[u8], pos: &mut usize) -> Option<String> {
             }
             c => {
                 // continua o fluxo UTF-8 byte a byte (seguro: fonte era &str)
-                let inicio = *pos;
+                let start = *pos;
                 while *pos < b.len() && b[*pos] != b'"' && b[*pos] != b'\\' {
                     *pos += 1;
                 }
-                out.push_str(std::str::from_utf8(b.get(inicio..*pos)?).ok()?);
+                out.push_str(std::str::from_utf8(b.get(start..*pos)?).ok()?);
                 let _ = c;
             }
         }
     }
 }
 
-fn analisar_objeto(b: &[u8], pos: &mut usize) -> Option<Json> {
+fn parse_object(b: &[u8], pos: &mut usize) -> Option<Json> {
     *pos += 1; // '{'
-    let mut campos = std::collections::BTreeMap::new();
-    pular_espaco(b, pos);
+    let mut fields = std::collections::BTreeMap::new();
+    skip_space(b, pos);
     if b.get(*pos) == Some(&b'}') {
         *pos += 1;
-        return Some(Json::Obj(campos));
+        return Some(Json::Obj(fields));
     }
     loop {
-        pular_espaco(b, pos);
-        let chave = analisar_string(b, pos)?;
-        pular_espaco(b, pos);
+        skip_space(b, pos);
+        let key = parse_string(b, pos)?;
+        skip_space(b, pos);
         if b.get(*pos) != Some(&b':') {
             return None;
         }
         *pos += 1;
-        let valor = analisar_valor(b, pos)?;
-        campos.insert(chave, valor);
-        pular_espaco(b, pos);
+        let value = parse_value(b, pos)?;
+        fields.insert(key, value);
+        skip_space(b, pos);
         match b.get(*pos)? {
             b',' => *pos += 1,
             b'}' => {
                 *pos += 1;
-                return Some(Json::Obj(campos));
+                return Some(Json::Obj(fields));
             }
             _ => return None,
         }
     }
 }
 
-fn analisar_array(b: &[u8], pos: &mut usize) -> Option<Json> {
+fn parse_array(b: &[u8], pos: &mut usize) -> Option<Json> {
     *pos += 1; // '['
-    let mut itens = Vec::new();
-    pular_espaco(b, pos);
+    let mut items = Vec::new();
+    skip_space(b, pos);
     if b.get(*pos) == Some(&b']') {
         *pos += 1;
-        return Some(Json::Arr(itens));
+        return Some(Json::Arr(items));
     }
     loop {
-        let valor = analisar_valor(b, pos)?;
-        itens.push(valor);
-        pular_espaco(b, pos);
+        let value = parse_value(b, pos)?;
+        items.push(value);
+        skip_space(b, pos);
         match b.get(*pos)? {
             b',' => *pos += 1,
             b']' => {
                 *pos += 1;
-                return Some(Json::Arr(itens));
+                return Some(Json::Arr(items));
             }
             _ => return None,
         }

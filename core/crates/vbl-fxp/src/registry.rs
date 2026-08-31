@@ -17,62 +17,62 @@ use vbl_runtime::fxp::{ActorLimits, Registry as RuntimeRegistry, SensorInfo};
 
 /// Modo de operação global do barramento (PLAN §3.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ModoOperacao {
+pub enum OperationMode {
     /// Todo dispositivo no endpoint físico; indisponível ⇒ falha honesta.
     Real,
     /// Todo dispositivo sintético, marcado no Caderno (CI-safe; default).
     #[default]
-    Simulado,
+    Simulated,
     /// Por dispositivo: reais onde há endpoint, simulados no restante.
-    Hibrido,
+    Hybrid,
 }
 
-impl ModoOperacao {
-    pub fn parse(s: &str) -> Result<Self, ErroRegistro> {
+impl OperationMode {
+    pub fn parse(s: &str) -> Result<Self, RegistryError> {
         match s {
             "real" => Ok(Self::Real),
-            "simulado" => Ok(Self::Simulado),
-            "hibrido" | "híbrido" => Ok(Self::Hibrido),
-            other => Err(ErroRegistro::ConfigInvalida(format!(
+            "simulado" => Ok(Self::Simulated),
+            "hibrido" | "híbrido" => Ok(Self::Hybrid),
+            other => Err(RegistryError::InvalidConfig(format!(
                 "modo desconhecido: '{other}' (use real | simulado | hibrido)"
             ))),
         }
     }
 
-    pub fn nome(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         match self {
-            ModoOperacao::Real => "real",
-            ModoOperacao::Simulado => "simulado",
-            ModoOperacao::Hibrido => "hibrido",
+            OperationMode::Real => "real",
+            OperationMode::Simulated => "simulado",
+            OperationMode::Hybrid => "hibrido",
         }
     }
 }
 
-/// Modo do dispositivo individual (o global modula: em `Simulado` puro tudo
+/// Modo do dispositivo individual (o global modula: em `Simulated` puro tudo
 /// é sintético; em `Real` dispositivo sem endpoint real é inacessível; em
-/// `Hibrido` vale o modo individual).
+/// `Hybrid` vale o modo individual).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DeviceMode {
     Real,
     #[default]
-    Simulado,
+    Simulated,
 }
 
 impl DeviceMode {
-    pub fn parse(s: &str) -> Result<Self, ErroRegistro> {
+    pub fn parse(s: &str) -> Result<Self, RegistryError> {
         match s {
             "real" => Ok(Self::Real),
-            "simulado" => Ok(Self::Simulado),
-            other => Err(ErroRegistro::ConfigInvalida(format!(
+            "simulado" => Ok(Self::Simulated),
+            other => Err(RegistryError::InvalidConfig(format!(
                 "modo de dispositivo desconhecido: '{other}'"
             ))),
         }
     }
 
-    pub fn nome(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         match self {
             DeviceMode::Real => "real",
-            DeviceMode::Simulado => "simulado",
+            DeviceMode::Simulated => "simulado",
         }
     }
 }
@@ -81,13 +81,13 @@ impl DeviceMode {
 #[derive(Debug, Clone, PartialEq)]
 pub enum DeviceKind {
     Sensor {
-        grandeza: String,
-        unidade: String,
+        quantity: String,
+        unit: String,
         /// Faixa física esperada (documentativa; leitura fora dela é alerta,
         /// nunca fabricação — FORMAL §4.7).
-        faixa: (Option<f64>, Option<f64>),
+        range: (Option<f64>, Option<f64>),
         /// Precisão típica em percentual (§6; 0.0 = dependente do backend).
-        precisao_pct: f64,
+        precision_pct: f64,
     },
     Actor {
         limits: ActorLimits,
@@ -107,7 +107,7 @@ pub enum RemoteAddr {
 pub enum Endpoint {
     /// Backend simulado em processo (determinístico; roteirizado pelo CLI).
     #[default]
-    Simulado,
+    Simulated,
     /// Auto-descoberta no host (só para os dispositivos obrigatórios; falha
     /// de descoberta ⇒ dispositivo registrado porém inacessível — §4.7).
     Auto,
@@ -123,7 +123,7 @@ pub enum Endpoint {
     HwmonPwm { file: PathBuf },
     /// LED class: diretório com `brightness` e `max_brightness`.
     LedClass { dir: PathBuf },
-    /// Peer remoto falando schema v1 (`unix:/caminho` ou `tcp:host:porta`).
+    /// Peer remoto falando schema v1 (`unix:/path` ou `tcp:host:porta`).
     Remote { addr: RemoteAddr },
 }
 
@@ -131,44 +131,44 @@ impl Endpoint {
     /// Formato textual do config: `simulado` | `auto` |
     /// `thermal_zone:<dir>` | `hwmon_temp:<arq>` | `rapl_energy:<dir>` |
     /// `rapl_constraint:<arq>` | `hwmon_pwm:<arq>` | `led:<dir>` |
-    /// `unix:<caminho>` | `tcp:<host>:<porta>`.
-    pub fn parse(s: &str) -> Result<Self, ErroRegistro> {
+    /// `unix:<path>` | `tcp:<host>:<porta>`.
+    pub fn parse(s: &str) -> Result<Self, RegistryError> {
         // Esquemas sem caminho.
         match s {
-            "simulado" => return Ok(Endpoint::Simulado),
+            "simulado" => return Ok(Endpoint::Simulated),
             "auto" => return Ok(Endpoint::Auto),
             _ => {}
         }
-        let (esquema, resto) = s
+        let (schema, rest) = s
             .split_once(':')
-            .ok_or_else(|| ErroRegistro::EndpointInvalido(s.into()))?;
+            .ok_or_else(|| RegistryError::InvalidEndpoint(s.into()))?;
         let path = |v: &str| PathBuf::from(v);
-        match esquema {
-            "thermal_zone" => Ok(Endpoint::ThermalZone { dir: path(resto) }),
-            "hwmon_temp" => Ok(Endpoint::HwmonTemp { file: path(resto) }),
-            "rapl_energy" => Ok(Endpoint::RaplEnergy { dir: path(resto) }),
-            "rapl_constraint" => Ok(Endpoint::RaplConstraint { file: path(resto) }),
-            "hwmon_pwm" => Ok(Endpoint::HwmonPwm { file: path(resto) }),
-            "led" => Ok(Endpoint::LedClass { dir: path(resto) }),
-            "unix" => Ok(Endpoint::Remote { addr: RemoteAddr::Unix(path(resto)) }),
+        match schema {
+            "thermal_zone" => Ok(Endpoint::ThermalZone { dir: path(rest) }),
+            "hwmon_temp" => Ok(Endpoint::HwmonTemp { file: path(rest) }),
+            "rapl_energy" => Ok(Endpoint::RaplEnergy { dir: path(rest) }),
+            "rapl_constraint" => Ok(Endpoint::RaplConstraint { file: path(rest) }),
+            "hwmon_pwm" => Ok(Endpoint::HwmonPwm { file: path(rest) }),
+            "led" => Ok(Endpoint::LedClass { dir: path(rest) }),
+            "unix" => Ok(Endpoint::Remote { addr: RemoteAddr::Unix(path(rest)) }),
             "tcp" => {
-                let (host, port) = resto.rsplit_once(':').ok_or_else(|| {
-                    ErroRegistro::EndpointInvalido(format!("{s} (esperado tcp:host:porta)"))
+                let (host, port) = rest.rsplit_once(':').ok_or_else(|| {
+                    RegistryError::InvalidEndpoint(format!("{s} (esperado tcp:host:porta)"))
                 })?;
                 let port: u16 = port.parse().map_err(|_| {
-                    ErroRegistro::EndpointInvalido(format!("{s} (porta inválida)"))
+                    RegistryError::InvalidEndpoint(format!("{s} (porta inválida)"))
                 })?;
                 Ok(Endpoint::Remote { addr: RemoteAddr::Tcp { host: host.into(), port } })
             }
-            _ => Err(ErroRegistro::EndpointInvalido(s.into())),
+            _ => Err(RegistryError::InvalidEndpoint(s.into())),
         }
     }
 
     /// Descrição canônica (re-parseável por [`Endpoint::parse`]; usada no
     /// Caderno, no `vbl fxp-probe` e na documentação).
-    pub fn descricao(&self) -> String {
+    pub fn description(&self) -> String {
         match self {
-            Endpoint::Simulado => "simulado".into(),
+            Endpoint::Simulated => "simulado".into(),
             Endpoint::Auto => "auto".into(),
             Endpoint::ThermalZone { dir } => format!("thermal_zone:{}", dir.display()),
             Endpoint::HwmonTemp { file } => format!("hwmon_temp:{}", file.display()),
@@ -204,29 +204,29 @@ pub struct DeviceEntry {
 
 impl DeviceEntry {
     /// Sensor simulado com metadados do §6.
-    pub fn sensor(name: &str, grandeza: &str, unidade: &str, precisao_pct: f64) -> Self {
+    pub fn sensor(name: &str, quantity: &str, unit: &str, precision_pct: f64) -> Self {
         Self {
             name: name.into(),
             kind: DeviceKind::Sensor {
-                grandeza: grandeza.into(),
-                unidade: unidade.into(),
-                faixa: (None, None),
-                precisao_pct,
+                quantity: quantity.into(),
+                unit: unit.into(),
+                range: (None, None),
+                precision_pct,
             },
-            mode: DeviceMode::Simulado,
-            endpoint: Endpoint::Simulado,
+            mode: DeviceMode::Simulated,
+            endpoint: Endpoint::Simulated,
             fallback: Vec::new(),
             aliases: Vec::new(),
         }
     }
 
     /// Ator simulado com limites do §6.
-    pub fn ator(name: &str, limits: ActorLimits) -> Self {
+    pub fn actor(name: &str, limits: ActorLimits) -> Self {
         Self {
             name: name.into(),
             kind: DeviceKind::Actor { limits },
-            mode: DeviceMode::Simulado,
-            endpoint: Endpoint::Simulado,
+            mode: DeviceMode::Simulated,
+            endpoint: Endpoint::Simulated,
             fallback: Vec::new(),
             aliases: Vec::new(),
         }
@@ -235,50 +235,50 @@ impl DeviceEntry {
 
 /// Erro de registro/configuração.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ErroRegistro {
+pub enum RegistryError {
     /// Nome canônico já ocupado por outro dispositivo.
-    NomeDuplicado(String),
+    DuplicateName(String),
     /// Alias/nome colide com nome canônico ou alias existente.
-    AliasConflitante(String),
+    ConflictingAlias(String),
     /// Alias aponta para dispositivo inexistente.
-    AliasDesconhecido { alias: String, canonical: String },
+    UnknownAlias { alias: String, canonical: String },
     /// Fallback cita alternativo fora do registro (FORMAL §4.3).
-    FallbackDesconhecido { ator: String, alternativo: String },
+    UnknownFallback { actor: String, alternativo: String },
     /// Alias definido sobre outro alias (encadeamento não é permitido).
-    AliasEncadeado(String),
+    ChainedAlias(String),
     /// String de endpoint fora do formato.
-    EndpointInvalido(String),
+    InvalidEndpoint(String),
     /// Config malformada (linha, valor, dispositivo subespecificado…).
-    ConfigInvalida(String),
+    InvalidConfig(String),
 }
 
-impl std::fmt::Display for ErroRegistro {
+impl std::fmt::Display for RegistryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ErroRegistro::NomeDuplicado(n) => {
+            RegistryError::DuplicateName(n) => {
                 write!(f, "nome canônico '{n}' já registrado")
             }
-            ErroRegistro::AliasConflitante(n) => {
+            RegistryError::ConflictingAlias(n) => {
                 write!(f, "'{n}' colide com nome/alias já registrado")
             }
-            ErroRegistro::AliasDesconhecido { alias, canonical } => {
+            RegistryError::UnknownAlias { alias, canonical } => {
                 write!(f, "alias '{alias}' aponta para dispositivo inexistente '{canonical}'")
             }
-            ErroRegistro::FallbackDesconhecido { ator, alternativo } => {
-                write!(f, "fallback de '{ator}' cita '{alternativo}', fora do registro (FORMAL §4.3)")
+            RegistryError::UnknownFallback { actor, alternativo } => {
+                write!(f, "fallback de '{actor}' cita '{alternativo}', fora do registro (FORMAL §4.3)")
             }
-            ErroRegistro::AliasEncadeado(n) => {
+            RegistryError::ChainedAlias(n) => {
                 write!(f, "alias '{n}' não pode apontar para outro alias")
             }
-            ErroRegistro::EndpointInvalido(e) => {
+            RegistryError::InvalidEndpoint(e) => {
                 write!(f, "endpoint inválido: '{e}' (simulado | auto | thermal_zone:… | rapl_energy:… | rapl_constraint:… | hwmon_pwm:… | led:… | unix:… | tcp:host:porta)")
             }
-            ErroRegistro::ConfigInvalida(m) => write!(f, "config inválida: {m}"),
+            RegistryError::InvalidConfig(m) => write!(f, "config inválida: {m}"),
         }
     }
 }
 
-impl std::error::Error for ErroRegistro {}
+impl std::error::Error for RegistryError {}
 
 /// Registro do FXP: mapeamento nome simbólico → dispositivo concreto.
 #[derive(Debug, Clone, Default)]
@@ -289,28 +289,28 @@ pub struct DeviceRegistry {
 }
 
 impl DeviceRegistry {
-    pub fn novo() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
     /// Registro mínimo obrigatório (FORMAL §6) — modo simulado (CI-safe).
     /// Precisões típicas: cpu_temp ±2%, cpu_power ±5%, attention dependente
     /// do backend (0.0 = não declarado).
-    pub fn minimo() -> Self {
-        let mut r = Self::novo();
-        for (name, grandeza, unidade, precisao) in [
+    pub fn minimum() -> Self {
+        let mut r = Self::new();
+        for (name, quantity, unit, precision) in [
             ("cpu_temp", "temperatura", "°C", 2.0),
             ("cpu_power", "potencia", "W", 5.0),
             ("attention", "atencao", "%", 0.0),
         ] {
-            let _ = r.registrar(DeviceEntry::sensor(name, grandeza, unidade, precisao));
+            let _ = r.register(DeviceEntry::sensor(name, quantity, unit, precision));
         }
         for (name, min, max, safety) in [
             ("CpuPowerCap", Some(10.0), Some(250.0), Some(200.0)),
             ("Ventoinha", Some(0.0), Some(255.0), Some(200.0)),
             ("LedIndicador", None, None, None),
         ] {
-            let _ = r.registrar(DeviceEntry::ator(
+            let _ = r.register(DeviceEntry::actor(
                 name,
                 ActorLimits { min, max, safety_limit: safety },
             ));
@@ -318,18 +318,18 @@ impl DeviceRegistry {
         r
     }
 
-    fn ocupado(&self, nome: &str) -> bool {
-        self.devices.contains_key(nome) || self.aliases.contains_key(nome)
+    fn occupied(&self, name: &str) -> bool {
+        self.devices.contains_key(name) || self.aliases.contains_key(name)
     }
 
     /// Registra dispositivo canônico; valida unicidade de nome e aliases.
-    pub fn registrar(&mut self, entry: DeviceEntry) -> Result<(), ErroRegistro> {
-        if self.ocupado(&entry.name) {
-            return Err(ErroRegistro::NomeDuplicado(entry.name));
+    pub fn register(&mut self, entry: DeviceEntry) -> Result<(), RegistryError> {
+        if self.occupied(&entry.name) {
+            return Err(RegistryError::DuplicateName(entry.name));
         }
         for a in &entry.aliases {
-            if self.ocupado(a) {
-                return Err(ErroRegistro::AliasConflitante(a.clone()));
+            if self.occupied(a) {
+                return Err(RegistryError::ConflictingAlias(a.clone()));
             }
         }
         for a in &entry.aliases {
@@ -341,19 +341,19 @@ impl DeviceRegistry {
 
     /// Define alias de dispositivo já registrado (`attention` →
     /// `human_attention`); leitura por alias é idêntica à do canônico.
-    pub fn definir_alias(&mut self, alias: &str, canonical: &str) -> Result<(), ErroRegistro> {
+    pub fn set_alias(&mut self, alias: &str, canonical: &str) -> Result<(), RegistryError> {
         // Alias de alias é encadeamento — rejeitado antes de "desconhecido".
         if self.aliases.contains_key(canonical) {
-            return Err(ErroRegistro::AliasEncadeado(canonical.into()));
+            return Err(RegistryError::ChainedAlias(canonical.into()));
         }
         if !self.devices.contains_key(canonical) {
-            return Err(ErroRegistro::AliasDesconhecido {
+            return Err(RegistryError::UnknownAlias {
                 alias: alias.into(),
                 canonical: canonical.into(),
             });
         }
-        if self.ocupado(alias) {
-            return Err(ErroRegistro::AliasConflitante(alias.into()));
+        if self.occupied(alias) {
+            return Err(RegistryError::ConflictingAlias(alias.into()));
         }
         self.aliases.insert(alias.into(), canonical.into());
         if let Some(d) = self.devices.get_mut(canonical) {
@@ -363,26 +363,26 @@ impl DeviceRegistry {
     }
 
     /// Resolve alias → canônico (o próprio nome passa direto).
-    pub fn canonical_de<'a>(&'a self, nome: &'a str) -> &'a str {
-        self.aliases.get(nome).map(String::as_str).unwrap_or(nome)
+    pub fn canonical_of<'a>(&'a self, name: &'a str) -> &'a str {
+        self.aliases.get(name).map(String::as_str).unwrap_or(name)
     }
 
     /// Dispositivo por nome simbólico (canônico ou alias).
-    pub fn get(&self, nome: &str) -> Option<&DeviceEntry> {
-        self.devices.get(self.canonical_de(nome))
+    pub fn get(&self, name: &str) -> Option<&DeviceEntry> {
+        self.devices.get(self.canonical_of(name))
     }
 
-    pub fn get_mut(&mut self, nome: &str) -> Option<&mut DeviceEntry> {
-        let canonical = self.canonical_de(nome).to_string();
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut DeviceEntry> {
+        let canonical = self.canonical_of(name).to_string();
         self.devices.get_mut(&canonical)
     }
 
-    pub fn contains(&self, nome: &str) -> bool {
-        self.get(nome).is_some()
+    pub fn contains(&self, name: &str) -> bool {
+        self.get(name).is_some()
     }
 
     /// Todos os dispositivos canônicos (ordem alfabética estável).
-    pub fn dispositivos(&self) -> impl Iterator<Item = &DeviceEntry> {
+    pub fn devices(&self) -> impl Iterator<Item = &DeviceEntry> {
         self.devices.values()
     }
 
@@ -401,10 +401,10 @@ impl DeviceRegistry {
         let mut r = RuntimeRegistry::default();
         for d in self.devices.values() {
             match &d.kind {
-                DeviceKind::Sensor { grandeza, unidade, .. } => {
+                DeviceKind::Sensor { quantity, unit, .. } => {
                     let info = SensorInfo {
-                        grandeza: grandeza.clone(),
-                        unidade: unidade.clone(),
+                        quantity: quantity.clone(),
+                        unit: unit.clone(),
                     };
                     r.sensores.insert(d.name.clone(), info.clone());
                     for a in &d.aliases {
@@ -412,9 +412,9 @@ impl DeviceRegistry {
                     }
                 }
                 DeviceKind::Actor { limits } => {
-                    r.atores.insert(d.name.clone(), limits.clone());
+                    r.actors.insert(d.name.clone(), limits.clone());
                     for a in &d.aliases {
-                        r.atores.insert(a.clone(), limits.clone());
+                        r.actors.insert(a.clone(), limits.clone());
                     }
                 }
             }
@@ -423,7 +423,7 @@ impl DeviceRegistry {
     }
 }
 
-/// Configuração do barramento/registro (arquivo de linhas `chave = valor`;
+/// Configuração do barramento/registro (arquivo de linhas `key = value`;
 /// `#` comenta; sem dependências externas).
 ///
 /// ```text
@@ -432,7 +432,7 @@ impl DeviceRegistry {
 /// cache_ttl_ms = 100
 /// cpu_temp.mode = real
 /// cpu_temp.endpoint = auto            # ou thermal_zone:/sys/class/thermal/thermal_zone0
-/// human_attention.alias_de = attention
+/// human_attention.alias_of = attention
 /// VentoinhaReserva.mode = real
 /// VentoinhaReserva.endpoint = unix:/tmp/fxpd.sock
 /// VentoinhaReserva.max = 255
@@ -440,7 +440,7 @@ impl DeviceRegistry {
 /// ```
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct FxpConfig {
-    pub mode: Option<ModoOperacao>,
+    pub mode: Option<OperationMode>,
     pub cache_ttl_ms: Option<u64>,
     pub read_timeout_ms: Option<u64>,
     pub act_timeout_local_ms: Option<u64>,
@@ -449,114 +449,114 @@ pub struct FxpConfig {
     pub retries: Option<u32>,
     /// Por dispositivo (nome canônico ou novo dispositivo).
     pub devices: BTreeMap<String, DeviceCfg>,
-    /// `fallback.<ator> = alt1, alt2`.
+    /// `fallback.<actor> = alt1, alt2`.
     pub fallback: BTreeMap<String, Vec<String>>,
 }
 
 /// Bloco de configuração de um dispositivo.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct DeviceCfg {
-    pub alias_de: Option<String>,
+    pub alias_of: Option<String>,
     pub mode: Option<DeviceMode>,
     pub endpoint: Option<Endpoint>,
-    pub grandeza: Option<String>,
-    pub unidade: Option<String>,
+    pub quantity: Option<String>,
+    pub unit: Option<String>,
     pub min: Option<f64>,
     pub max: Option<f64>,
     pub safety_limit: Option<f64>,
     /// Precisão típica (sensor novo).
-    pub precisao_pct: Option<f64>,
+    pub precision_pct: Option<f64>,
 }
 
 impl FxpConfig {
-    /// Faz o parse de linhas `chave = valor`. Chaves compostas:
-    /// `<device>.<campo>` e `fallback.<ator>`.
-    pub fn parse(texto: &str) -> Result<Self, ErroRegistro> {
+    /// Faz o parse de linhas `key = value`. Chaves compostas:
+    /// `<device>.<field>` e `fallback.<actor>`.
+    pub fn parse(text: &str) -> Result<Self, RegistryError> {
         let mut cfg = Self::default();
-        for (i, bruta) in texto.lines().enumerate() {
-            let linha = bruta.split('#').next().unwrap_or("").trim();
-            if linha.is_empty() {
+        for (i, bruta) in text.lines().enumerate() {
+            let line = bruta.split('#').next().unwrap_or("").trim();
+            if line.is_empty() {
                 continue;
             }
-            let (chave, valor) = linha
+            let (key, value) = line
                 .split_once('=')
-                .ok_or_else(|| ErroRegistro::ConfigInvalida(format!("linha {}: sem '='", i + 1)))?;
-            let chave = chave.trim();
-            let valor = valor.trim();
-            let num = |campo: &str| -> Result<u64, ErroRegistro> {
-                valor.parse::<u64>().map_err(|_| {
-                    ErroRegistro::ConfigInvalida(format!(
-                        "linha {}: {campo} espera inteiro, got '{valor}'",
+                .ok_or_else(|| RegistryError::InvalidConfig(format!("linha {}: sem '='", i + 1)))?;
+            let key = key.trim();
+            let value = value.trim();
+            let num = |field: &str| -> Result<u64, RegistryError> {
+                value.parse::<u64>().map_err(|_| {
+                    RegistryError::InvalidConfig(format!(
+                        "linha {}: {field} espera inteiro, got '{value}'",
                         i + 1
                     ))
                 })
             };
-            match chave {
-                "mode" => cfg.mode = Some(ModoOperacao::parse(valor)?),
+            match key {
+                "mode" => cfg.mode = Some(OperationMode::parse(value)?),
                 "cache_ttl_ms" => cfg.cache_ttl_ms = Some(num("cache_ttl_ms")?),
                 "read_timeout_ms" => cfg.read_timeout_ms = Some(num("read_timeout_ms")?),
-                "act_timeout_local_ms" => cfg.act_timeout_local_ms = Some(num(chave)?),
-                "act_timeout_remote_ms" => cfg.act_timeout_remote_ms = Some(num(chave)?),
-                "queue_timeout_ms" => cfg.queue_timeout_ms = Some(num(chave)?),
+                "act_timeout_local_ms" => cfg.act_timeout_local_ms = Some(num(key)?),
+                "act_timeout_remote_ms" => cfg.act_timeout_remote_ms = Some(num(key)?),
+                "queue_timeout_ms" => cfg.queue_timeout_ms = Some(num(key)?),
                 "retries" => {
                     cfg.retries = Some(u32::try_from(num("retries")?).map_err(|_| {
-                        ErroRegistro::ConfigInvalida(format!("linha {}: retries muito grande", i + 1))
+                        RegistryError::InvalidConfig(format!("linha {}: retries muito grande", i + 1))
                     })?)
                 }
                 _ => {
-                    if let Some(dev) = chave.strip_prefix("fallback.") {
-                        let alts: Vec<String> = valor
+                    if let Some(dev) = key.strip_prefix("fallback.") {
+                        let alts: Vec<String> = value
                             .split(',')
                             .map(str::trim)
                             .filter(|s| !s.is_empty())
                             .map(String::from)
                             .collect();
                         if alts.is_empty() {
-                            return Err(ErroRegistro::ConfigInvalida(format!(
+                            return Err(RegistryError::InvalidConfig(format!(
                                 "linha {}: fallback sem alternativos",
                                 i + 1
                             )));
                         }
                         cfg.fallback.insert(dev.into(), alts);
                     } else {
-                        let (nome, campo) = chave
+                        let (name, field) = key
                             .split_once('.')
                             .ok_or_else(|| {
-                                ErroRegistro::ConfigInvalida(format!(
-                                    "linha {}: chave desconhecida '{chave}'",
+                                RegistryError::InvalidConfig(format!(
+                                    "linha {}: chave desconhecida '{key}'",
                                     i + 1
                                 ))
                             })?;
-                        let d = cfg.devices.entry(nome.into()).or_default();
-                        match campo {
-                            "alias_de" => d.alias_de = Some(valor.into()),
-                            "mode" => d.mode = Some(DeviceMode::parse(valor)?),
-                            "endpoint" => d.endpoint = Some(Endpoint::parse(valor)?),
-                            "grandeza" => d.grandeza = Some(valor.into()),
-                            "unidade" => d.unidade = Some(valor.into()),
+                        let d = cfg.devices.entry(name.into()).or_default();
+                        match field {
+                            "alias_de" => d.alias_of = Some(value.into()),
+                            "mode" => d.mode = Some(DeviceMode::parse(value)?),
+                            "endpoint" => d.endpoint = Some(Endpoint::parse(value)?),
+                            "grandeza" => d.quantity = Some(value.into()),
+                            "unidade" => d.unit = Some(value.into()),
                             "precisao_pct" => {
-                                d.precisao_pct = Some(valor.parse().map_err(|_| {
-                                    ErroRegistro::ConfigInvalida(format!(
+                                d.precision_pct = Some(value.parse().map_err(|_| {
+                                    RegistryError::InvalidConfig(format!(
                                         "linha {}: precisao_pct espera número",
                                         i + 1
                                     ))
                                 })?)
                             }
                             "min" | "max" | "safety_limit" => {
-                                let v: f64 = valor.parse().map_err(|_| {
-                                    ErroRegistro::ConfigInvalida(format!(
-                                        "linha {}: {campo} espera número",
+                                let v: f64 = value.parse().map_err(|_| {
+                                    RegistryError::InvalidConfig(format!(
+                                        "linha {}: {field} espera número",
                                         i + 1
                                     ))
                                 })?;
-                                match campo {
+                                match field {
                                     "min" => d.min = Some(v),
                                     "max" => d.max = Some(v),
                                     _ => d.safety_limit = Some(v),
                                 }
                             }
                             other => {
-                                return Err(ErroRegistro::ConfigInvalida(format!(
+                                return Err(RegistryError::InvalidConfig(format!(
                                     "linha {}: campo de dispositivo desconhecido '{other}'",
                                     i + 1
                                 )))
@@ -566,23 +566,23 @@ impl FxpConfig {
                 }
             }
         }
-        cfg.validar()?;
+        cfg.validate()?;
         Ok(cfg)
     }
 
     /// Regras estruturais: alias não encadeia; dispositivo novo precisa se
     /// declarar sensor (grandeza) ou ator (limites/endpoint de atuação).
-    fn validar(&self) -> Result<(), ErroRegistro> {
-        for (nome, d) in &self.devices {
-            if let Some(canonical) = &d.alias_de {
-                if let Some(outro) = self.devices.get(canonical) {
-                    if outro.alias_de.is_some() {
-                        return Err(ErroRegistro::AliasEncadeado(nome.clone()));
+    fn validate(&self) -> Result<(), RegistryError> {
+        for (name, d) in &self.devices {
+            if let Some(canonical) = &d.alias_of {
+                if let Some(other) = self.devices.get(canonical) {
+                    if other.alias_of.is_some() {
+                        return Err(RegistryError::ChainedAlias(name.clone()));
                     }
                 }
                 if d.mode.is_some() || d.endpoint.is_some() {
-                    return Err(ErroRegistro::ConfigInvalida(format!(
-                        "alias '{nome}' não aceita mode/endpoint"
+                    return Err(RegistryError::InvalidConfig(format!(
+                        "alias '{name}' não aceita mode/endpoint"
                     )));
                 }
             }
@@ -594,15 +594,15 @@ impl FxpConfig {
     /// existentes e registro de extensões novas (PLAN §3.1: diretório
     /// dinâmico). Dispositivo novo deve se declarar sensor (grandeza) ou
     /// ator (algum limite) — senão é config inválida.
-    pub fn aplicar(&self, registry: &mut DeviceRegistry) -> Result<(), ErroRegistro> {
+    pub fn apply(&self, registry: &mut DeviceRegistry) -> Result<(), RegistryError> {
         // 1) aliases primeiro (podem ser referenciados por novos dispositivos? não —
         //    mas fallback pode citar dispositivo novo; ordem: dispositivos → fallback)
-        for (nome, d) in &self.devices {
-            if let Some(canonical) = &d.alias_de {
-                registry.definir_alias(nome, canonical)?;
+        for (name, d) in &self.devices {
+            if let Some(canonical) = &d.alias_of {
+                registry.set_alias(name, canonical)?;
                 continue;
             }
-            if let Some(entry) = registry.get_mut(nome) {
+            if let Some(entry) = registry.get_mut(name) {
                 // Override de dispositivo existente (obrigatório ou extensão).
                 if let Some(mode) = d.mode {
                     entry.mode = mode;
@@ -611,24 +611,24 @@ impl FxpConfig {
                     entry.endpoint = ep.clone();
                 }
                 match &mut entry.kind {
-                    DeviceKind::Sensor { grandeza, unidade, precisao_pct, faixa } => {
-                        if let Some(g) = &d.grandeza {
-                            *grandeza = g.clone();
+                    DeviceKind::Sensor { quantity, unit, precision_pct, range } => {
+                        if let Some(g) = &d.quantity {
+                            *quantity = g.clone();
                         }
-                        if let Some(u) = &d.unidade {
-                            *unidade = u.clone();
+                        if let Some(u) = &d.unit {
+                            *unit = u.clone();
                         }
-                        if let Some(p) = d.precisao_pct {
-                            *precisao_pct = p;
+                        if let Some(p) = d.precision_pct {
+                            *precision_pct = p;
                         }
                         // Para sensores, min/max declaram a faixa física.
                         if d.min.is_some() || d.max.is_some() {
-                            faixa.0 = d.min;
-                            faixa.1 = d.max;
+                            range.0 = d.min;
+                            range.1 = d.max;
                         }
                         if d.safety_limit.is_some() {
-                            return Err(ErroRegistro::ConfigInvalida(format!(
-                                "sensor '{nome}' não aceita safety_limit (exclusivo de ator)"
+                            return Err(RegistryError::InvalidConfig(format!(
+                                "sensor '{name}' não aceita safety_limit (exclusivo de ator)"
                             )));
                         }
                     }
@@ -642,10 +642,10 @@ impl FxpConfig {
                         if let Some(v) = d.safety_limit {
                             limits.safety_limit = Some(v);
                         }
-                        if d.grandeza.is_some() || d.unidade.is_some() || d.precisao_pct.is_some()
+                        if d.quantity.is_some() || d.unit.is_some() || d.precision_pct.is_some()
                         {
-                            return Err(ErroRegistro::ConfigInvalida(format!(
-                                "ator '{nome}' não aceita grandeza/unidade/precisao_pct"
+                            return Err(RegistryError::InvalidConfig(format!(
+                                "ator '{name}' não aceita grandeza/unidade/precisao_pct"
                             )));
                         }
                     }
@@ -654,17 +654,17 @@ impl FxpConfig {
                 // Extensão nova (ex.: `VentoinhaReserva`, `solar_panel`).
                 let mode = d.mode.unwrap_or_default();
                 let endpoint = d.endpoint.clone().unwrap_or_default();
-                let kind = if let Some(g) = &d.grandeza {
+                let kind = if let Some(g) = &d.quantity {
                     if d.safety_limit.is_some() {
-                        return Err(ErroRegistro::ConfigInvalida(format!(
-                            "sensor '{nome}' não aceita safety_limit (exclusivo de ator)"
+                        return Err(RegistryError::InvalidConfig(format!(
+                            "sensor '{name}' não aceita safety_limit (exclusivo de ator)"
                         )));
                     }
                     DeviceKind::Sensor {
-                        grandeza: g.clone(),
-                        unidade: d.unidade.clone().unwrap_or_else(|| "unidade".into()),
-                        faixa: (d.min, d.max),
-                        precisao_pct: d.precisao_pct.unwrap_or(0.0),
+                        quantity: g.clone(),
+                        unit: d.unit.clone().unwrap_or_else(|| "unidade".into()),
+                        range: (d.min, d.max),
+                        precision_pct: d.precision_pct.unwrap_or(0.0),
                     }
                 } else if d.min.is_some() || d.max.is_some() || d.safety_limit.is_some() {
                     DeviceKind::Actor {
@@ -678,12 +678,12 @@ impl FxpConfig {
                     // Ator remoto sem limites declarados (ex.: LedIndicador remoto).
                     DeviceKind::Actor { limits: ActorLimits::default() }
                 } else {
-                    return Err(ErroRegistro::ConfigInvalida(format!(
-                        "dispositivo novo '{nome}' precisa de grandeza (sensor) ou limites (ator)"
+                    return Err(RegistryError::InvalidConfig(format!(
+                        "dispositivo novo '{name}' precisa de grandeza (sensor) ou limites (ator)"
                     )));
                 };
-                registry.registrar(DeviceEntry {
-                    name: nome.clone(),
+                registry.register(DeviceEntry {
+                    name: name.clone(),
                     kind,
                     mode,
                     endpoint,
@@ -693,24 +693,24 @@ impl FxpConfig {
             }
         }
         // 2) política de fallback (FORMAL §4.3): validada contra o registro.
-        for (ator, alts) in &self.fallback {
-            if !registry.contains(ator) {
-                return Err(ErroRegistro::ConfigInvalida(format!(
-                    "fallback de ator não registrado: '{ator}'"
+        for (actor, alts) in &self.fallback {
+            if !registry.contains(actor) {
+                return Err(RegistryError::InvalidConfig(format!(
+                    "fallback de ator não registrado: '{actor}'"
                 )));
             }
             for alt in alts {
                 if !registry.contains(alt) {
-                    return Err(ErroRegistro::FallbackDesconhecido {
-                        ator: ator.clone(),
+                    return Err(RegistryError::UnknownFallback {
+                        actor: actor.clone(),
                         alternativo: alt.clone(),
                     });
                 }
             }
-            let entry = registry.get_mut(ator).expect("checado acima");
+            let entry = registry.get_mut(actor).expect("checado acima");
             if !matches!(entry.kind, DeviceKind::Actor { .. }) {
-                return Err(ErroRegistro::ConfigInvalida(format!(
-                    "fallback só se aplica a atores: '{ator}' é sensor"
+                return Err(RegistryError::InvalidConfig(format!(
+                    "fallback só se aplica a atores: '{actor}' é sensor"
                 )));
             }
             entry.fallback = alts.clone();

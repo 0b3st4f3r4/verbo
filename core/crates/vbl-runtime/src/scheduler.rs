@@ -1,7 +1,7 @@
 //! Escalonador por fila de prazos (FORMAL §4.2): min-heap por
 //! `horizon`/`maintenance_deadline` — O(log N) por mutação e varredura
 //! O(N + vencidos) por tick. O relógio é virtual e injetável: o engine passa
-//! `agora` a cada tick (1 tick ≈ 1 s virtual; em teste o simulador avança
+//! `now` a cada tick (1 tick ≈ 1 s virtual; em teste o simulador avança
 //! instantaneamente).
 //!
 //! O heap decide **quem venceu**; a validade do prazo (predicados pinados na
@@ -14,61 +14,61 @@ use std::collections::BinaryHeap;
 
 /// Tipo de prazo agendado.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Prazo {
+pub enum Deadline {
     Horizon,
-    Manutencao,
+    Maintenance,
 }
 
 /// Instante com ordenação total (`f64::total_cmp`) — heap exige `Ord`.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Instante(f64);
+pub struct VirtualInstant(f64);
 
-impl Instante {
+impl VirtualInstant {
     pub fn de(x: f64) -> Self {
         Self(x)
     }
 
-    pub fn valor(&self) -> f64 {
+    pub fn value(&self) -> f64 {
         self.0
     }
 }
 
-impl PartialOrd for Instante {
+impl PartialOrd for VirtualInstant {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for Instante {
+impl Ord for VirtualInstant {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.total_cmp(&other.0)
     }
 }
 
-impl Eq for Instante {}
+impl Eq for VirtualInstant {}
 
 /// Entrada da fila: (instante-alvo, forma, tipo, versão do estado do prazo).
 #[derive(Debug, Clone, PartialEq)]
-pub struct Entrada {
-    pub em: Instante,
-    pub forma: String,
-    pub prazo: Prazo,
+pub struct Entry {
+    pub em: VirtualInstant,
+    pub form: String,
+    pub deadline: Deadline,
     /// Versão do estado que gerou a entrada (`keep` renova a versão —
     /// entradas obsoletas são descartadas pelo engine).
-    pub versao: u64,
+    pub version: u64,
     /// Ordem de inserção (desempate FIFO no heap).
     pub seq: u64,
 }
 
-impl Eq for Entrada {}
+impl Eq for Entry {}
 
-impl PartialOrd for Entrada {
+impl PartialOrd for Entry {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for Entrada {
+impl Ord for Entry {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // ordem natural: por instante (o heap usa Reverse<Entrada> → min-heap);
         // empate: ordem de inserção (seq — FIFO)
@@ -79,8 +79,8 @@ impl Ord for Entrada {
 /// Min-heap de prazos de formas ativas.
 #[derive(Debug, Default)]
 pub struct Scheduler {
-    heap: BinaryHeap<Reverse<Entrada>>,
-    sequencia: u64,
+    heap: BinaryHeap<Reverse<Entry>>,
+    sequence: u64,
 }
 
 impl Scheduler {
@@ -98,38 +98,38 @@ impl Scheduler {
 
     /// Agenda um prazo — O(log N).
     ///
-    /// `versao` é a versão do estado da forma que gerou o prazo (`keep`
+    /// `version` é a versão do estado da forma que gerou o prazo (`keep`
     /// renova a versão); entradas obsoletas são descartadas pelo engine.
-    pub fn agendar(&mut self, forma: &str, prazo: Prazo, em: f64, versao: u64) {
-        self.sequencia += 1;
-        let entrada =
-            Entrada { em: Instante::de(em), forma: forma.into(), prazo, versao, seq: self.sequencia };
-        self.heap.push(Reverse(entrada));
+    pub fn schedule(&mut self, form: &str, deadline: Deadline, em: f64, version: u64) {
+        self.sequence += 1;
+        let entry =
+            Entry { em: VirtualInstant::de(em), form: form.into(), deadline, version, seq: self.sequence };
+        self.heap.push(Reverse(entry));
     }
 
-    /// Drena os prazos vencidos (`em <= agora`) — O(log N + vencidos).
-    pub fn drenar_vencidos(&mut self, agora: f64) -> Vec<Entrada> {
-        let agora = Instante::de(agora);
-        let mut vencidos = Vec::new();
-        while let Some(Reverse(topo)) = self.heap.peek() {
-            if topo.em > agora {
+    /// Drena os prazos vencidos (`em <= now`) — O(log N + vencidos).
+    pub fn drain_due(&mut self, now: f64) -> Vec<Entry> {
+        let now = VirtualInstant::de(now);
+        let mut due = Vec::new();
+        while let Some(Reverse(top)) = self.heap.peek() {
+            if top.em > now {
                 break;
             }
-            let Reverse(entrada) = self.heap.pop().unwrap();
-            vencidos.push(entrada);
+            let Reverse(entry) = self.heap.pop().unwrap();
+            due.push(entry);
         }
-        vencidos
+        due
     }
 
     /// Remove todas as entradas de uma forma (dissolução explícita).
-    pub fn remover_forma(&mut self, forma: &str) {
-        let restantes: Vec<Reverse<Entrada>> =
-            self.heap.drain().filter(|Reverse(e)| e.forma != forma).collect();
-        self.heap = restantes.into_iter().collect();
+    pub fn remove_form(&mut self, form: &str) {
+        let remaining: Vec<Reverse<Entry>> =
+            self.heap.drain().filter(|Reverse(e)| e.form != form).collect();
+        self.heap = remaining.into_iter().collect();
     }
 
     /// Próximo prazo agendado (telemetria/CLI).
-    pub fn proximo(&self) -> Option<&Entrada> {
+    pub fn next(&self) -> Option<&Entry> {
         self.heap.peek().map(|Reverse(e)| e)
     }
 }

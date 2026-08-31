@@ -33,7 +33,7 @@ pub enum Severity {
     Warning,
 }
 
-/// Um diagnóstico: `código linha:coluna mensagem` (critério do AGENTS.md §1.3:
+/// Um diagnóstico: `código line:coluna mensagem` (critério do AGENTS.md §1.3:
 /// "mensagens de erro claras, indicando linha e coluna").
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
@@ -59,15 +59,15 @@ impl Diagnostic {
 
 impl std::fmt::Display for Diagnostic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let gravidade = match self.severity {
+        let severity = match self.severity {
             Severity::Error => "erro",
             Severity::Warning => "aviso",
         };
-        write!(f, "{} [{}] {}: {}", self.span, gravidade, self.code, self.message)
+        write!(f, "{} [{}] {}: {}", self.span, severity, self.code, self.message)
     }
 }
 
-/// Coleção de diagnósticos com atalhos de consulta (espelha `vlcheck.validar`).
+/// Coleção de diagnósticos com atalhos de consulta (espelha `vlcheck.validate`).
 #[derive(Debug, Clone, Default)]
 pub struct Diagnostics {
     pub items: Vec<Diagnostic>,
@@ -98,7 +98,7 @@ impl Diagnostics {
         self.items.iter().filter(|d| d.is_error())
     }
 
-    /// Ordena por posição (estável) — mesmo contrato de `vlcheck.validar`.
+    /// Ordena por posição (estável) — mesmo contrato de `vlcheck.validate`.
     pub fn sort(&mut self) {
         self.items.sort_by_key(|d| (d.span.line, d.span.col));
     }
