@@ -79,17 +79,25 @@ Comentários: `//` de linha e `/* ... */` de bloco. Strings: `"..."` com escapes
   de prazos; `dissolve`/`subvert` encurtam as regras seguintes da mesma
   `review`. O `horizon` é absoluto — reclassificação não o renova; virar
   `nonequilibrium` sem `maintenance_deadline` é erro registrado.
+- **Transições legais**: `event→equilibrium`, `equilibrium→nonequilibrium`,
+  `nonequilibrium→equilibrium` e `nonequilibrium→nonequilibrium` (keep).
+  **Não há retorno a `event`**: `reclassify_as_nonequilibrium` sobre uma forma
+  `event` é erro registrado e a forma permanece `event`.
+- **`review` para forma inexistente, ou segunda `review` para a mesma forma,
+  é erro de compilação** — regras não são mescladas.
 - **`dissolve`**: encerra a forma. **`reclassify_as_equilibrium` /
   `reclassify_as_nonequilibrium`**: mudam a conjugação (formas persistem ou
   passam a exigir `keep()`).
 - **`notify_shutdown`**: desliga cargas secundárias associadas; não dissolve a
   forma nem interrompe as ações seguintes.
 - **`act(Ator, valor)`**: comando assíncrono via FXP; o FXP valida o valor
-  contra limites inclusivos (mínimo, máximo, segurança; rejeitado ⇒ não envia e
-  registra) e registra comando, valor, timestamp e custo no Caderno. Falha do ator → alerta no Caderno e possível
+  contra limites inclusivos (mínimo, máximo, segurança; rejeitado ⇒ não envia
+  e registra `actor_rejected_value` no Caderno) e registra comando, valor,
+  timestamp e custo no Caderno. Falha do ator → alerta no Caderno e possível
   fallback do runtime.
-- **Falha de sensor**: a condição **não é avaliada** naquele tick — um sensor
-  ausente nunca é tratado como leitura `0.0` (zero é leitura física válida).
+- **Falha de sensor**: a condição **não é avaliada** naquele tick e o Caderno
+  registra o alerta de falha de I/O — um sensor ausente nunca é tratado como
+  leitura `0.0` (zero é leitura física válida).
 - **Nomes simbólicos**: `source_path` e atores são símbolos do FXP
   (ex.: `"cpu_temp"`, `CpuPowerCap`, `Ventoinha`) — **nunca** caminhos de
   sistema (`/sys/...`, `/dev/...`); o mapeamento físico é do registro do FXP.

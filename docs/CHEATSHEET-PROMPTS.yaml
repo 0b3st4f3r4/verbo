@@ -1,0 +1,228 @@
+# ==============================================================================
+# Banco fixo de 20 prompts para validação do cheat sheet (docs/PLAN.md §7)
+# ==============================================================================
+# Critério de aceite (PLAN §7): 10 prompts de sintaxe + 10 de semântica,
+# 3 execuções cada; aceito se ≥ 90% das respostas passam no verificador
+# sintático (tests/vlcheck.py — mini-validador dedicado; o parser real é da
+# Etapa 2) E na rubrica semântica abaixo. Resultados versionados em
+# docs/CHEATSHEET-VALIDACAO.md (gerado por scripts/validate_cheatsheet.py).
+#
+# Rubrica: lista de itens; cada item deve aparecer na resposta (case-insensitive).
+# Um item pode ser uma lista => qualquer alternativa satisfaz (any-of).
+
+versao: 3
+execucoes_por_prompt: 3
+limiar_aceitacao: 0.90
+# v1 (auditoria da Etapa 1): 45% — falhas triadas em docs/ETAPA-1-RELATORIO.md §10
+# (lacunas do cheat sheet corrigidas; rubrics de formatação exata substituídas
+# por âncoras estruturais; prompts ambíguos passaram a exigir programa completo).
+# v2: 71,7% — semântica 29/30; falhas de sintaxe majoritariamente reais do modelo.
+# v3: âncora S01 sem sensibilidade a espaçamento; S03 pede bloco de código explícito.
+
+prompts:
+  # ------------------------------------------------------------------
+  # Sintaxe (S01–S10) — a resposta deve conter bloco de código `.vl`
+  # válido segundo tests/vlcheck.py, além da rubrica.
+  # ------------------------------------------------------------------
+  - id: S01
+    tipo: sintaxe
+    enunciado: >
+      Escreva uma forma nonequilibrium válida chamada PensarLivre, com uma
+      review que a reclassifique para equilibrium quando a atenção cair
+      abaixo de 30%.
+    rubrica:
+      - "nonequilibrium PensarLivre"
+      - "maintenance_deadline"
+      - "attention < 30"
+      - "reclassify_as_equilibrium"
+
+  - id: S02
+    tipo: sintaxe
+    enunciado: >
+      Escreva a forma event mínima possível em VerboLang.
+    rubrica:
+      - "event "
+      - "value:"
+      - "horizon:"
+      - "!maintenance_deadline"   # negativo: forma event não usa manutenção
+      - "!cost_bytes"
+
+  - id: S03
+    tipo: sintaxe
+    enunciado: >
+      Escreva uma forma equilibrium persistente chamada Registro com custo
+      de 4096 bytes. Apresente o código em um bloco de código verbolang.
+    rubrica:
+      - "equilibrium Registro"
+      - "cost_bytes: 4096"
+
+  - id: S04
+    tipo: sintaxe
+    enunciado: >
+      Escreva o exemplo canônico de subversão térmica: a forma
+      nonequilibrium TradingEspeculativo com review que, quando cpu_temp
+      ultrapassar 85°C, subverta a forma E limite a potência da CPU em 50W
+      na mesma regra.
+    rubrica:
+      - "nonequilibrium TradingEspeculativo"
+      - "when cpu_temp > 85"
+      - "subvert"
+      - "act(CpuPowerCap, 50)"
+
+  - id: S05
+    tipo: sintaxe
+    enunciado: >
+      Escreva um programa completo com a forma nonequilibrium
+      TarefaImportante (horizon 30s, maintenance_deadline 5s) e um bloco main
+      que renove keep(TarefaImportante) a cada 4s e acione
+      act(LedIndicador, "verde") a cada 10s.
+    rubrica:
+      - "nonequilibrium TarefaImportante"
+      - "keep(TarefaImportante)"
+      - "every 4s"
+      - "every 10s"
+      - "act(LedIndicador"
+
+  - id: S06
+    tipo: sintaxe
+    enunciado: >
+      Escreva a forma nonequilibrium ServidorCritico que aciona a Ventoinha
+      com PWM 200 quando a temperatura passar de 70°C.
+    rubrica:
+      - "nonequilibrium ServidorCritico"
+      - "maintenance_deadline"
+      - "act(Ventoinha, 200)"
+
+  - id: S07
+    tipo: sintaxe
+    enunciado: >
+      Escreva uma forma com duração decimal de 2.5 segundos no horizon e um
+      comentário de linha explicando o que ela faz.
+    rubrica:
+      - "2.5s"
+      - "//"
+
+  - id: S08
+    tipo: sintaxe
+    enunciado: >
+      Escreva um programa completo: uma forma equilibrium Sensor com
+      source_path "cpu_temp" e uma review para ela com três regras usando
+      operadores de comparação diferentes entre si (por exemplo >, < e ==).
+    rubrica:
+      - "equilibrium Sensor"
+      - "review Sensor"
+      - "when "
+      - "->"
+
+  - id: S09
+    tipo: sintaxe
+    enunciado: >
+      Escreva uma forma nonequilibrium com source_path apontando para o
+      sensor cpu_power e exchange_mode "extraction".
+    rubrica:
+      - "source_path: \"cpu_power\""
+      - "exchange_mode: \"extraction\""
+
+  - id: S10
+    tipo: sintaxe
+    enunciado: >
+      Escreva um programa com duas formas de conjugações diferentes (declare
+      ambas) e uma review para cada uma delas; as regras podem usar os
+      sensores cpu_temp e attention.
+    rubrica:
+      - "review "
+
+  # ------------------------------------------------------------------
+  # Semântica (M01–M10) — a resposta é em prosa; a rubrica verifica os
+  # conceitos obrigatórios (respostas devem citar as âncoras da FORMAL).
+  # ------------------------------------------------------------------
+  - id: M01
+    tipo: semantica
+    enunciado: >
+      O que acontece com uma forma nonequilibrium quando o
+      maintenance_deadline expira sem keep() e sem regra de revisão ativa?
+    rubrica:
+      - [ "colapsa", "colapso", "dissolvida" ]
+      - [ "caderno", "registrado", "log" ]
+
+  - id: M02
+    tipo: semantica
+    enunciado: >
+      Um sensor registrado no FXP está inacessível. O que o runtime faz com
+      as regras de revisão que o referenciam naquele tick?
+    rubrica:
+      - [ "não é avaliada", "não avaliada", "deixa de ser avaliada", "não são avaliadas" ]
+      - [ "alerta", "registrado no caderno", "falha de i/o" ]
+
+  - id: M03
+    tipo: semantica
+    enunciado: >
+      Um sensor ausente pode ser tratado como leitura 0.0? Justifique.
+    rubrica:
+      - [ "não", "nunca" ]
+      - [ "leitura física válida", "zero é uma leitura válida", "0.0 é válido" ]
+      - [ "falsa", "falso disparo", "disparo falso", "disparos falsos", "falsamente" ]
+
+  - id: M04
+    tipo: semantica
+    enunciado: >
+      Quando o operador subvert é acionado, o que acontece com o valor da
+      forma, com o ciclo de vida dela e com as ações seguintes da mesma
+      regra?
+    rubrica:
+      - "poesia_gerada_pelo_calor_do_silicio_e_resfriamento_da_mente"
+      - [ "mesmo tick", "no próprio tick" ]
+      - [ "não cancela", "continuam", "são executadas" ]
+
+  - id: M05
+    tipo: semantica
+    enunciado: >
+      A reclassificação de uma forma renova o seu horizon?
+    rubrica:
+      - [ "não", "nunca" ]
+      - [ "absoluto", "desde a criação" ]
+
+  - id: M06
+    tipo: semantica
+    enunciado: >
+      É legal reclassificar uma forma event para nonequilibrium com
+      reclassify_as_nonequilibrium?
+    rubrica:
+      - [ "não", "ilegal", "erro" ]
+      - [ "permanece", "não há retorno", "sem retorno" ]
+
+  - id: M07
+    tipo: semantica
+    enunciado: >
+      Quais são as currencies padrão de cada conjugação na contabilidade do
+      Caderno?
+    rubrica:
+      - "CpuCycles"
+      - "DiskBytes"
+      - "PowerWatts"
+
+  - id: M08
+    tipo: semantica
+    enunciado: >
+      O que acontece se um programa VerboLang tiver duas reviews para a
+      mesma forma?
+    rubrica:
+      - [ "erro de compilação", "erro", "rejeitado" ]
+      - [ "não são mescladas", "não mescla" ]
+
+  - id: M09
+    tipo: semantica
+    enunciado: >
+      Um comando act com valor acima do safety_limit do ator é enviado ao
+      hardware? O que é registrado?
+    rubrica:
+      - [ "não é enviado", "rejeitado", "não envia" ]
+      - "actor_rejected_value"
+
+  - id: M10
+    tipo: semantica
+    enunciado: >
+      Para que serve notify_shutdown? Ele dissolve a forma?
+    rubrica:
+      - [ "cargas secundárias", "desligamento das cargas" ]
+      - [ "não dissolve", "não", "permanece ativa" ]
