@@ -9,6 +9,12 @@ de suporte + 6 meses de descontinuação = 7 anos de ciclo de vida.
 ## [Não lançado] — linha `v2027.0`, fase alpha (pesquisa, experimentação e definição de escopo)
 
 ### Adicionado
+- Publicação no crates.io (RELEASES.md § crates.io): workflow
+  `publish.yml` (tag `v*` + disparo manual com dry-run, ordem de dependência
+  com espera de indexação, idempotente), metadados de pacote nos quatro
+  crates (`repository`, `rust-version`, `readme`, `keywords`,
+  `categories`), dependências internas com `version` + `path` no workspace
+  e alvo `make rust-package` + passo de empacotamento no CI de push.
 - `core/` — núcleo em Rust: parser (`vbl-lang`), motor de ticks
   (`vbl-runtime`), barramento FXP com registro de dispositivos (`vbl-fxp`)
   e Caderno de produção com cadeia SHA-256 (`vbl-cli`); matriz de testes,

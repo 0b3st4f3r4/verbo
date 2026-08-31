@@ -119,8 +119,59 @@ cada despedida usa o próximo patch real daquela minor)
    a portaria (check + TDD + BDD + clippy/testes/E2E do núcleo), compila o
    `vbl` em modo release, empacota binário + dashboard + documentos +
    exemplos + scripts, carimba SHA-256 e anexa à release da tag
-   (`-alpha/-beta/-rc` saem como pré-lançamento).
-5. Anunciar apontando a entrada do changelog — a fase da tag fala por si.
+   (`-alpha/-beta/-rc` saem como pré-lançamento). Em paralelo, o
+   `.github/workflows/publish.yml` publica os módulos Rust no crates.io
+   (seção abaixo) — a tag `vX.Y.Z` deve confabular com a `version` do
+   `[workspace.package]` (`core/Cargo.toml`), única fonte de versão.
+5. Acompanhar os dois workflows até o verde; o publish é idempotente — se
+   falhar no meio da fila, re-execute o job (os crates já publicados são
+   pulados).
+6. Anunciar apontando a entrada do changelog — a fase da tag fala por si.
+
+## crates.io — publicação dos módulos Rust
+
+O núcleo (`core/`) publica quatro crates: `vbl-lang`, `vbl-runtime`,
+`vbl-fxp` e `vbl-cli`. A versão vive **só** em `[workspace.package]`
+(`core/Cargo.toml`) — todos os crates saem em lockstep; dependências internas
+carregam `version` + `path` no `[workspace.dependencies]` (o `path` manda no
+workspace, o `version` entra no manifesto publicado).
+
+**Ordem de dependência** (o workflow respeita, esperando a indexação de cada
+versão antes do dependente): `vbl-lang → vbl-runtime → vbl-fxp → vbl-cli`.
+
+**Gatilhos** do `.github/workflows/publish.yml`:
+
+- push de tag `v*` — portaria (clippy + testes + `cargo package`)
+  e publicação real;
+- manual (`workflow_dispatch`) — `dry_run: true` por padrão: roda tudo, não
+  publica. Use para ensaiar a publicação antes da tag.
+
+**Requisitos (uma vez):**
+
+1. Token de API em <https://crates.io/settings/tokens> (escopo
+   `publish-new` + `publish-update`) registrado como secret
+   `CARGO_REGISTRY_TOKEN` em <https://github.com/0b3st4f3r4/verbo/settings/secrets/actions>.
+2. (Opcional, recomendado) No environment `crates-io`
+   (settings/environments), adicione *required reviewers* — todo publish
+   passa a exigir aprovação humana.
+
+**Verificação local** (equivalente ao que o CI roda): `make rust-package`
+(`cargo package --workspace --locked --allow-dirty` — o `--allow-dirty` é só
+porque a árvore local pode estar suja; no CI o checkout é limpo e o comando
+roda estrito). O `cargo package` nunca publica — empacota e compila cada
+pacote (verify build) exatamente como o registry fará.
+
+**Regras de ouro:**
+
+- Tag nova para versão nova — tags não se reutilizam; o publish pula crate
+  cuja versão já existe no registry.
+- `rust-version = "1.87"` é o piso declarado (verificado pelo
+  `clippy::incompatible_msrv` — API mais nova que o campo quebra o clippy);
+  se uma feature nova exigir toolchain mais novo, suba o campo no
+  `[workspace.package]` e registre no CHANGELOG.
+- Pré-lançamentos (calendário `v2027.0-alphaN` etc.) são versões internas —
+  só publique crates em fases alpha/beta com a consciência de que
+  **versão publicada é versão para sempre**.
 
 ## Onde estamos
 

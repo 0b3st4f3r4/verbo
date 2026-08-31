@@ -1,0 +1,150 @@
+# Publicação no crates.io — docs/RELEASES.md § crates.io.
+#
+# Dispara junto com o release.yml na mesma tag `v*` (ou manualmente, com
+# dry-run por padrão). Publica os quatro crates na ordem de dependência
+# (vbl-lang → vbl-runtime → vbl-fxp → vbl-cli), pulando o que já está na
+# versão atual — re-executar depois de uma falha no meio da fila é seguro.
+#
+# Requisito (uma vez): secret CARGO_REGISTRY_TOKEN com um token de API do
+# crates.io (https://crates.io/settings/tokens — escopo publish-new +
+# publish-update) em
+# https://github.com/0b3st4f3r4/verbo/settings/secrets/actions.
+# O job usa o environment `crates-io` — adicione "required reviewers" nele
+# para exigir aprovação humana antes de qualquer publish.
+name: Publicar crates.io
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run — empacota e verifica, não publica"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publicar:
+    name: Portaria e publicação (ordem de dependência)
+    runs-on: ubuntu-latest
+    environment: crates-io
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: core
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      # Tag: publica de verdade. Dispatch: obedece o input (padrão dry-run).
+      # && e || devolvem o valor do operando (como em JS) — sem parênteses.
+      DRY_RUN: ${{ github.event_name == 'push' && 'false' || inputs.dry_run && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      # A versão vive só no [workspace.package] — a tag deve confabular com
+      # ela: `v0.2.0` publica 0.2.0. Todos os crates compartilham a mesma
+      # versão (release em lockstep).
+      - name: Tag == versão do workspace
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSOES=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[].version' | sort -u)
+          if [ "$(echo "${VERSOES}" | wc -l)" -ne 1 ]; then
+            echo "::error::Versões divergentes no workspace: ${VERSOES}"
+            exit 1
+          fi
+          if [ "${VERSOES}" != "${TAG}" ]; then
+            echo "::error::Tag v${TAG} != versão do workspace ${VERSOES} — corrija [workspace.package] version."
+            exit 1
+          fi
+          echo "tag confabula: v${TAG} ↔ workspace ${VERSOES}"
+
+      # Portaria (docs/RELEASES.md): nada é publicado sem clippy limpo e a
+      # matriz de testes do núcleo — o mesmo padrão do release.yml.
+      - name: Portaria — clippy + testes do núcleo
+        run: |
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test
+
+      # Empacota os quatro crates e compila o conteúdo de cada pacote
+      # (verify build) — pega readme ausente, manifesto incompleto e arquivo
+      # faltando antes de tocar no registry. Estrito (sem --allow-dirty): o
+      # checkout é limpo, então o pacote publicado é exatamente o commit.
+      - name: Pacotes íntegros — cargo package
+        run: cargo package --workspace --locked
+
+      # Publica na ordem topológica das dependências internas; entre um crate
+      # e seu dependente, espera a versão nova aparecer na API (índice) — o
+      # cargo do dependente não resolve dependência inexistente.
+      - name: Publicar (vbl-lang → vbl-runtime → vbl-fxp → vbl-cli)
+        run: |
+          set -euo pipefail
+
+          # UA é obrigatório pela política de API do crates.io.
+          ua_get() {
+            curl -sf -A "verbolang-publish-ci (github.com/0b3st4f3r4/verbo)" "$1"
+          }
+
+          # 0 (sucesso) ⇔ a versão exata já existe no crates.io.
+          ja_publicado() {
+            ua_get "https://crates.io/api/v1/crates/$1/$2" >/dev/null
+          }
+
+          aguardar_indexacao() {
+            local crate="$1" versao="$2" tentativas=0
+            until ja_publicado "${crate}" "${versao}"; do
+              tentativas=$((tentativas + 1))
+              if [ "${tentativas}" -ge 60 ]; then
+                echo "::error::${crate} ${versao} não apareceu no crates.io em 5 min"
+                exit 1
+              fi
+              sleep 5
+            done
+            # margem para o sparse index (index.crates.io) alcançar a API
+            sleep 10
+            echo "${crate} ${versao} indexada"
+          }
+
+          VERSAO=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "vbl-lang") | .version')
+          echo "versão do workspace: ${VERSAO} — dry-run: ${DRY_RUN}"
+
+          for CRATE in vbl-lang vbl-runtime vbl-fxp vbl-cli; do
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "::group::${CRATE} ${VERSAO} — dry-run"
+              cargo publish -p "${CRATE}" --locked --dry-run
+              echo "::endgroup::"
+              continue
+            fi
+            if ja_publicado "${CRATE}" "${VERSAO}"; then
+              echo "::notice::${CRATE} ${VERSAO} já está no crates.io — pulando"
+            else
+              cargo publish -p "${CRATE}" --locked
+            fi
+            case "${CRATE}" in
+              vbl-cli) ;; # último — nada depende dele
+              *) aguardar_indexacao "${CRATE}" "${VERSAO}" ;;
+            esac
+          done
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Publicação crates.io"
+            echo
+            echo "- Evento: \`${GITHUB_EVENT_NAME}\` — dry-run: \`${DRY_RUN}\`"
+            echo "- Versão: \`${GITHUB_REF_NAME#v}\` (workspace em lockstep)"
+            echo "- Ordem: vbl-lang → vbl-runtime → vbl-fxp → vbl-cli"
+            echo "- Secret exigido: \`CARGO_REGISTRY_TOKEN\` · environment: \`crates-io\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

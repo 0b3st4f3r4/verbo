@@ -7,13 +7,21 @@ version = "0.2.0"
 edition = "2021"
 license = "GPL-3.0-only"
 authors = ["Silvano Neto"]
+# Piso real do núcleo, verificado pelo clippy::incompatible_msrv no CI:
+# u64::is_multiple_of (1.87) no vbl-runtime. Qualquer API mais nova que o
+# campo declarado quebra o clippy — suba o número junto com o código.
+rust-version = "1.87"
+repository = "https://github.com/0b3st4f3r4/verbo"
 
 [workspace.dependencies]
 sha2 = "0.10"
 criterion = "0.5"
-vbl-lang = { path = "crates/vbl-lang" }
-vbl-runtime = { path = "crates/vbl-runtime" }
-vbl-fxp = { path = "crates/vbl-fxp" }
+# Dependências internas carregam version + path: o path manda dentro do
+# workspace; no `cargo publish` o version é que entra no manifesto — sem ele
+# o crates.io recusa o pacote do dependente.
+vbl-lang = { version = "0.2.0", path = "crates/vbl-lang" }
+vbl-runtime = { version = "0.2.0", path = "crates/vbl-runtime" }
+vbl-fxp = { version = "0.2.0", path = "crates/vbl-fxp" }
 
 [profile.bench]
 debug = true

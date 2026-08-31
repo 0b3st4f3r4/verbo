@@ -24,7 +24,7 @@ export CARGO_HOME
 NIGHTLY ?= nightly
 
 .PHONY: help check smoke release-check serve up stop ui web setup test test-unit test-bdd validate-cheatsheet
-.PHONY: rust-build rust-test rust-e2e rust-lint rust-asan rust-bench rust-check rust-coverage rust-clean
+.PHONY: rust-build rust-test rust-e2e rust-lint rust-asan rust-bench rust-check rust-package rust-coverage rust-clean
 .PHONY: rust-memoria rust-soak
 
 help:
@@ -42,6 +42,7 @@ help:
 > @echo "  make rust-test     testes: matriz (42), canon (5), transição (36), FXP (42), Caderno (12)"
 > @echo "  make rust-e2e      E2E da Etapa 4: CLI + FXP + Caderno de produção (7 cenários)"
 > @echo "  make rust-lint     clippy --workspace --all-targets (zero warnings)"
+> @echo "  make rust-package  empacota os 4 crates p/ crates.io (dry-run de publicação)"
 > @echo "  make rust-asan     testes sob AddressSanitizer (vazamentos, AGENTS §1.3)"
 > @echo "  make rust-bench    criterion: transição ≤100µs p95, escalonador, FXP, Caderno (gravação ≤200µs)"
 > @echo "  make rust-coverage cobertura via cargo-llvm-cov (relatório em core/target)"
@@ -132,6 +133,12 @@ rust-asan:
 >   --workspace --target x86_64-unknown-linux-gnu
 
 rust-check: rust-lint rust-test
+
+# Publicação no crates.io (RELEASES.md § crates.io): empacota o workspace e
+# roda o verify build de cada pacote sem tocar no registry. Local permite
+# árvore suja (checa antes do commit); o CI roda estrito, sem --allow-dirty.
+rust-package:
+> @cd core && $(CARGO) package --workspace --locked --allow-dirty
 
 rust-bench:
 > @cd core && $(CARGO) bench --bench transition --bench scheduler --bench fxp --bench ledger

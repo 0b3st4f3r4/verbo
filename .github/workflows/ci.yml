@@ -67,6 +67,13 @@ jobs:
       - name: E2E — Caderno de produção e validação (PLAN §4.2)
         run: cargo test -p vbl-cli --test e2e
 
+      # Publicação no crates.io (RELEASES.md § crates.io): empacota os
+      # quatro crates e roda o verify build de cada pacote — readme ausente,
+      # manifesto incompleto ou arquivo faltando quebram aqui, não na tag.
+      # Estrito (sem --allow-dirty): o checkout é limpo por definição.
+      - name: Empacotamento crates.io (verificação de pacote)
+        run: cargo package --workspace --locked
+
       # Vazamentos: ASan/LSan (AGENTS §1.3 — ASan/Valgrind)
       - name: ASan (vazamentos de heap)
         run: |
