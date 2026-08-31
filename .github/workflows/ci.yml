@@ -1,0 +1,36 @@
+# CI da VerboLang — runner nomeado na entrega da Etapa 1 (docs/PLAN.md §1.3 a):
+# GitHub Actions. A mesma suíte roda localmente via `make test`.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  suite:
+    name: Suíte de testes (TDD + BDD)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Instalar dependências
+        run: pip install -r requirements-dev.txt
+
+      - name: Checagens estáticas (shell + JS da UI)
+        run: make check
+
+      - name: Testes unitários (TDD) — PLAN §1.2
+        run: python -m pytest -q tests/unit
+
+      - name: Cenários BDD — PLAN §1.1
+        run: python -m behave tests/features
+
+      # A validação do cheat sheet (PLAN §7) exige o LLM local e roda como
+      # job manual na máquina do desenvolvedor:
+      #   make serve  →  make validate-cheatsheet

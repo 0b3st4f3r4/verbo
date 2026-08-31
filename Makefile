@@ -12,12 +12,21 @@ UI_BASE := http://127.0.0.1:$(UI_PORT)/scripts/verbo-chat/chat.html
 KEY := $(shell awk '/^LOCAL_VLLM_KEY:/{print $$2}' $${LOCAL_VLLM_KEY_FILE:-$(HOME)/.dsh}/.credentials.yaml 2>/dev/null)
 LOG := .serve.log
 
-.PHONY: help check smoke serve up stop ui
+# Suíte de testes (Etapa 1): usa o venv do workspace se existir
+PYTHON ?= python3
+PYTHON_BIN := $(if $(wildcard .venv/bin/python),.venv/bin/python,$(PYTHON))
+
+.PHONY: help check smoke serve up stop ui setup test test-unit test-bdd validate-cheatsheet
 
 help:
 > @echo "VerboLang — atalhos:"
 > @echo "  make check   valida shell + JS inline da UI (rápido, offline)"
 > @echo "  make smoke   testa endpoints locais (precisa do servidor no ar)"
+> @echo "  make setup   cria .venv e instala requirements-dev.txt"
+> @echo "  make test    suíte completa: unitários (pytest) + BDD (behave)"
+> @echo "  make test-unit  apenas testes unitários (pytest)"
+> @echo "  make test-bdd   apenas cenários BDD (behave)"
+> @echo "  make validate-cheatsheet  banco de 20 prompts contra o LLM local (PLAN §7)"
 > @echo "  make serve   sobe o modelo + UI em primeiro plano (Ctrl+C para)"
 > @echo "  make up      sobe em segundo plano (log em $(LOG))"
 > @echo "  make stop    encerra vLLM e o servidor estático da UI"
@@ -41,6 +50,24 @@ smoke:
     http://127.0.0.1:8000/v1/models); \
   echo "$$code  /v1/models"; \
   test "$$code" = 200
+
+setup:
+> @$(PYTHON) -m venv .venv
+> @.venv/bin/pip install -r requirements-dev.txt
+> @echo "venv pronto (.venv) — use make test"
+
+test:
+> @$(PYTHON_BIN) -m pytest -q tests/unit
+> @$(PYTHON_BIN) -m behave tests/features
+
+test-unit:
+> @$(PYTHON_BIN) -m pytest -q tests/unit
+
+test-bdd:
+> @$(PYTHON_BIN) -m behave tests/features
+
+validate-cheatsheet:
+> @$(PYTHON_BIN) scripts/validate_cheatsheet.py --base-url $${VBL_LLM_URL:-http://127.0.0.1:8000/v1} --model $${VBL_LLM_MODEL:-qwen3-4b}
 
 serve:
 > @bash $(SCRIPT)

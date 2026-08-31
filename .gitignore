@@ -1,3 +1,6 @@
 __pycache__/
 *.jsonl
 *.log
+.venv/
+.pytest_cache/
+persistencia/
