@@ -1,6 +1,6 @@
 [package]
 name = "vbl-cli"
-description = "VerboLang — interpretador de console `.vl` (entregável da Etapa 2, PLAN §2.3)"
+description = "VerboLang — interpretador de console `.vl` (entregáveis das Etapas 2–4, PLAN §2.3/§3/§4)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

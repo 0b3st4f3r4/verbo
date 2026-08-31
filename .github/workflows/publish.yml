@@ -120,13 +120,17 @@ jobs:
             | jq -r '.packages[] | select(.name == "vbl-lang") | .version')
           echo "versão do workspace: ${VERSAO} — dry-run: ${DRY_RUN}"
 
+          # Ensaio: os quatro juntos, num comando só — o publish de um crate
+          # isolado resolve os irmãos no registry, que ainda não os tem; o
+          # --workspace monta o tmp-registry com todos (como o cargo package).
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "::group::todos os crates ${VERSAO} — dry-run"
+            cargo publish --workspace --locked --dry-run
+            echo "::endgroup::"
+            exit 0
+          fi
+
           for CRATE in vbl-lang vbl-runtime vbl-fxp vbl-cli; do
-            if [ "${DRY_RUN}" = "true" ]; then
-              echo "::group::${CRATE} ${VERSAO} — dry-run"
-              cargo publish -p "${CRATE}" --locked --dry-run
-              echo "::endgroup::"
-              continue
-            fi
             if ja_publicado "${CRATE}" "${VERSAO}"; then
               echo "::notice::${CRATE} ${VERSAO} já está no crates.io — pulando"
             else

@@ -4,7 +4,9 @@ members = ["crates/vbl-lang", "crates/vbl-runtime", "crates/vbl-fxp", "crates/vb
 
 [workspace.package]
 # Estreia pública no crates.io: 0.1.0-alpha.0 — o análogo SemVer da
-# gramática `vYYYY.0-alphaN` (RELEASES.md): pré-alpha, tudo pode mudar.
+# gramática `vYYYY.0.0-alpha.N` (RELEASES.md § cargo/SemVer): pré-alpha,
+# tudo pode mudar. A tag de corte é `v0.1.0-alpha.0` (o gate do
+# publish.yml compara a tag, sem o `v`, com esta versão).
 version = "0.1.0-alpha.0"
 edition = "2021"
 license = "GPL-3.0-only"

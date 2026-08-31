@@ -162,7 +162,9 @@ versão antes do dependente): `vbl-lang → vbl-runtime → vbl-fxp → vbl-cli`
 - push de tag `v*` — portaria (clippy + testes + `cargo package`)
   e publicação real;
 - manual (`workflow_dispatch`) — `dry_run: true` por padrão: roda tudo, não
-  publica. Use para ensaiar a publicação antes da tag.
+  publica. Use para ensaiar a publicação antes da tag (o ensaio usa
+  `cargo publish --workspace --dry-run`: por crate isolado, o cargo
+  resolveria os irmãos no registry, que ainda não os tem).
 
 **Requisitos (uma vez):**
 
