@@ -17,6 +17,15 @@
   let carregando = null;
   const renderizados = [];
 
+  // Base deste arquivo, capturada no tempo de execução da tag <script>:
+  // dentro de carregarMermaid() document.currentScript já é null (o
+  // renderizar roda no DOMContentLoaded) e a URL do vendor saía relativa
+  // à página — 404 quieto, diagrama cru. Com o mermaid no additional-js
+  // do book.toml o carregamento dinâmico abaixo é só plano B.
+  const BASE = ((typeof document !== "undefined" && document.currentScript) || {}).src
+    ? document.currentScript.src.replace(/[^/]*$/, "")
+    : "";
+
   function temaMermaid() {
     const classe = document.documentElement.className;
     return /\b(light|rust)\b/.test(classe) ? "neutral" : "dark";
@@ -25,11 +34,9 @@
   function carregarMermaid() {
     if (window.mermaid) return Promise.resolve();
     if (!carregando) {
-      const base = (document.currentScript && document.currentScript.src || "")
-        .replace(/[^/]*$/, "");
       carregando = new Promise((resolver, recusar) => {
         const s = document.createElement("script");
-        s.src = base + "vendor/mermaid.min.js";
+        s.src = BASE + "vendor/mermaid.min.js";
         s.onload = resolver;
         s.onerror = () => recusar(new Error("mermaid.min.js não carregou"));
         document.head.appendChild(s);

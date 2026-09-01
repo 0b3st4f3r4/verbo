@@ -127,9 +127,13 @@ const toml = fs.readFileSync(path.join(SITE, "book.toml"), "utf-8");
 assert.ok(/language\s*=\s*"pt-BR"/.test(toml), "book.toml sem language pt-BR");
 assert.ok(/create-missing\s*=\s*false/.test(toml), "book.toml deve falhar com capítulo faltando");
 for (const m of toml.matchAll(/"([^"]+\.(?:css|js))"/g)) {
-  const comprometido = m[1].replace(/^src\/assets\//, "theme/");
-  assert.ok(fs.existsSync(path.join(SITE, comprometido)),
-    `book.toml lista ${m[1]} e site/theme não tem a fonte (${comprometido})`);
+  // vendor vendored tem fonte própria (web/vendor, rastreada — ver NOTICE);
+  // todo o resto vem do tema (site/theme/).
+  const fonte = m[1].startsWith("src/assets/vendor/")
+    ? path.join(RAIZ, m[1].replace(/^src\/assets\//, "web/"))
+    : path.join(SITE, m[1].replace(/^src\/assets\//, "theme/"));
+  assert.ok(fs.existsSync(fonte),
+    `book.toml lista ${m[1]} e a fonte não existe (${fonte})`);
 }
 
 console.log("✓ site.test.js: i18n ×7, gramática verbolang, SUMMARY e book.toml coerentes");

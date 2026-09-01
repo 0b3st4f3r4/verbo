@@ -27,7 +27,11 @@ preferred-dark-theme = "navy"
 # documentação técnica: `->` e `--ticks` são literais, não tipografia
 smart-punctuation = false
 additional-css = ["src/assets/site.css"]
-additional-js = ["src/assets/verbolang.js", "src/assets/mermaid-init.js", "src/assets/i18n.js"]
+# O mdBook 0.5 NÃO copia mais arquivos estáticos soltos de src/ ou theme/ —
+# só os assets desta lista (copiados com hash e emitidos como <script>, na
+# ordem). O mermaid.min.js (3,5 MB vendored de web/vendor, MIT — ver NOTICE)
+# vem primeiro: a lib define window.mermaid antes do init ler os blocos.
+additional-js = ["src/assets/vendor/mermaid.min.js", "src/assets/verbolang.js", "src/assets/mermaid-init.js", "src/assets/i18n.js"]
 git-repository-url = "https://github.com/0b3st4f3r4/verbo"
 git-repository-icon = "fab-github"
 edit-url-template = "https://github.com/0b3st4f3r4/verbo/edit/main/site/content/{path}"

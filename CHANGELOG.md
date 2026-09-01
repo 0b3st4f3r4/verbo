@@ -37,6 +37,16 @@ _(a próxima janela é a `v2027.0.0-alpha.1`, Setembro)_
   ramo `range == 0` do wrap (antes o Δt < 1 ms do relógio real desviava o
   par para o ramo degenerado). Total determinístico: **95,20%** em qualquer
   host (linhas; `drivers.rs` 99,65%).
+- Diagramas Mermaid do livro não renderizavam — os blocos ```mermaid
+  publicavam como código cru. Duas causas somadas: (1) o mdBook 0.5
+  deixou de copiar arquivos estáticos soltos de `src/` e `theme/`, então
+  `mermaid.min.js` nunca chegava ao artefato (404 no site); (2) o
+  `mermaid-init.js` resolvia a URL da lib com `document.currentScript`
+  dentro do `DOMContentLoaded` — sempre `null`, e o caminho saía
+  relativo à página. A lib agora entra pelo `additional-js` do
+  `book.toml` (copiada com hash e emitida como `<script>` antes do
+  init; `site.test.js` passa a validar a fonte em `web/vendor/`), e o
+  init captura a própria base no tempo de execução da tag.
 
 ## [v2027.0.0-alpha.0] — 2026-09-01
 
