@@ -181,3 +181,33 @@ mod tests {
         assert_eq!(c.ticks_waiting, 1, "re-enfileirado conta o tempo na fila");
     }
 }
+
+// complementos de cobertura: erro de capacidade, clamp de prioridade e clear
+#[cfg(test)]
+mod tests_cauda {
+    use super::*;
+
+    fn cmd(seq: u32) -> Command {
+        Command { seq, actor: "Fan".into(), value: Value::Num(1.0), priority: PRIORITY_NORMAL, ticks_waiting: 0, primary: None }
+    }
+
+    #[test]
+    fn fila_cheia_erro_display_e_clamp_de_prioridade() {
+        let mut fila = CommandQueue::with_capacity(1);
+        assert!(fila.is_empty());
+        assert_eq!(fila.capacity(), 1);
+        fila.enqueue(cmd(1)).unwrap();
+        // guarda anti-inchaço
+        let e = fila.enqueue(cmd(2)).unwrap_err();
+        assert_eq!(e.to_string(), "fila de comandos cheia (capacidade 1)");
+        // prioridade acima do normal é LIMITADA ao normal (subvert usa canal próprio)
+        let mut baixo = cmd(3);
+        baixo.priority = PRIORITY_NORMAL + 5;
+        let mut fila2 = CommandQueue::with_capacity(4);
+        fila2.enqueue(baixo).unwrap();
+        assert_eq!(fila2.dequeue().unwrap().priority, PRIORITY_NORMAL);
+        // desligamento limpo
+        fila.clear();
+        assert!(fila.is_empty());
+    }
+}

@@ -266,3 +266,108 @@ fn header_v1_is_little_endian_per_doc() {
     assert_eq!(length, HEADER_LEN + 8);
     assert_eq!(b.len(), 4 + length);
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// Cobertura complementar: Display dos erros, rejeições de encode restantes,
+// HELLO com publicação de registro, heartbeat e string com prefixo de 2 bytes.
+// ══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn display_de_todos_os_erros_de_schema() {
+    assert_eq!(
+        SchemaError::FrameExceeded { length: 9000 }.to_string(),
+        "frame de 9000 bytes excede o máximo de 8192"
+    );
+    assert_eq!(
+        SchemaError::PayloadTooShort { length: 3 }.to_string(),
+        "payload de 3 bytes é menor que o header de 12"
+    );
+    assert_eq!(SchemaError::InvalidMagic.to_string(), "magic inválido (esperado \"FXP\")");
+    assert_eq!(
+        SchemaError::UnknownVersion { received: 9 }.to_string(),
+        "versão de schema desconhecida: 9 (v1)"
+    );
+    assert_eq!(
+        SchemaError::UnknownOpcode { received: 0xFF }.to_string(),
+        "opcode desconhecido: 0xFF"
+    );
+    assert_eq!(
+        SchemaError::InvalidName.to_string(),
+        "opcode exige nome simbólico ausente/truncado"
+    );
+    assert_eq!(SchemaError::MissingField.to_string(), "corpo da mensagem truncado");
+    assert_eq!(SchemaError::PayloadTooLong.to_string(), "bytes excedentes após o corpo");
+    assert_eq!(
+        SchemaError::ReservedFlag.to_string(),
+        "bits reservados de flags devem ser 0 no encode"
+    );
+    assert_eq!(
+        SchemaError::StringTooLong.to_string(),
+        "string excede o limite (nome ≤ 255, texto ≤ 1024)"
+    );
+    assert_eq!(
+        SchemaError::NonFiniteValue.to_string(),
+        "valor NaN/infinito não é leitura física válida (FORMAL §4.7)"
+    );
+    assert_eq!(SchemaError::InvalidUtf8.to_string(), "campo de texto com UTF-8 inválido");
+}
+
+#[test]
+fn encode_rejeita_opcode_desconhecido_e_flag_reservada() {
+    let ruim = Message {
+        opcode: 0x7F,
+        flags: 0,
+        seq: 1,
+        name: "cpu_temp".into(),
+        body: Body::Empty,
+    };
+    assert!(matches!(
+        encode_to_vec(&ruim),
+        Err(SchemaError::UnknownOpcode { received: 0x7F })
+    ));
+    let mut reservado = Message::read("cpu_temp", 1, false);
+    reservado.flags = 0b1000_0000;
+    assert!(matches!(encode_to_vec(&reservado), Err(SchemaError::ReservedFlag)));
+}
+
+#[test]
+fn hello_com_publicacao_de_registro_e_heartbeat_roundtrip() {
+    let devices = vec![
+        DeviceDesc::Sensor {
+            name: "cpu_temp".into(),
+            min: Some(-40.0),
+            max: Some(120.0),
+            quantity: "temperatura".into(),
+            unit: "°C".into(),
+            precision_pct: 1.5,
+        },
+        DeviceDesc::Actor {
+            name: "Fan".into(),
+            min: Some(0.0),
+            max: Some(255.0),
+            safety: Some(200.0),
+        },
+    ];
+    let hello = Message::hello(devices.clone(), 9);
+    assert_eq!(decode(&encode_to_vec(&hello).unwrap()).unwrap().0, hello);
+    // ack de heartbeat nos dois estados
+    for ok in [true, false] {
+        let hb = Message::heartbeat_ack(ok, 10);
+        assert_eq!(decode(&encode_to_vec(&hb).unwrap()).unwrap().0, hb);
+    }
+    let hb = Message::heartbeat("cpu_temp", 11);
+    assert_eq!(decode(&encode_to_vec(&hb).unwrap()).unwrap().0, hb);
+}
+
+#[test]
+fn string_longa_usa_prefixo_de_dois_bytes() {
+    // texto de 300 bytes (> 255) no reason do InvalidValue → prefixo u16
+    let longo = "x".repeat(300);
+    let msg = Message::act("Fan", WireValue::Ident(longo.clone()), 1, false);
+    let frame = encode_to_vec(&msg).unwrap();
+    let volta = decode(&frame).unwrap().0;
+    assert_eq!(volta, msg);
+    // o texto de 300 bytes está inteiro no frame (prefixo de 2 bytes)
+    assert!(frame.len() > HEADER_LEN + 300);
+    let _ = (MAX_STRING, MAGIC, VERSION);
+}

@@ -283,3 +283,99 @@ fn nonexistent_and_inaccessible_path() {
     let mut s = RaplEnergySensor::new("/nao/existe/rapl");
     assert_eq!(s.read(), Err(SensorFailure::Inaccessible));
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// Cobertura complementar: Display de ActorError, LED (mapa custom, domínio
+// fracionário, teto de brilho), RAPL com contador range==0 e descrições.
+// ══════════════════════════════════════════════════════════════════════════
+use vbl_fxp::drivers::ActorError;
+
+#[test]
+fn display_de_actor_error() {
+    assert_eq!(ActorError::WriteFailed("permissão".into()).to_string(), "escrita falhou: permissão");
+    assert_eq!(ActorError::InvalidValue("fora".into()).to_string(), "valor inválido: fora");
+}
+
+#[test]
+fn led_com_mapa_custom_dominio_fracionario_e_teto() {
+    let dir = std::env::temp_dir().join(format!("vbl-led2-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("max_brightness"), "100").unwrap();
+    std::fs::write(dir.join("brightness"), "0").unwrap(); // sysfs: o arquivo existe
+
+    let mut mapa = std::collections::BTreeMap::new();
+    mapa.insert("verde".to_string(), 50u8);
+    let mut led = LedClassActor::with_map(dir.clone(), mapa);
+    assert_eq!(led.max_brightness(), 100);
+
+    // brilho fracionário → fora do domínio inteiro
+    assert!(matches!(
+        led.apply(&Value::Num(1.5)),
+        Err(ActorError::InvalidValue(m)) if m.contains("fora do domínio"),
+    ));
+    // cor fora do mapa → recusa sem falsificar
+    assert!(led.apply(&Value::Str("roxo".into())).is_err());
+    // brilho válido abaixo do teto grava
+    assert!(led.apply(&Value::Num(30.0)).is_ok());
+    assert_eq!(std::fs::read_to_string(dir.join("brightness")).unwrap(), "30");
+    // acima do max_brightness → recusa
+    assert!(matches!(
+        led.apply(&Value::Num(101.0)),
+        Err(ActorError::InvalidValue(m)) if m.contains("max_brightness"),
+    ));
+    // heartbeat: brightness existe
+    assert!(led.heartbeat());
+}
+
+#[test]
+fn rapl_wrap_com_range_zero_nao_inventa_potencia() {
+    let dir = std::env::temp_dir().join(format!("vbl-rapl2-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("energy_uj"), "500").unwrap();
+    std::fs::write(dir.join("max_energy_range_uj"), "0").unwrap(); // contador sem range
+    let mut sensor = RaplEnergySensor::new(dir.clone());
+    let _ = sensor.read().unwrap_err(); // amostra de aquecimento
+    std::fs::write(dir.join("energy_uj"), "100").unwrap(); // wrap com range 0
+    assert_eq!(sensor.read(), Err(SensorFailure::Inaccessible));
+}
+
+#[test]
+fn descricoes_dos_drivers_reais() {
+    let base = std::env::temp_dir().join(format!("vbl-desc-{}", std::process::id()));
+    std::fs::create_dir_all(&base).unwrap();
+    let rotas: Vec<(vbl_fxp::registry::Endpoint, &str)> = vec![
+        (
+            vbl_fxp::registry::Endpoint::ThermalZone { dir: base.join("tz") },
+            "thermal_zone",
+        ),
+        (
+            vbl_fxp::registry::Endpoint::HwmonTemp { file: base.join("temp") },
+            "hwmon_temp",
+        ),
+        (
+            vbl_fxp::registry::Endpoint::RaplEnergy { dir: base.join("rapl") },
+            "rapl_energy",
+        ),
+    ];
+    for (endpoint, prefixo) in rotas {
+        let driver = sensor_from(&endpoint).expect("driver de leitura");
+        assert!(driver.description().starts_with(prefixo), "{}", driver.description());
+    }
+    let atores: Vec<(vbl_fxp::registry::Endpoint, &str)> = vec![
+        (
+            vbl_fxp::registry::Endpoint::RaplConstraint { file: base.join("cap") },
+            "rapl_constraint",
+        ),
+        (
+            vbl_fxp::registry::Endpoint::HwmonPwm { file: base.join("pwm") },
+            "hwmon_pwm",
+        ),
+        (vbl_fxp::registry::Endpoint::LedClass { dir: base.join("led") }, "led:"),
+    ];
+    for (endpoint, prefixo) in atores {
+        let driver = actor_from(&endpoint).expect("driver de atuação");
+        assert!(driver.description().starts_with(prefixo), "{}", driver.description());
+    }
+}
