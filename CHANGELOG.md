@@ -25,6 +25,19 @@ _(a próxima janela é a `v2027.0.0-alpha.1`, Setembro)_
   (ex.: `BENCH_ARGS=--quick`). Dependência `pre-commit>=4.0` em
   `requirements-dev.txt`.
 
+### Corrigido
+- Gate de cobertura Rust (llvm-cov ≥ 95%) era **dependente do host**: a
+  auto-descoberta do FXP (`drivers::discover*`) sondava o `/sys` real, e a
+  cobertura variava entre a máquina de referência (AMD, com k10temp/RAPL
+  reais) e a VM do CI — 94,92% < 95%, vermelho em CI e verde localmente.
+  `drivers::discover_at` e as variantes `*_at` tornam a árvore de decisão
+  hermética (sysroot sintético exercita todos os ramos nos testes); os
+  wrappers públicos continuam sondando o hardware real. Bônus de honestidade:
+  `rapl_wrap_com_range_zero_nao_inventa_potencia` agora alcança de fato o
+  ramo `range == 0` do wrap (antes o Δt < 1 ms do relógio real desviava o
+  par para o ramo degenerado). Total determinístico: **95,20%** em qualquer
+  host (linhas; `drivers.rs` 99,65%).
+
 ## [v2027.0.0-alpha.0] — 2026-09-01
 
 Primeiro pré-lançamento público da linha `v2027.0` (fase alpha: pesquisa,

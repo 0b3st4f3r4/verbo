@@ -375,16 +375,30 @@ impl ActorDriver for LedClassActor {
 /// **registrado porém inacessível** (FORMAL §4.7), jamais simulado em modo
 /// real. `attention` não é descobrível: o backend simulado é o padrão.
 pub fn discover(name: &str) -> Option<crate::registry::Endpoint> {
+    discover_at(Path::new("/sys"), name)
+}
+
+/// `discover` com raiz sysfs injetável: os testes exercitam a árvore de
+/// decisão inteira num sysroot sintético (tmpdir), então a cobertura e o
+/// resultado não dependem do hardware do host (o CI roda em VM sem
+/// k10temp/pwm/LEDs reais). Os wrappers públicos abaixo sondam o `/sys` real.
+pub fn discover_at(root: &Path, name: &str) -> Option<crate::registry::Endpoint> {
     use crate::registry::Endpoint;
     match name {
-        "cpu_temp" => discover_thermal_zone().map(|dir| Endpoint::ThermalZone { dir }),
-        "cpu_power" => discover_rapl_energy().map(|dir| Endpoint::RaplEnergy { dir }),
-        "CpuPowerCap" => {
-            let f = Path::new("/sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw");
-            f.exists().then(|| Endpoint::RaplConstraint { file: f.into() })
+        "cpu_temp" => {
+            discover_thermal_zone_at(&root.join("class/thermal"))
+                .map(|dir| Endpoint::ThermalZone { dir })
         }
-        "Fan" => discover_pwm().map(|file| Endpoint::HwmonPwm { file }),
-        "StatusLed" => discover_led().map(|dir| Endpoint::LedClass { dir }),
+        "cpu_power" => {
+            discover_rapl_energy_at(&root.join("class/powercap"))
+                .map(|dir| Endpoint::RaplEnergy { dir })
+        }
+        "CpuPowerCap" => {
+            let f = root.join("class/powercap/intel-rapl:0/constraint_0_power_limit_uw");
+            f.exists().then_some(Endpoint::RaplConstraint { file: f })
+        }
+        "Fan" => discover_pwm_at(&root.join("class/hwmon")).map(|file| Endpoint::HwmonPwm { file }),
+        "StatusLed" => discover_led_at(&root.join("class/leds")).map(|dir| Endpoint::LedClass { dir }),
         _ => None,
     }
 }
@@ -392,8 +406,12 @@ pub fn discover(name: &str) -> Option<crate::registry::Endpoint> {
 /// Primeira thermal_zone plausível: preferência `x86_pkg_temp`/`cpu_*`;
 /// caso nenhum `type` case, a primeira com `temp` legível.
 pub fn discover_thermal_zone() -> Option<PathBuf> {
+    discover_thermal_zone_at(Path::new("/sys/class/thermal"))
+}
+
+fn discover_thermal_zone_at(class_thermal: &Path) -> Option<PathBuf> {
     let mut fallback = None;
-    for zone in listar_dirs("/sys/class/thermal", "thermal_zone") {
+    for zone in listar_dirs_at(class_thermal, "thermal_zone") {
         if !zone.join("temp").exists() {
             continue;
         }
@@ -409,14 +427,22 @@ pub fn discover_thermal_zone() -> Option<PathBuf> {
 
 /// Primeiro domínio RAPL com `energy_uj`.
 pub fn discover_rapl_energy() -> Option<PathBuf> {
-    listar_dirs("/sys/class/powercap", "intel-rapl")
+    discover_rapl_energy_at(Path::new("/sys/class/powercap"))
+}
+
+fn discover_rapl_energy_at(class_powercap: &Path) -> Option<PathBuf> {
+    listar_dirs_at(class_powercap, "intel-rapl")
         .into_iter()
         .find(|d| d.join("energy_uj").exists())
 }
 
 /// Primeiro hwmon com PWM exportado.
 pub fn discover_pwm() -> Option<PathBuf> {
-    for hwmon in listar_dirs("/sys/class/hwmon", "hwmon") {
+    discover_pwm_at(Path::new("/sys/class/hwmon"))
+}
+
+fn discover_pwm_at(class_hwmon: &Path) -> Option<PathBuf> {
+    for hwmon in listar_dirs_at(class_hwmon, "hwmon") {
         for n in 1..=4 {
             let pwm = hwmon.join(format!("pwm{n}"));
             if pwm.exists() {
@@ -429,10 +455,14 @@ pub fn discover_pwm() -> Option<PathBuf> {
 
 /// Primeira LED class com brightness gravável.
 pub fn discover_led() -> Option<PathBuf> {
-    listar_dirs("/sys/class/leds", "").into_iter().find(|d| d.join("brightness").exists())
+    discover_led_at(Path::new("/sys/class/leds"))
 }
 
-fn listar_dirs(base: &str, prefix: &str) -> Vec<PathBuf> {
+fn discover_led_at(class_leds: &Path) -> Option<PathBuf> {
+    listar_dirs_at(class_leds, "").into_iter().find(|d| d.join("brightness").exists())
+}
+
+fn listar_dirs_at(base: &Path, prefix: &str) -> Vec<PathBuf> {
     let Ok(entry) = std::fs::read_dir(base) else {
         return Vec::new();
     };

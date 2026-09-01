@@ -3,12 +3,15 @@
 //! honesta em CI, PLAN §6.5). Unidades, wrap do RAPL, falhas honestas (§4.7)
 //! e domínios de atuação.
 
+use std::ffi::OsStr;
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use vbl_fxp::drivers::{
-    actor_from, sensor_from, ActorDriver, AttentionSource, HwmonPwmActor, LedClassActor,
-    RaplEnergySensor, RaplPowerCapActor, SensorDriver, SimulatedAttention, ThermalZoneSensor,
+    actor_from, discover_led, discover_pwm, discover_rapl_energy, discover_thermal_zone,
+    sensor_from, ActorDriver, AttentionSource, HwmonPwmActor, LedClassActor, RaplEnergySensor,
+    RaplPowerCapActor, SensorDriver, SimulatedAttention, ThermalZoneSensor,
 };
 use vbl_fxp::registry::Endpoint;
 use vbl_runtime::fxp::{SensorFailure, Value};
@@ -267,12 +270,89 @@ fn fabrication_and_discovery_are_consistent() {
     let mut a = actor_from(&Endpoint::HwmonPwm { file }).expect("pwm deve fabricar ator");
     assert!(a.heartbeat());
 
-    // Auto-descoberta: consistente em qualquer host (achar ou não é válido).
-    for name in ["cpu_temp", "cpu_power", "CpuPowerCap", "Fan", "StatusLed", "x"] {
-        let _ = vbl_fxp::drivers::discover(name);
+    // Auto-descoberta — HERMÉTICA: sysroot sintético exercita a árvore de
+    // decisão inteira em qualquer host (a VM do CI não tem k10temp/pwm/LEDs
+    // reais; a cobertura não pode depender do hardware). Os wrappers que
+    // sondam o /sys real seguem cobertos pela fumigação no fim do bloco.
+    let sys = tmpdir("sysroot");
+    let class = sys.join("class");
+    // thermal: zone0 sem temp é pulado (continue); zone1 ("foo_bar") vira
+    // fallback; zone2 casa x86_pkg_temp e retorna. "outra" não casa o
+    // prefixo; zone9 é arquivo (filtrado por is_dir).
+    let tz = class.join("thermal");
+    fs::create_dir_all(tz.join("thermal_zone0")).unwrap();
+    fs::create_dir_all(tz.join("thermal_zone1")).unwrap();
+    fs::write(tz.join("thermal_zone1/type"), "foo_bar").unwrap();
+    fs::write(tz.join("thermal_zone1/temp"), "40000").unwrap();
+    fs::create_dir_all(tz.join("thermal_zone2")).unwrap();
+    fs::write(tz.join("thermal_zone2/type"), "x86_pkg_temp").unwrap();
+    fs::write(tz.join("thermal_zone2/temp"), "41000").unwrap();
+    fs::create_dir_all(tz.join("outra")).unwrap();
+    fs::write(tz.join("thermal_zone9"), "").unwrap();
+    // powercap: :0 sem energy_uj (e com o constraint do CpuPowerCap); :1 com.
+    let pc = class.join("powercap");
+    fs::create_dir_all(pc.join("intel-rapl:0")).unwrap();
+    fs::create_dir_all(pc.join("intel-rapl:1")).unwrap();
+    fs::write(pc.join("intel-rapl:1/energy_uj"), "1000").unwrap();
+    fs::write(pc.join("intel-rapl:0/constraint_0_power_limit_uw"), "50000000").unwrap();
+    // hwmon: hwmon0 sem pwm (varre n=1..=4 sem achar); hwmon1 com pwm2.
+    let hw = class.join("hwmon");
+    fs::create_dir_all(hw.join("hwmon0")).unwrap();
+    fs::create_dir_all(hw.join("hwmon1")).unwrap();
+    fs::write(hw.join("hwmon1/pwm2"), "128").unwrap();
+    // leds: led0 sem brightness; led1 com; nome não-UTF8 entra pelo ramo
+    // `unwrap_or` do filtro (prefixo vazio aceita qualquer nome válido).
+    let leds = class.join("leds");
+    fs::create_dir_all(leds.join("led0")).unwrap();
+    fs::create_dir_all(leds.join("led1")).unwrap();
+    fs::write(leds.join("led1/brightness"), "0").unwrap();
+    fs::create_dir_all(leds.join(OsStr::from_bytes(b"\xffled"))).unwrap();
+
+    if let Some(Endpoint::ThermalZone { dir }) = vbl_fxp::drivers::discover_at(&sys, "cpu_temp") {
+        assert!(dir.ends_with("thermal_zone2"), "deve casar x86_pkg_temp: {dir:?}");
+    } else {
+        panic!("cpu_temp deve descobrir a thermal_zone2 sintética");
     }
+    if let Some(Endpoint::RaplEnergy { dir }) = vbl_fxp::drivers::discover_at(&sys, "cpu_power") {
+        assert!(dir.ends_with("intel-rapl:1"), "deve achar o domínio com energy_uj: {dir:?}");
+    } else {
+        panic!("cpu_power deve descobrir o intel-rapl:1 sintético");
+    }
+    if let Some(Endpoint::RaplConstraint { file }) = vbl_fxp::drivers::discover_at(&sys, "CpuPowerCap") {
+        assert!(file.ends_with("constraint_0_power_limit_uw"), "{file:?}");
+    } else {
+        panic!("CpuPowerCap deve descobrir o constraint sintético");
+    }
+    if let Some(Endpoint::HwmonPwm { file }) = vbl_fxp::drivers::discover_at(&sys, "Fan") {
+        assert!(file.ends_with("hwmon1/pwm2"), "{file:?}");
+    } else {
+        panic!("Fan deve descobrir o pwm2 sintético");
+    }
+    if let Some(Endpoint::LedClass { dir }) = vbl_fxp::drivers::discover_at(&sys, "StatusLed") {
+        assert!(dir.ends_with("led1"), "{dir:?}");
+    } else {
+        panic!("StatusLed deve descobrir o led1 sintético");
+    }
+    assert!(vbl_fxp::drivers::discover_at(&sys, "x").is_none());
     // attention não é descobrível: simulado é o padrão obrigatório.
-    assert!(vbl_fxp::drivers::discover("attention").is_none());
+    assert!(vbl_fxp::drivers::discover_at(&sys, "attention").is_none());
+    // Raiz sem class/*: read_dir falha → lista vazia → None honesto (e a
+    // branch de erro de listagem fica coberta em qualquer host).
+    let vazio = tmpdir("sysroot-vazio");
+    for nome in ["cpu_temp", "cpu_power", "CpuPowerCap", "Fan", "StatusLed"] {
+        assert!(vbl_fxp::drivers::discover_at(&vazio, nome).is_none());
+    }
+    // Fumigação dos wrappers que sondam o /sys real: executar é válido;
+    // achar ou não depende do hardware e não pode afetar a suíte.
+    let _ = (
+        discover_thermal_zone(),
+        discover_rapl_energy(),
+        discover_pwm(),
+        discover_led(),
+    );
+    for nome in ["cpu_temp", "cpu_power", "CpuPowerCap", "Fan", "StatusLed"] {
+        let _ = vbl_fxp::drivers::discover(nome);
+    }
 }
 
 /// Leitura com path inexistente: Inacessivel honesto (§4.7).
@@ -330,15 +410,20 @@ fn led_com_mapa_custom_dominio_fracionario_e_teto() {
 
 #[test]
 fn rapl_wrap_com_range_zero_nao_inventa_potencia() {
-    let dir = std::env::temp_dir().join(format!("vbl-rapl2-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("energy_uj"), "500").unwrap();
-    std::fs::write(dir.join("max_energy_range_uj"), "0").unwrap(); // contador sem range
-    let mut sensor = RaplEnergySensor::new(dir.clone());
-    let _ = sensor.read().unwrap_err(); // amostra de aquecimento
-    std::fs::write(dir.join("energy_uj"), "100").unwrap(); // wrap com range 0
-    assert_eq!(sensor.read(), Err(SensorFailure::Inaccessible));
+    let dir = tmpdir("rapl-range0");
+    // Relógio sintético: precisa avançar (dt ≥ MIN_DT_S) para o segundo par
+    // cair no ramo de wrap — com o relógio real, Δt < 1 ms seria par
+    // degenerado e o ramo range==0 do wrap nunca era alcançado.
+    let ticks = AtomicUsize::new(0);
+    let mut sensor = RaplEnergySensor::with_clock(
+        &dir,
+        Box::new(move || ticks.fetch_add(2, Ordering::Relaxed) as f64),
+    );
+    fs::write(dir.join("energy_uj"), "500").unwrap();
+    fs::write(dir.join("max_energy_range_uj"), "0").unwrap(); // contador sem range
+    assert_eq!(sensor.read(), Err(SensorFailure::Inaccessible)); // aquecimento
+    fs::write(dir.join("energy_uj"), "100").unwrap(); // wrap com range 0
+    assert_eq!(sensor.read(), Err(SensorFailure::Inaccessible)); // wrap exige range > 0
 }
 
 #[test]
