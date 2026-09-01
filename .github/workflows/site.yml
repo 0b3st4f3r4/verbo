@@ -8,7 +8,11 @@
 # Dispara em push para main (quando o livro pode mudar), em tag v* (a
 # release republica o site) e manualmente. O deploy usa o environment
 # `github-pages` — ative "GitHub Pages → Source: GitHub Actions" uma vez
-# (o configure-pages com enablement faz isso no primeiro run).
+# (o configure-pages com enablement faz isso no primeiro run) e garanta a
+# política de deploy do environment: Settings → Environments → github-pages
+# → Deployment branches and tags → branch `main` + tag `v*`. Sem a tag na
+# política, o run disparado pela release falha no deploy-pages ("not allowed
+# to deploy … due to environment protection rules").
 name: Site (GitHub Pages)
 
 on:
