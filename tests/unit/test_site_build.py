@@ -168,14 +168,24 @@ def test_css_usa_fontes_que_existem():
 
 # ── 5. book.toml coerente ──────────────────────────────────────────────────
 
-def test_book_toml_assets_existem():
+def test_book_toml_assets_existem(montado):
+    # o mdbook resolve additional-css/js a partir da raiz do livro (site/) na
+    # hora do build — e esses assets sob src/ são emitidos pelo montador.
+    # site/src é artefato git-ignorado (não existe no checkout limpo do CI),
+    # então a verificação roda contra a árvore montada (o mesmo --check).
+    _, src = montado
     toml = (RAIZ / "site" / "book.toml").read_text("utf-8")
     for m in re.finditer(r'additional-(css|js)\s*=\s*\[([^\]]*)\]', toml):
         for bruto in m.group(2).split(","):
             caminho = bruto.strip().strip('"').strip("'")
-            if caminho:
-                assert (RAIZ / "site" / caminho).is_file(), (
-                    f"book.toml lista {caminho} e site/ não o tem")
+            if not caminho:
+                continue
+            if caminho.startswith("src/"):
+                alvo = src / caminho[len("src/"):]
+            else:
+                alvo = RAIZ / "site" / caminho
+            assert alvo.is_file(), (
+                f"book.toml lista {caminho} e o livro montado não o tem")
 
 
 def test_montar_eh_idempotente(tmp_path):
@@ -283,6 +293,13 @@ def test_main_check_e_montagem_e_pages(tmp_path, monkeypatch):
     destino = tmp_path / "src"
     assert mod.main(["--dest", str(destino)]) == 0
     assert (destino / "SUMMARY.md").is_file()
+    # site/book é artefato do mdbook (git-ignorado): o checkout limpo do CI não
+    # o tem. A fiação main → montar_pages é exercitada com um livro mínimo; o
+    # empacotamento completo já é coberto por test_montar_pages_com_livro_falso.
+    livro = tmp_path / "book"
+    livro.mkdir()
+    (livro / "index.html").write_text("<html></html>", "utf-8")
+    monkeypatch.setattr(mod, "LIVRO", livro)
     pages = tmp_path / "pages"
     assert mod.main(["--pages", str(pages)]) == 0
     assert (pages / "docs" / "index.html").is_file()

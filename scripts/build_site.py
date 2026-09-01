@@ -269,9 +269,12 @@ def verificar(src: Path) -> list[str]:
 
 # ── artefato do GitHub Pages ───────────────────────────────────────────────
 
+LIVRO = RAIZ / "site" / "book"   # saída do `mdbook build site` (artefato, não checkout)
+
+
 def montar_pages(dest: Path, livro: Path | None = None) -> Path:
     """Artefato do Pages: livro em `dest/docs`, landing raiz e .nojekyll."""
-    livro = livro or (RAIZ / "site" / "book")
+    livro = livro or LIVRO
     if not (livro / "index.html").is_file():
         raise SystemExit("livro ausente — rode `mdbook build site` antes de --pages")
     if dest.exists():
