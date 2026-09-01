@@ -8,45 +8,7 @@ de suporte + 6 meses de descontinuação = 7 anos de ciclo de vida.
 
 ## [Não lançado]
 
-_(a próxima janela é a `v2027.0.0-alpha.1`, Setembro)_
-
-### Alterado
-- Pre-commit migrado do script `.githooks/pre-commit` (158 linhas) para o
-  framework [pre-commit](https://pre-commit.com): `.pre-commit-config.yaml`
-  com os mesmos 12 estágios como hooks locais (`repo: local`, `make`), na
-  ordem do CI, com os gates de cobertura ≥ 95% (pytest-cov e llvm-cov).
-  `make hooks` aponta o `core.hooksPath` para um wrapper fino em
-  `.githooks/pre-commit`, que só resolve o ambiente (`PRE_COMMIT_HOME` no
-  workspace — HOME pode ser read-only, mesma regra do `CARGO_HOME`) e delega
-  ao framework. Modo rápido: `make pc ARGS="run estaticos tdd-cobertura bdd
-  clippy testes e2e"` (equivale ao antigo `VBL_PRE_COMMIT=quick`);
-  `SKIP=<ids>` pula estágios. Novos alvos: `make test-cov`, `make
-  rust-fxp-probe` e `make pc`; `make rust-bench` aceita `BENCH_ARGS`
-  (ex.: `BENCH_ARGS=--quick`). Dependência `pre-commit>=4.0` em
-  `requirements-dev.txt`.
-
-### Corrigido
-- Gate de cobertura Rust (llvm-cov ≥ 95%) era **dependente do host**: a
-  auto-descoberta do FXP (`drivers::discover*`) sondava o `/sys` real, e a
-  cobertura variava entre a máquina de referência (AMD, com k10temp/RAPL
-  reais) e a VM do CI — 94,92% < 95%, vermelho em CI e verde localmente.
-  `drivers::discover_at` e as variantes `*_at` tornam a árvore de decisão
-  hermética (sysroot sintético exercita todos os ramos nos testes); os
-  wrappers públicos continuam sondando o hardware real. Bônus de honestidade:
-  `rapl_wrap_com_range_zero_nao_inventa_potencia` agora alcança de fato o
-  ramo `range == 0` do wrap (antes o Δt < 1 ms do relógio real desviava o
-  par para o ramo degenerado). Total determinístico: **95,20%** em qualquer
-  host (linhas; `drivers.rs` 99,65%).
-- Diagramas Mermaid do livro não renderizavam — os blocos ```mermaid
-  publicavam como código cru. Duas causas somadas: (1) o mdBook 0.5
-  deixou de copiar arquivos estáticos soltos de `src/` e `theme/`, então
-  `mermaid.min.js` nunca chegava ao artefato (404 no site); (2) o
-  `mermaid-init.js` resolvia a URL da lib com `document.currentScript`
-  dentro do `DOMContentLoaded` — sempre `null`, e o caminho saía
-  relativo à página. A lib agora entra pelo `additional-js` do
-  `book.toml` (copiada com hash e emitida como `<script>` antes do
-  init; `site.test.js` passa a validar a fonte em `web/vendor/`), e o
-  init captura a própria base no tempo de execução da tag.
+_(nada ainda — a próxima janela é a `v2027.0.0-alpha.1`, Setembro)_
 
 ## [v2027.0.0-alpha.0] — 2026-09-01
 
@@ -95,3 +57,39 @@ experimentação e definição de escopo). Versão do workspace:
 - Versão do workspace: `2027.0.0-alpha.0` (era `0.1.0-alpha.0`, nunca
   publicada) — a estreia pública adota a gramática da linha
   (`v2027.0.0-alpha.N`), conforme RELEASES.md § cargo/SemVer.
+- Pre-commit migrado do script `.githooks/pre-commit` (158 linhas) para o
+  framework [pre-commit](https://pre-commit.com): `.pre-commit-config.yaml`
+  com os mesmos 12 estágios como hooks locais (`repo: local`, `make`), na
+  ordem do CI, com os gates de cobertura ≥ 95% (pytest-cov e llvm-cov).
+  `make hooks` aponta o `core.hooksPath` para um wrapper fino em
+  `.githooks/pre-commit`, que só resolve o ambiente (`PRE_COMMIT_HOME` no
+  workspace — HOME pode ser read-only, mesma regra do `CARGO_HOME`) e delega
+  ao framework. Modo rápido: `make pc ARGS="run estaticos tdd-cobertura bdd
+  clippy testes e2e"` (equivale ao antigo `VBL_PRE_COMMIT=quick`);
+  `SKIP=<ids>` pula estágios. Novos alvos: `make test-cov`, `make
+  rust-fxp-probe` e `make pc`; `make rust-bench` aceita `BENCH_ARGS`
+  (ex.: `BENCH_ARGS=--quick`). Dependência `pre-commit>=4.0` em
+  `requirements-dev.txt`.
+
+### Corrigido
+- Gate de cobertura Rust (llvm-cov ≥ 95%) era **dependente do host**: a
+  auto-descoberta do FXP (`drivers::discover*`) sondava o `/sys` real, e a
+  cobertura variava entre a máquina de referência (AMD, com k10temp/RAPL
+  reais) e a VM do CI — 94,92% < 95%, vermelho em CI e verde localmente.
+  `drivers::discover_at` e as variantes `*_at` tornam a árvore de decisão
+  hermética (sysroot sintético exercita todos os ramos nos testes); os
+  wrappers públicos continuam sondando o hardware real. Bônus de honestidade:
+  `rapl_wrap_com_range_zero_nao_inventa_potencia` agora alcança de fato o
+  ramo `range == 0` do wrap (antes o Δt < 1 ms do relógio real desviava o
+  par para o ramo degenerado). Total determinístico: **95,20%** em qualquer
+  host (linhas; `drivers.rs` 99,65%).
+- Diagramas Mermaid do livro não renderizavam — os blocos ```mermaid
+  publicavam como código cru. Duas causas somadas: (1) o mdBook 0.5
+  deixou de copiar arquivos estáticos soltos de `src/` e `theme/`, então
+  `mermaid.min.js` nunca chegava ao artefato (404 no site); (2) o
+  `mermaid-init.js` resolvia a URL da lib com `document.currentScript`
+  dentro do `DOMContentLoaded` — sempre `null`, e o caminho saía
+  relativo à página. A lib agora entra pelo `additional-js` do
+  `book.toml` (copiada com hash e emitida como `<script>` antes do
+  init; `site.test.js` passa a validar a fonte em `web/vendor/`), e o
+  init captura a própria base no tempo de execução da tag.
