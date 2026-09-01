@@ -1,0 +1,150 @@
+# .pre-commit-config.yaml — pre-commit da VerboLang (framework pre-commit).
+# O CI, inteiro, antes de cada commit: espelha 1:1 o pipeline de
+# .github/workflows/ci.yml e acrescenta os gates de cobertura (≥ 95%):
+#   • pytest-cov     — make test-cov (--cov-fail-under)       (Python)
+#   • cargo-llvm-cov — --fail-under-lines                     (Rust)
+#
+# Estágios (na ordem do CI):
+#   1. estaticos ........ make check (shell + py_compile + JS da UI)
+#   2. tdd-cobertura .... make test-cov (pytest + --cov-fail-under; .coveragerc)
+#   3. bdd .............. make test-bdd (behave tests/features)
+#   4. clippy ........... make rust-lint (--workspace --all-targets -D warnings)
+#   5. testes ........... make rust-test (matriz, canon, transição, FXP, Caderno)
+#   6. e2e .............. make rust-e2e (CLI + FXP + Caderno de produção)
+#   7. pacote ........... make rust-package (verificação de pacote crates.io)
+#   8. asan ............. make rust-asan (vazamentos de heap, AGENTS §1.3)
+#   9. memoria .......... make rust-memoria (orçamentos de heap, Etapa 5)
+#  10. bench ............ make rust-bench BENCH_ARGS=--quick (≤100µs p95 etc.)
+#  11. fxp-probe ........ make rust-fxp-probe (registro FXP, FORMAL §6)
+#  12. llvm-cov ......... cargo-llvm-cov --fail-under-lines (gate com piso)
+#
+# Uso:
+#   make hooks            # ativar (uma vez por clone: core.hooksPath → .githooks;
+#                         #   o wrapper resolve PRE_COMMIT_HOME e delega ao framework)
+#   git commit …          # bateria completa (padrão — os 12 estágios)
+#   make pc ARGS="run estaticos tdd-cobertura bdd clippy testes e2e"
+#                         # modo rápido (WIP); o CI SEMPRE roda o completo
+#   SKIP=asan,memoria git commit …   # pular estágios pontuais
+#   git commit --no-verify           # fuga de emergência (deixa rastro no
+#                                    # reflog do commit — use com parceria)
+#
+# Variáveis:
+#   VBL_COVERAGE_MIN=95   piso de cobertura (pytest-cov e llvm-cov). Rebaixar
+#                         é decisão explícita e visível no comando, nunca
+#                         silenciosa: o padrão é o mínimo pedido (95%).
+#
+# Todos os hooks são `repo: local` + `language: system`: nenhuma rede, nenhum
+# environment sintético — os comandos são exatamente os que o CI roda.
+repos:
+  - repo: local
+    hooks:
+      # 1. estáticos — idêntico ao passo "Checagens estáticas" do CI
+      - id: estaticos
+        name: estaticos — make check (shell + py_compile + JS da UI)
+        entry: make check
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      # 2. TDD + gate pytest-cov — denominador honesto do omit em .coveragerc
+      - id: tdd-cobertura
+        name: tdd-cobertura — pytest + --cov-fail-under (≥ 95%)
+        entry: make test-cov
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      # 3. BDD
+      - id: bdd
+        name: bdd — behave tests/features
+        entry: make test-bdd
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      # 4–6. núcleo Rust: clippy, testes, E2E (mesmos comandos do CI;
+      # CARGO_HOME do workspace vem exportado pelo Makefile)
+      - id: clippy
+        name: clippy — cargo clippy -D warnings (zero avisos)
+        entry: make rust-lint
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      - id: testes
+        name: testes — cargo test (workspace)
+        entry: make rust-test
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      - id: e2e
+        name: e2e — vbl-cli --test e2e (CLI + FXP + Caderno)
+        entry: make rust-e2e
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      # 7. pacote (local permite árvore suja; o CI roda estrito no checkout limpo)
+      - id: pacote
+        name: pacote — cargo package --workspace --locked
+        entry: make rust-package
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      # 8. ASan/LSan — vazamentos de heap (nightly, AGENTS §1.3)
+      - id: asan
+        name: asan — cargo +nightly test -Zsanitizer=address
+        entry: make rust-asan
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      # 9. orçamentos de heap — auditor mede o processo: serial (Etapa 5)
+      - id: memoria
+        name: memoria — heap-audit, --test-threads=1
+        entry: make rust-memoria
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      # 10. benchmarks de latência em modo rápido (mesmo --quick do CI)
+      - id: bench
+        name: bench — criterion --quick (transição, escalonador, FXP, Caderno)
+        entry: make rust-bench BENCH_ARGS=--quick
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      # 11. cobertura do registro FXP do host (FORMAL §6)
+      - id: fxp-probe
+        name: fxp-probe — vbl fxp-probe (registro mínimo, FORMAL §6)
+        entry: make rust-fxp-probe
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
+      # 12. llvm-cov — cobertura Rust com piso; o relatório HTML continua no
+      #     make rust-coverage (core/target/coverage)
+      - id: llvm-cov
+        name: llvm-cov — cargo +nightly llvm-cov --fail-under-lines (≥ 95%)
+        entry: bash
+        args:
+          - -c
+          - 'export CARGO_HOME="$PWD/core/.cargo-home"; cd core; cargo +nightly llvm-cov --workspace --summary-only --fail-under-lines "${VBL_COVERAGE_MIN:-95}" || { echo "  ↳ relatório HTML: make rust-coverage (core/target/coverage)"; exit 1; }'
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true

@@ -28,3 +28,6 @@ logs/**/stress-10k.vcad.jsonl
 
 # vsh (Verbo Shell): estado de sessões (cwd/env/histórico)
 .vsh/
+
+# cache/store do framework pre-commit (wrapper .githooks/pre-commit)
+.pc-cache/

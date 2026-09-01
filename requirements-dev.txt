@@ -4,3 +4,5 @@ behave>=1.3.3
 pytest>=8.0
 pytest-cov>=6.0
 PyYAML>=6.0
+# Framework de hooks git (.pre-commit-config.yaml): o CI inteiro antes do commit
+pre-commit>=4.0

@@ -8,7 +8,22 @@ de suporte + 6 meses de descontinuação = 7 anos de ciclo de vida.
 
 ## [Não lançado]
 
-_(nada ainda — a próxima janela é a `v2027.0.0-alpha.1`, Setembro)_
+_(a próxima janela é a `v2027.0.0-alpha.1`, Setembro)_
+
+### Alterado
+- Pre-commit migrado do script `.githooks/pre-commit` (158 linhas) para o
+  framework [pre-commit](https://pre-commit.com): `.pre-commit-config.yaml`
+  com os mesmos 12 estágios como hooks locais (`repo: local`, `make`), na
+  ordem do CI, com os gates de cobertura ≥ 95% (pytest-cov e llvm-cov).
+  `make hooks` aponta o `core.hooksPath` para um wrapper fino em
+  `.githooks/pre-commit`, que só resolve o ambiente (`PRE_COMMIT_HOME` no
+  workspace — HOME pode ser read-only, mesma regra do `CARGO_HOME`) e delega
+  ao framework. Modo rápido: `make pc ARGS="run estaticos tdd-cobertura bdd
+  clippy testes e2e"` (equivale ao antigo `VBL_PRE_COMMIT=quick`);
+  `SKIP=<ids>` pula estágios. Novos alvos: `make test-cov`, `make
+  rust-fxp-probe` e `make pc`; `make rust-bench` aceita `BENCH_ARGS`
+  (ex.: `BENCH_ARGS=--quick`). Dependência `pre-commit>=4.0` em
+  `requirements-dev.txt`.
 
 ## [v2027.0.0-alpha.0] — 2026-09-01
 

@@ -23,9 +23,14 @@ CARGO_HOME := $(abspath core/.cargo-home)
 export CARGO_HOME
 NIGHTLY ?= nightly
 
-.PHONY: help check smoke release-check serve up stop ui web setup test test-unit test-bdd validate-cheatsheet hooks site-check site-build site
+# Framework de hooks (.pre-commit-config.yaml): cache/store no workspace —
+# mesma regra do CARGO_HOME (o wrapper .githooks/pre-commit reaproveita a var)
+PRE_COMMIT_HOME ?= $(abspath .pc-cache)
+export PRE_COMMIT_HOME
+
+.PHONY: help check smoke release-check serve up stop ui web setup test test-unit test-bdd test-cov validate-cheatsheet hooks pc site-check site-build site
 .PHONY: rust-build rust-test rust-e2e rust-lint rust-asan rust-bench rust-check rust-package rust-coverage rust-clean
-.PHONY: rust-memoria rust-soak
+.PHONY: rust-memoria rust-soak rust-fxp-probe
 
 help:
 > @echo "VerboLang — atalhos:"
@@ -36,15 +41,18 @@ help:
 > @echo "  make site-build  monta site/src e compila o livro (mdbook ≥ 0.5)"
 > @echo "  make site        compila e serve o livro em http://127.0.0.1:$(SITE_PORT)/"
 > @echo "  make setup   cria .venv e instala requirements-dev.txt"
-> @echo "  make hooks   ativa o pre-commit (.githooks → core.hooksPath): o CI inteiro antes de cada commit"
+> @echo "  make hooks   ativa o hook do framework (.githooks → core.hooksPath): o CI inteiro antes de cada commit"
+> @echo "  make pc      roda o pre-commit com o ambiente do projeto (ARGS=\"run …\")"
 > @echo "  make test    suíte completa: unitários (pytest) + BDD (behave)"
 > @echo "  make test-unit  apenas testes unitários (pytest)"
 > @echo "  make test-bdd   apenas cenários BDD (behave)"
+> @echo "  make test-cov   unitários + gate pytest-cov ≥ 95% (VBL_COVERAGE_MIN)"
 > @echo "  --- núcleo Rust (Etapas 2–4) ---"
 > @echo "  make rust-check    parser/runtime/FXP/Caderno: clippy + todos os testes"
 > @echo "  make rust-build    compila o workspace core/ (vbl, vbl-lang, vbl-runtime, vbl-fxp)"
 > @echo "  make rust-test     testes: matriz (42), canon (5), transição (36), FXP (42), Caderno (12)"
 > @echo "  make rust-e2e      E2E da Etapa 4: CLI + FXP + Caderno de produção (7 cenários)"
+> @echo "  make rust-fxp-probe  cobertura do registro FXP do host (FORMAL §6)"
 > @echo "  make rust-lint     clippy --workspace --all-targets (zero warnings)"
 > @echo "  make rust-package  empacota os 4 crates p/ crates.io (dry-run de publicação)"
 > @echo "  make rust-asan     testes sob AddressSanitizer (vazamentos, AGENTS §1.3)"
@@ -106,11 +114,18 @@ setup:
 > @.venv/bin/pip install -r requirements-dev.txt
 > @echo "venv pronto (.venv) — use make test"
 
-# Pre-commit (.githooks/pre-commit): espelho do CI + gates de cobertura ≥95%
-# (pytest-cov e cargo-llvm-cov). Modo rápido por commit: VBL_PRE_COMMIT=quick.
+# Pre-commit (framework): .pre-commit-config.yaml espelha o CI + gates de
+# cobertura ≥95% (pytest-cov e cargo-llvm-cov). O wrapper .githooks/pre-commit
+# só resolve o ambiente (PRE_COMMIT_HOME) e delega ao framework. Rápido em WIP:
+#   make pc ARGS="run estaticos tdd-cobertura bdd clippy testes e2e"
 hooks:
 > @git config core.hooksPath .githooks
-> @echo "pre-commit ativado — teste com: bash .githooks/pre-commit --quick"
+> @rm -f .git/hooks/pre-commit
+> @echo "pre-commit (framework) ativo — bateria completa (.pre-commit-config.yaml) a cada commit; modo rápido: make pc ARGS=\"run estaticos tdd-cobertura bdd clippy testes e2e\""
+
+# O próprio framework, com o ambiente do projeto (cache no workspace)
+pc:
+> @$(PYTHON_BIN) -m pre_commit $(ARGS)
 
 # ── site de documentação (site/, mdBook — verbolang.org/docs) ─────────────
 # mdbook ≥ 0.5 (testado em 0.5.4): cargo install mdbook --locked
@@ -147,6 +162,10 @@ test-unit:
 test-bdd:
 > @$(PYTHON_BIN) -m behave tests/features
 
+# Gate de cobertura da suíte unitária (pre-commit/CI): denominador em .coveragerc
+test-cov:
+> @$(PYTHON_BIN) -m pytest -q tests/unit --cov=prototype --cov=scripts --cov-report=term-missing --cov-fail-under=$${VBL_COVERAGE_MIN:-95}
+
 # ------------------------------------------------------------------
 # Núcleo Rust — Etapa 2 (core/: vbl-lang, vbl-runtime, vbl-cli)
 # ------------------------------------------------------------------
@@ -160,6 +179,10 @@ rust-test:
 # produção, com verificação externa dos logs (vbl ledger-verify)
 rust-e2e:
 > @cd core && $(CARGO) test -p vbl-cli --test e2e
+
+# Cobertura do registro FXP do host (FORMAL §6) — pre-commit/CI
+rust-fxp-probe:
+> @cd core && $(CARGO) run -p vbl-cli -- fxp-probe
 
 rust-lint:
 > @cd core && $(CARGO) clippy --workspace --all-targets -- -D warnings
@@ -177,7 +200,7 @@ rust-package:
 > @cd core && $(CARGO) package --workspace --locked --allow-dirty
 
 rust-bench:
-> @cd core && $(CARGO) bench --bench transition --bench scheduler --bench fxp --bench ledger
+> @cd core && $(CARGO) bench --bench transition --bench scheduler --bench fxp --bench ledger -- $${BENCH_ARGS:-}
 
 rust-coverage:
 > @cd core && $(CARGO) +$(NIGHTLY) llvm-cov --workspace --html --output-dir target/coverage

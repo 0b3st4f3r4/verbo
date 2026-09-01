@@ -1,158 +1,23 @@
 #!/usr/bin/env bash
-# ─────────────────────────────────────────────────────────────────────────────
-# pre-commit da VerboLang — o CI, inteiro, antes de cada commit.
-#
-# Espelha 1:1 o pipeline de .github/workflows/ci.yml (jobs "suite" + "core")
-# e adiciona os gates de cobertura de testes (mínimo 95%):
-#
-#   • pytest-cov     — suíte unitária TDD com --cov-fail-under  (Python)
-#   • cargo-llvm-cov — --fail-under-lines no workspace inteiro  (Rust)
-#
-# Estágios (na ordem do CI):
-#   1. estáticos .......... make check (shell + py_compile + JS da UI)
-#   2. TDD + cobertura .... pytest tests/unit  (--cov-fail-under ≥ 95%)
-#   3. BDD ................ behave tests/features
-#   4. clippy ............. --workspace --all-targets -D warnings (zero avisos)
-#   5. testes Rust ........ cargo test (matriz, canon, transição, FXP, Caderno)
-#   6. E2E ................ vbl-cli --test e2e (CLI + FXP + Caderno)
-#   7. pacote ............. cargo package --workspace --locked
-#   8. ASan/LSan .......... vazamentos de heap (nightly, AGENTS §1.3)
-#   9. memória ............ orçamentos de heap, auditor serial (Etapa 5)
-#  10. benchmarks ......... criterion --quick (transição ≤100µs p95 etc.)
-#  11. fxp-probe .......... cobertura do registro FXP (FORMAL §6)
-#  12. llvm-cov ........... cobertura Rust (--fail-under-lines ≥ 95%)
-#
-# Uso:
-#   git config core.hooksPath .githooks   # ativar (uma vez por clone)
-#   git commit ...                        # bateria completa (padrão)
-#   VBL_PRE_COMMIT=quick git commit ...   # só estágios 1–6 (WIP; o CI SEMPRE
-#                                         #   roda o completo — é só anteparo
-#                                         #   local para iterar rápido)
-#   bash .githooks/pre-commit --quick     # execução manual rápida
-#
-# Variáveis:
-#   VBL_PRE_COMMIT=quick  modo rápido (estáticos + TDD/cobertura + BDD +
-#                         clippy + testes + E2E); padrão: completo (1–12).
-#   VBL_COVERAGE_MIN=95   piso de cobertura (pytest-cov e llvm-cov).
-#                         Rebaixar é decisão explícita e visível no comando,
-#                         nunca silenciosa: o padrão é o mínimo pedido (95%).
-#
-# Fuga de emergência: git commit --no-verify (deixa rastro no reflog do
-# commit — use com parceria, não com pressa).
-# ─────────────────────────────────────────────────────────────────────────────
-set -u
+# Wrapper fino do pre-commit (framework) — a bateria inteira vive no
+# .pre-commit-config.yaml (espelho do CI); este script só resolve o ambiente:
+# o cache/store do framework fica no workspace porque o HOME pode ser
+# read-only (mesma regra do CARGO_HOME no Makefile).
+set -euo pipefail
 
 RAIZ="$(git rev-parse --show-toplevel 2>/dev/null)" || {
-  echo "pre-commit: fora de um repositório git" >&2; exit 1
-}
-cd "$RAIZ"
-
-MODO="completo"
-if [ "${1:-}" = "--quick" ] || [ "${VBL_PRE_COMMIT:-}" = "quick" ]; then
-  MODO="quick"
-fi
-
-# Python: venv do workspace se existir (mesma regra do Makefile)
-PYTHON_BIN=".venv/bin/python"
-[ -x "$PYTHON_BIN" ] || PYTHON_BIN="python3"
-
-# Núcleo Rust: CARGO_HOME dentro do workspace (mesma regra do Makefile)
-export CARGO_HOME="$RAIZ/core/.cargo-home"
-CARGO="${CARGO:-cargo}"
-NIGHTLY="${NIGHTLY:-nightly}"
-
-# Piso de cobertura (95% é o mínimo pedido; VBL_COVERAGE_MIN rebaixa
-# conscientemente durante a elevação da cobertura)
-MIN="${VBL_COVERAGE_MIN:-95}"
-
-# Escopo honesto do denominador Python (omit) vive no .coveragerc versionado —
-# fonte única usada pelo pre-commit e pelo CI.
-
-if command -v tput >/dev/null 2>&1 && [ -t 1 ]; then
-  VERDE=$'\033[32m'; VERMELHO=$'\033[31m'; AMARELO=$'\033[33m'; ZERO=$'\033[0m'
-else
-  VERDE=""; VERMELHO=""; AMARELO=""; ZERO=""
-fi
-
-T0=$SECONDS
-ETAPA=""
-
-etapa() {
-  ETAPA="$1"; shift
-  echo "── [$ETAPA] $*"
-}
-
-ok()   { printf '%s✓ %s OK (%ss)%s\n' "$VERDE" "$ETAPA" "$((SECONDS-T_ETAPA))" "$ZERO"; }
-falha(){ printf '%s✗ %s FALHOU (%ss)%s\n' "$VERMELHO" "$ETAPA" "$((SECONDS-T_ETAPA))" "$ZERO"; }
-
-rodar() {
-  T_ETAPA=$SECONDS
-  if "$@"; then ok; else falha; exit 1; fi   # fail-fast: commit não prossegue quebrado
-}
-
-echo "══ pre-commit VerboLang (modo: $MODO, cobertura mínima: ${MIN}%) ══"
-
-# 1. estáticos — idêntico ao passo "Checagens estáticas" do CI
-etapa "estaticos" "make check"; T_ETAPA=$SECONDS
-if make check; then ok; else falha; exit 1; fi
-
-# 2. TDD + gate pytest-cov
-etapa "tdd-cobertura" "pytest tests/unit --cov-fail-under=${MIN}"
-T_ETAPA=$SECONDS
-if ! "$PYTHON_BIN" -c "import pytest_cov" 2>/dev/null; then
-  printf '%s✗ pytest-cov ausente — instale com: pip install -r requirements-dev.txt (ou make setup)%s\n' "$VERMELHO" "$ZERO"
+  echo "pre-commit: fora de um repositório git" >&2
   exit 1
+}
+export PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-$RAIZ/.pc-cache}"
+
+PC="$RAIZ/.venv/bin/pre-commit"
+if [ ! -x "$PC" ]; then
+  PC="$(command -v pre-commit || true)"
 fi
-if "$PYTHON_BIN" -m pytest -q tests/unit \
-    --cov=prototype --cov=scripts \
-    --cov-report=term-missing \
-    --cov-fail-under="$MIN"; then
-  ok
-else
-  falha
-  printf '%s  ↳ piso de cobertura: %s%%. Relatório por linha acima; eleve a cobertura ou rebaixe conscientemente com VBL_COVERAGE_MIN=%s git commit …%s\n' "$AMARELO" "$MIN" "$((MIN-1))" "$ZERO"
+if [ -z "${PC:-}" ]; then
+  echo "pre-commit ausente — instale com: pip install -r requirements-dev.txt (ou make setup)" >&2
   exit 1
 fi
 
-# 3. BDD
-etapa "bdd" "behave tests/features"; rodar "$PYTHON_BIN" -m behave tests/features
-
-# 4–6. núcleo Rust: clippy, testes, E2E (mesmos comandos do CI)
-cd "$RAIZ/core" || exit 1
-
-etapa "clippy" "cargo clippy -D warnings"; rodar "$CARGO" clippy --workspace --all-targets -- -D warnings
-etapa "testes" "cargo test";               rodar "$CARGO" test
-etapa "e2e" "vbl-cli --test e2e";          rodar "$CARGO" test -p vbl-cli --test e2e
-
-if [ "$MODO" = "completo" ]; then
-  # 7. pacote (local permite árvore suja; o CI roda estrito no checkout limpo)
-  etapa "pacote" "cargo package --workspace --locked"; rodar "$CARGO" package --workspace --locked --allow-dirty
-
-  # 8. ASan/LSan — vazamentos de heap (AGENTS §1.3)
-  etapa "asan" "cargo +nightly test -Zsanitizer=address"
-  rodar env RUSTFLAGS="-Zsanitizer=address" "$CARGO" +nightly test --workspace --target x86_64-unknown-linux-gnu
-
-  # 9. orçamentos de heap — auditor mede o processo: serial (Etapa 5)
-  etapa "memoria" "heap-audit, --test-threads=1"
-  rodar "$CARGO" test -p vbl-runtime --features heap-audit --test memoria -- --test-threads=1
-
-  # 10. benchmarks de latência em modo rápido (mesmo --quick do CI)
-  etapa "bench" "criterion --quick (transição, escalonador, FXP, Caderno)"
-  rodar "$CARGO" bench --bench transition --bench scheduler --bench fxp --bench ledger -- --quick
-
-  # 11. cobertura do registro FXP do host (FORMAL §6)
-  etapa "fxp-probe" "cargo run -p vbl-cli -- fxp-probe"; rodar "$CARGO" run -p vbl-cli -- fxp-probe
-
-  # 12. llvm-cov — cobertura Rust com piso
-  etapa "llvm-cov" "cargo +nightly llvm-cov --fail-under-lines=${MIN}"; T_ETAPA=$SECONDS
-  if "$CARGO" +nightly llvm-cov --workspace --summary-only --fail-under-lines "$MIN"; then
-    ok
-  else
-    falha
-    printf '%s  ↳ relatório HTML: make rust-coverage (core/target/coverage)%s\n' "$AMARELO" "$ZERO"
-    exit 1
-  fi
-fi
-
-printf '%s══ ✓ pre-commit completo em %ss — pronto para o CI ══%s\n' "$VERDE" "$((SECONDS-T0))" "$ZERO"
-exit 0
+exec "$PC" "$@"
