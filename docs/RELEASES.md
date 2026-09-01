@@ -199,7 +199,7 @@ pacote (verify build) exatamente como o registry fará.
 
 Linha **`v2027.0`** (major `2027` no cargo), fase **alpha.0** — a tag
 `v2027.0.0-alpha.0` (Jul + Ago 2026: pesquisa, experimentação e definição de
-escopo) foi cortada em 31/08/2026. A próxima janela é a `alpha.1`
+escopo) foi cortada em 01/09/2026. A próxima janela é a `alpha.1`
 (Setembro). O site de documentação didática (verbolang.org/docs) acompanha a
 linha: o workflow `site.yml` republica o livro a cada push relevante e a
 cada tag.

@@ -1,5 +1,3 @@
-#
-
 <p align="center"><img src="docs/brand/verbolog-banner.svg" alt="VerboLang" width="640"></p>
 
 **Uma linguagem de programação onde nenhum dado é inerte.**
@@ -185,7 +183,7 @@ embeddings com o chat desligado ou em outra máquina.
 | [`docs/cheatsheet/CHEATSHEET-VALIDATION.md`](docs/cheatsheet/CHEATSHEET-VALIDATION.md) | Resultados versionados da validação do cheat sheet |
 | [`scripts/validate_cheatsheet.py`](scripts/validate_cheatsheet.py) | Executa o banco de prompts contra o LLM local e avalia com o vlcheck |
 | [`scripts/serve-local-llm.sh`](scripts/serve-local-llm.sh) | Sobe o modelo local Qwen3-4B-Instruct-2507-FP8 via vLLM (e abre o dashboard) |
-| [`web/`](web/README.md) | Dashboard do runtime: entrada ([`index.html`](web/index.html)), **chat** single-file ([`chat.html`](web/chat.html): streaming SSE, medidor de contexto, alternância puro ↔ +VerboLang) e **métricas em tempo real** do Caderno ([`metrics.html`](web/metrics.html)) |
+| [`web/`](web/README.md) | Dashboard do runtime: entrada ([`index.html`](web/index.html)), **chat** single-file ([`chat.html`](web/chat.html): streaming SSE, medidor de contexto, alternância puro ↔ +VerboLang), **métricas em tempo real** do Caderno ([`metrics.html`](web/metrics.html)) e **documentação renderizada** ([`docs.html`](web/docs.html) — FORMAL, manifesto e cheat sheets via [`md.js`](web/md.js)) |
 | [`scripts/webui.py`](scripts/webui.py) | Ponte do dashboard: estático na raiz do repo + métricas SSE do Caderno (`.vcad`/JSONL) — só stdlib |
 | [`web/verbolog.svg`](web/verbolog.svg) | Marca do projeto (logo e favicon da UI) |
 | [`docs/brand/verbolog-triangle.svg`](docs/brand/verbolog-triangle.svg) | Emblema mestre da marca: triângulo invertido de metal escovado sobre vidro fosco, lados em degradê azul-verde-vermelho, três pássaros alinhados no horizonte (gerador em [`design/`](design/)) |
@@ -245,14 +243,17 @@ Detalhes e critérios de aceite por etapa em [`docs/PLAN.md`](docs/PLAN.md) e [`
 
 O ciclo de vida segue [`docs/RELEASES.md`](docs/RELEASES.md): **6 meses de
 pesquisa e desenvolvimento + 6 anos de suporte + 6 meses de descontinuação =
-7 anos** por linha (`vYYYY.N`). A fase de pesquisa (Jul–Dez) publica
-`vYYYY.0-alphaN`/`-betaN`/`-rc`; o stable nasce em Janeiro; o suporte vai de
-trimestral (1º ano) a anual (4º–6º anos); na despedida, TODAS as minors da
-linha recebem um último patch, na ordem em que nasceram, até
-`vYYYY.final.final` (Jun do 7º ano). Estado atual: linha **`v2027.0`** na
-fase **alpha** — a primeira tag, `v2027.0.0-alpha.0` (31/08/2026), já
-publica os quatro crates no crates.io com a mesma versão e republica o
-livro em verbolang.org/docs. A bateria antes de qualquer tag é
+7 anos** por linha (nome `vYYYY.0`; o stable `vYYYY.0.0` nasce em Janeiro).
+A pesquisa (Jul–Dez) publica `vYYYY.0.0-alpha.N`/`-beta.N`/`-rc` da linha que
+está por nascer; o suporte cobre as 11 minors `vYYYY.0.0`–`vYYYY.10.0`, com
+cadência trimestral no 1º ano, semestral no 2º–3º e anual no 4º–6º (a minor
+`10` é a `.final`); na descontinuação (Dez do 6º ano → Jun do 7º), TODAS as
+minors recebem um último patch (`vYYYY.N.Z`), na ordem em que nasceram — a
+despedida da `.final` é a última tag da linha. Estado atual: linha
+**`v2027.0`** na fase **alpha** — a primeira tag, `v2027.0.0-alpha.0`, corta
+a linha: ao empurrá-la, os quatro crates publicam no crates.io com a mesma
+versão e o livro republica em verbolang.org/docs. A bateria antes de
+qualquer tag é
 `make release-check` (agora com a portaria do site), toda release registra
 entrada no [`CHANGELOG.md`](CHANGELOG.md) e, ao empurrar a tag, o CI
 (`.github/workflows/release.yml`) cria os artefatos (binário `vbl` +
