@@ -10,7 +10,7 @@ de suporte + 6 meses de descontinuação = 7 anos de ciclo de vida.
 
 _(nada ainda — a próxima janela é a `v2027.0.0-alpha.1`, Setembro)_
 
-## [v2027.0.0-alpha.0] — 2026-08-31
+## [v2027.0.0-alpha.0] — 2026-09-01
 
 Primeiro pré-lançamento público da linha `v2027.0` (fase alpha: pesquisa,
 experimentação e definição de escopo). Versão do workspace:
