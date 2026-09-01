@@ -119,8 +119,25 @@ inode original, função idêntica).
 
 ## 6. Execução longa (24 h)
 
-Soak em andamento — `logs/stage5/soak-24h.log` (PID em
-`/tmp/vbl-soak-24h.pid`, sessão própria via `setsid`: sobrevive a reinícios
-do harness). Conclusão registrada ao término (janela de ~24 h a partir de
-31/08 ~07:45 local). Estado inicial: patamar 3 200 KiB; amostras a cada
-50 000 ticks (~3 min).
+**✅ CONCLUÍDA — SOAK OK (01/09/2026 07:16).** Log completo:
+`logs/stage5/soak-24h.log` (amostra a cada 50 000 ticks ≈ 3 min; vigiado por
+observador externo com batimento horário, sessão própria via `setsid` — o
+soak sobreviveu a uma janela inteira de uso da máquina, com builds de
+release, testes e renomeações rodando em paralelo).
+
+| Métrica | Valor |
+|---|---|
+| Duração | 86 400 s (24 h exatas, término autônomo pelo `--seconds`) |
+| Ticks | **22 902 183** (média 265,07 ticks/s, cadência constante do início ao fim) |
+| Formas vivas / prazos | **666 / 666** em toda a janela (renovação a cada 3 ticks; nenhuma deriva) |
+| RSS | patamar 3 272–3 320 KiB; aos ~15,9 h o alocador devolveu páginas ao SO (trim) e o patamar desceu para 2 896–2 940 KiB — estável na banda nova pelas últimas 8 h |
+| Pico | **3 324 KiB** — intocado do início ao fim |
+| Veredito do binário | `# SOAK OK: RSS estável (final ≤ patamar + 10% + 4 MiB)` |
+
+**Leitura termodinâmica:** nenhuma estrutura sobrevive ao horizon em
+execução de um dia inteiro — o que sobe é o contador de ticks, nunca o
+RSS. O trim do alocador (~370 KiB devolvidos) confirma que o patamar era
+capacidade retida, não crescimento. Com isso, a meta de
+**zero vazamentos em 24 h (AGENTS §2.2 Etapa 5, critério (d))** passa de
+⏳ para ✅ — completa o quadro (a) churn 200 k, (b) soak 15 min, (c)
+ASan/LSan limpo já registrados no relatório da etapa.
