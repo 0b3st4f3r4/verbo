@@ -234,7 +234,7 @@ impede carregá-la inteira. Regras para a equipe de agentes:
 
 - Ao delegar tarefas da linguagem ao modelo local, **injete o contexto
   necessário no prompt** — preferencialmente o cheat sheet denso para agentes
-  [`docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md`](docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md)
+  [`docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md`](docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md)
   (~1.200 tokens; o canônico completo
   [`docs/cheatsheet/VBL-CHEATSHEET.md`](docs/cheatsheet/VBL-CHEATSHEET.md) é a referência humana;
   demanda e caminhos em [`docs/PLAN.md`](docs/PLAN.md) §7).

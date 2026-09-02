@@ -11,7 +11,7 @@ saída (gerada, git-ignorada):
     docs/{FORMAL,MANIFESTO,...}.md  → site/src/reference/**       (links reescritos)
     README.md, CHANGELOG.md,
     docs/PLAN.md, docs/RELEASES.md  → site/src/project/**         (links reescritos)
-    examples/*.vl                   → site/src/reference/exemplos/*.vl
+    examples/*.vl                   → site/src/reference/examples/*.vl
     docs/brand/*.svg                → site/src/assets/brand/*.svg
     web/verbolog.svg, web/fonts/*,
     web/vendor/mermaid.min.js       → site/src/assets/…
@@ -60,10 +60,10 @@ FONTES_FIXAS: list[tuple[str, str]] = [
     ("docs/FXP-SCHEMA-v1.md", "reference/FXP-SCHEMA-v1.md"),
     ("docs/NOTEBOOK-FORMAT-v1.md", "reference/NOTEBOOK-FORMAT-v1.md"),
     ("docs/cheatsheet/VBL-CHEATSHEET.md", "reference/cheatsheet/VBL-CHEATSHEET.md"),
-    ("docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md", "reference/cheatsheet/VBL-CHEATSHEET-AGENTES.md"),
-    ("docs/adrs/ADR-001-linguagem-nucleo.md", "reference/ADR-001-linguagem-nucleo.md"),
+    ("docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md", "reference/cheatsheet/VBL-CHEATSHEET-AGENTS.md"),
+    ("docs/adrs/ADR-001-core-language.md", "reference/ADR-001-core-language.md"),
     # Projeto — como o projeto se governa
-    ("README.md", "project/repositorio.md"),
+    ("README.md", "project/repository.md"),
     ("CHANGELOG.md", "project/CHANGELOG.md"),
     ("docs/PLAN.md", "project/PLAN.md"),
     ("docs/RELEASES.md", "project/RELEASES.md"),
@@ -81,7 +81,7 @@ def construir_mapa() -> dict[str, str]:
 
     # Exemplos executáveis viram assets de referência
     for exemplo in sorted((RAIZ / "examples").glob("*.vl")):
-        mapa[f"examples/{exemplo.name}"] = f"reference/exemplos/{exemplo.name}"
+        mapa[f"examples/{exemplo.name}"] = f"reference/examples/{exemplo.name}"
 
     # Marcas SVG (banner do README, emblema da landing)
     for svg in sorted((RAIZ / "docs" / "brand").glob("*.svg")):
@@ -185,7 +185,7 @@ def montar(dest: Path, mapa: dict[str, str] | None = None) -> Path:
         alvo.write_text(texto, encoding="utf-8")
 
     # 3. exemplos executáveis (assets estáticos)
-    _copiar_arvore(RAIZ / "examples", dest / "reference" / "exemplos")
+    _copiar_arvore(RAIZ / "examples", dest / "reference" / "examples")
 
     # 4. assets: marcas, fontes, mermaid vendored e o tema
     _copiar_arvore(RAIZ / "docs" / "brand", dest / "assets" / "brand")
@@ -239,7 +239,7 @@ def verificar(src: Path) -> list[str]:
     obrigatorios = [
         "assets/site.css", "assets/verbolang.js", "assets/mermaid-init.js",
         "assets/i18n.js", "assets/verbolog.svg", "assets/vendor/mermaid.min.js",
-        "assets/brand/verbolog-triangle.svg", "reference/exemplos/example1_free_thinking.vl",
+        "assets/brand/verbolog-triangle.svg", "reference/examples/example1_free_thinking.vl",
     ]
     for arquivo in obrigatorios:
         if not (src / arquivo).is_file():
@@ -257,7 +257,7 @@ def verificar(src: Path) -> list[str]:
             problemas.append(f"site.css pede {fonte}, inexistente em web/fonts")
 
     # trilha completa (o didático é o coração do site)
-    for capitulo in ["visao-geral", "instalacao", "formas", "revisoes", "fxp", "caderno", "receitas"]:
+    for capitulo in ["overview", "installation", "forms", "reviews", "fxp", "notebook", "recipes"]:
         entrada = f"guide/{capitulo}.md"
         if entrada not in entradas_summary():
             problemas.append(f"capítulo da trilha fora do SUMMARY: {entrada}")

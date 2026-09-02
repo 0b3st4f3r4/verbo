@@ -2,7 +2,7 @@
 //! §1.3/§2.2). RODA APENAS COM A FEATURE:
 //!
 //! ```bash
-//! cargo test -p vbl-runtime --features heap-audit --test memoria -- --test-threads=1
+//! cargo test -p vbl-runtime --features heap-audit --test memory -- --test-threads=1
 //! ```
 //!
 //! IMPORTANTE: o auditor mede a heap do PROCESSO inteiro — os testes têm de
@@ -29,7 +29,7 @@ use vbl_runtime::heap_auditor;
 use vbl_runtime::{load, Engine, FxpSimulator};
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("vbl-memoria-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("vbl-memory-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir

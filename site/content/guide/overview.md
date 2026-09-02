@@ -124,6 +124,6 @@ A filosofia completa — as seis leis do Materialismo Computacional — está no
 
 ## Próximo passo
 
-[Instalação e primeiro run](instalacao.md): compilar o interpretador `vbl`,
+[Instalação e primeiro run](installation.md): compilar o interpretador `vbl`,
 rodar a subversão térmica e verificar a cadeia SHA-256 do Caderno — em menos
 de cinco minutos.

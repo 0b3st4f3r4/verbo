@@ -166,5 +166,5 @@ Três cláusulas que salvam auditoria:
 
 ## Próximo passo
 
-[Reviews — quando a matéria reage](revisoes.md): as regras, a ordem de
+[Reviews — quando a matéria reage](reviews.md): as regras, a ordem de
 avaliação no tick e a semântica fina de `subvert`.

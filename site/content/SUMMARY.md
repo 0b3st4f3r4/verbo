@@ -4,28 +4,28 @@
 
 # Trilha
 
-- [O que é a VerboLang](guide/visao-geral.md)
-- [Instalação e primeiro run](guide/instalacao.md)
-- [As três conjugações](guide/formas.md)
-- [Reviews — quando a matéria reage](guide/revisoes.md)
+- [O que é a VerboLang](guide/overview.md)
+- [Instalação e primeiro run](guide/installation.md)
+- [As três conjugações](guide/forms.md)
+- [Reviews — quando a matéria reage](guide/reviews.md)
 - [FXP — sensores e atores](guide/fxp.md)
-- [O Caderno — contabilidade termodinâmica](guide/caderno.md)
-- [Receitas e anti-padrões](guide/receitas.md)
+- [O Caderno — contabilidade termodinâmica](guide/notebook.md)
+- [Receitas e anti-padrões](guide/recipes.md)
 
 # Referência
 
 - [Especificação formal (FORMAL)](reference/FORMAL.md)
 - [Manifesto — as seis leis](reference/MANIFESTO.md)
 - [Cheat sheet completo](reference/cheatsheet/VBL-CHEATSHEET.md)
-  - [Cheat sheet denso (agentes)](reference/cheatsheet/VBL-CHEATSHEET-AGENTES.md)
+  - [Cheat sheet denso (agentes)](reference/cheatsheet/VBL-CHEATSHEET-AGENTS.md)
 - [FXP — schema v1](reference/FXP-SCHEMA-v1.md)
 - [Caderno — formato .vcad v1](reference/NOTEBOOK-FORMAT-v1.md)
-- [ADR-001 — o núcleo em Rust](reference/ADR-001-linguagem-nucleo.md)
-- [Exemplos executáveis](exemplos.md)
+- [ADR-001 — o núcleo em Rust](reference/ADR-001-core-language.md)
+- [Exemplos executáveis](examples.md)
 
 # Projeto
 
-- [README do repositório](project/repositorio.md)
+- [README do repositório](project/repository.md)
 - [Plano de execução (PLAN)](project/PLAN.md)
 - [Processo de releases](project/RELEASES.md)
 - [Changelog](project/CHANGELOG.md)

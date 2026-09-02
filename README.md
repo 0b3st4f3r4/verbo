@@ -178,7 +178,7 @@ embeddings com o chat desligado ou em outra máquina.
 | [`docs/reports/STAGE-5-GOALS-REVIEW.md`](docs/reports/STAGE-5-GOALS-REVIEW.md) | Revisão formal das metas provisórias (AGENTS §4) com números medidos |
 | [`logs/stage4/`](logs/stage4/) | Logs reais do Caderno exportados das cargas E2E + relatórios de verificação externa |
 | [`logs/stage5/`](logs/stage5/) | Baselines/medidas dos benches, soak de longa execução, ASan e logs do Caderno pós-otimização |
-| [`docs/adrs/ADR-001-linguagem-nucleo.md`](docs/adrs/ADR-001-linguagem-nucleo.md) | Decisão Rust × C com orçamentos de memória/latência reancorados |
+| [`docs/adrs/ADR-001-core-language.md`](docs/adrs/ADR-001-core-language.md) | Decisão Rust × C com orçamentos de memória/latência reancorados |
 | [`docs/cheatsheet/CHEATSHEET-PROMPTS.yaml`](docs/cheatsheet/CHEATSHEET-PROMPTS.yaml) | Banco fixo de 20 prompts para validação do cheat sheet (PLAN §7) |
 | [`docs/cheatsheet/CHEATSHEET-VALIDATION.md`](docs/cheatsheet/CHEATSHEET-VALIDATION.md) | Resultados versionados da validação do cheat sheet |
 | [`scripts/validate_cheatsheet.py`](scripts/validate_cheatsheet.py) | Executa o banco de prompts contra o LLM local e avalia com o vlcheck |
@@ -187,7 +187,7 @@ embeddings com o chat desligado ou em outra máquina.
 | [`scripts/webui.py`](scripts/webui.py) | Ponte do dashboard: estático na raiz do repo + métricas SSE do Caderno (`.vcad`/JSONL) — só stdlib |
 | [`web/verbolog.svg`](web/verbolog.svg) | Marca do projeto (logo e favicon da UI) |
 | [`docs/brand/verbolog-triangle.svg`](docs/brand/verbolog-triangle.svg) | Emblema mestre da marca: triângulo invertido de metal escovado sobre vidro fosco, lados em degradê azul-verde-vermelho, três pássaros alinhados no horizonte (gerador em [`design/`](design/)) |
-| [`docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md`](docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md) | Cheat sheet denso para agentes (~1.200 tokens) — a versão injetada pela UI e pelo validador |
+| [`docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md`](docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md) | Cheat sheet denso para agentes (~1.200 tokens) — a versão injetada pela UI e pelo validador |
 | [`docs/cheatsheet/VBL-CHEATSHEET.md`](docs/cheatsheet/VBL-CHEATSHEET.md) | VerboLang em uma página — cheat sheet canônico completo (referência humana, fonte do denso) |
 | [`LICENSE`](LICENSE) | Licença GPL-3.0 (copyleft) |
 
@@ -229,14 +229,14 @@ hash incremental, auditor de heap, soak de longa execução e revisão formal
 das metas) ([relatório da Etapa 5](docs/reports/STAGE-5-REPORT.md)).
 
 1. **Etapa 1** ✅ — Suíte BDD/TDD/E2E com mocks e simulador FXP
-2. **Etapa 2** ✅ — Núcleo da linguagem em **Rust**: lexer, parser, AST e motor de tick assíncrono ([ADR-001](docs/adrs/ADR-001-linguagem-nucleo.md))
+2. **Etapa 2** ✅ — Núcleo da linguagem em **Rust**: lexer, parser, AST e motor de tick assíncrono ([ADR-001](docs/adrs/ADR-001-core-language.md))
 3. **Etapa 3** ✅ — FXP real: schema v1, registro de dispositivos, drivers, barramento multi-modo e transporte local×remoto ([relatório](docs/reports/STAGE-3-REPORT.md))
 4. **Etapa 4** ✅ — Caderno de produção (gravação assíncrona, `.vcad`, `ledger-verify`) e validação end-to-end ([relatório](docs/reports/STAGE-4-REPORT.md))
 5. **Etapa 5** ✅ — Qualidade, profiling termodinâmico e otimização ([relatório](docs/reports/STAGE-5-REPORT.md) · [revisão de metas](docs/reports/STAGE-5-GOALS-REVIEW.md))
 
 Para rodar a suíte: `make setup && make test` (Python) e `make rust-check` +
 `make rust-e2e` (núcleo Rust, Etapas 2–4). Gates da Etapa 5:
-`make rust-memoria` (orçamentos de heap) e `make rust-soak` (execução longa).
+`make rust-memory` (orçamentos de heap) e `make rust-soak` (execução longa).
 Detalhes e critérios de aceite por etapa em [`docs/PLAN.md`](docs/PLAN.md) e [`AGENTS.md`](AGENTS.md).
 
 ## Releases
@@ -272,7 +272,7 @@ Configuração completa em [`docs/setup/SETUP-LOCAL-LLM.md`](docs/setup/SETUP-LO
 > está no seu treino e a janela de 4096 tokens impede carregá-la inteira.
 > Tarefas da linguagem exigem injetar contexto no prompt: use o modo
 > **"+ VerboLang"** da UI de consulta (injeta o denso
-> [`docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md`](docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md)) ou o
+> [`docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md`](docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md)) ou o
 > cheat sheet no seu próprio prompt. Demanda e caminhos (cheat sheet, RAG,
 > fine-tune) em [`docs/PLAN.md` §7](docs/PLAN.md).
 

@@ -62,13 +62,13 @@ def test_trilha_didatica_completa(montado):
     mod, src = montado
     capítulos = mod.entradas_summary()
     esperados = [
-        "guide/visao-geral.md",
-        "guide/instalacao.md",
-        "guide/formas.md",
-        "guide/revisoes.md",
+        "guide/overview.md",
+        "guide/installation.md",
+        "guide/forms.md",
+        "guide/reviews.md",
         "guide/fxp.md",
-        "guide/caderno.md",
-        "guide/receitas.md",
+        "guide/notebook.md",
+        "guide/recipes.md",
     ]
     for cap in esperados:
         assert cap in capítulos, f"capítulo da trilha ausente no SUMMARY: {cap}"
@@ -125,13 +125,13 @@ def test_reescrita_relativa_cheatsheet(montado):
 
 def test_reescrita_guia_para_referencia(montado):
     _, src = montado
-    txt = (src / "guide" / "receitas.md").read_text("utf-8")
+    txt = (src / "guide" / "recipes.md").read_text("utf-8")
     assert "(../reference/FORMAL.md)" in txt, "guia não aponta a spec no livro"
 
 
 def test_fallback_github_para_arquivo_de_fora(montado):
     _, src = montado
-    txt = (src / "project" / "repositorio.md").read_text("utf-8")
+    txt = (src / "project" / "repository.md").read_text("utf-8")
     # README aponta scripts/webui.py, que não vai para o livro — vira URL canônica
     assert "https://github.com/0b3st4f3r4/verbo/blob/main/scripts/webui.py" in txt
 
@@ -219,7 +219,7 @@ def test_verificar_pega_link_quebrado(montado, tmp_path):
     import shutil as _sh
     destino = tmp_path / "src"
     _sh.copytree(src, destino)
-    cap = destino / "guide" / "visao-geral.md"
+    cap = destino / "guide" / "overview.md"
     cap.write_text(cap.read_text("utf-8") + "\n[ruim](capitulo-fantasma.md)\n", "utf-8")
     assert any("capitulo-fantasma" in p for p in mod.verificar(destino))
 
@@ -229,7 +229,7 @@ def test_verificar_pega_raiz_absoluta(montado, tmp_path):
     import shutil as _sh
     destino = tmp_path / "src"
     _sh.copytree(src, destino)
-    cap = destino / "guide" / "formas.md"
+    cap = destino / "guide" / "forms.md"
     cap.write_text(cap.read_text("utf-8") + '\n<img src="/estatico.png">\n', "utf-8")
     assert any("raiz-absoluto" in p for p in mod.verificar(destino))
 
@@ -250,7 +250,7 @@ def test_reescrever_erro_link_escapa_do_repo():
     mod = _carregar()
     with pytest.raises(mod.ErroLink):
         mod.reescrever("[x](../../../../etc/passwd)",
-                       "site/content/guide/visao-geral.md", "guide/visao-geral.md",
+                       "site/content/guide/overview.md", "guide/overview.md",
                        mod.construir_mapa())
 
 
@@ -258,7 +258,7 @@ def test_reescrever_erro_link_inexistente_no_repo():
     mod = _carregar()
     with pytest.raises(mod.ErroLink):
         mod.reescrever("[x](arquivo-fantasma.md)",
-                       "site/content/guide/visao-geral.md", "guide/visao-geral.md",
+                       "site/content/guide/overview.md", "guide/overview.md",
                        mod.construir_mapa())
 
 
@@ -315,8 +315,8 @@ def test_main_check_falha_com_problemas(tmp_path, monkeypatch):
 
 def test_reescrever_ancora_pura_passa_ilmene():
     mod = _carregar()
-    assert mod.reescrever("[x](#secao)", "site/content/guide/visao-geral.md",
-                          "guide/visao-geral.md", mod.construir_mapa()) == "[x](#secao)"
+    assert mod.reescrever("[x](#secao)", "site/content/guide/overview.md",
+                          "guide/overview.md", mod.construir_mapa()) == "[x](#secao)"
 
 
 def test_verificar_pega_entrada_summary_sem_arquivo(montado, tmp_path):

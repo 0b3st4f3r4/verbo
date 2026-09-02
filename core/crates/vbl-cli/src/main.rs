@@ -917,7 +917,7 @@ retries = 3
     // ── run ───────────────────────────────────────────────────────────────
     #[tokio::test]
     async fn run_sem_ledger_executa_e_soma_cadeia() {
-        let dir = tmp_dir("run-memoria");
+        let dir = tmp_dir("run-memory");
         let arq = grava(&dir, "ok.vl", PROGRAMA_OK);
         let persist = dir.join("persistence");
         let code = run(

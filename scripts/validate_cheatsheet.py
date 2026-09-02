@@ -3,7 +3,7 @@
 
 Executa o banco fixo de 20 prompts (docs/cheatsheet/CHEATSHEET-PROMPTS.yaml) N vezes
 contra um endpoint OpenAI-compatível (o vLLM local do projeto), injetando a
-versão densa para agentes (docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md — a mesma que a UI
+versão densa para agentes (docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md — a mesma que a UI
 injeta no modo "+ VerboLang") como prompt de sistema, e avalia:
 
 - prompts de sintaxe: o primeiro bloco de código da resposta deve passar no
@@ -186,7 +186,7 @@ def main() -> int:
                           "qwen3-4b"))
     parser.add_argument("--api-key-env", default="LOCAL_VLLM_KEY")
     parser.add_argument("--banco", default="docs/cheatsheet/CHEATSHEET-PROMPTS.yaml")
-    parser.add_argument("--cheatsheet", default="docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md")
+    parser.add_argument("--cheatsheet", default="docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md")
     parser.add_argument("--saida", default="docs/cheatsheet/CHEATSHEET-VALIDATION.md")
     parser.add_argument("--execucoes", type=int, default=None,
                         help="sobrepõe execucoes_por_prompt do banco")

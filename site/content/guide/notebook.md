@@ -40,7 +40,7 @@ por forma é extensão futura; o orçamento de erro do método está em
 [AGENTS §1.4](https://github.com/0b3st4f3r4/verbo#readme) (erro do sensor ±5%
 + 1% do método).
 
-No primeiro run do [capítulo 2](instalacao.md): 1 forma ativa × 150 W × 1 s =
+No primeiro run do [capítulo 2](installation.md): 1 forma ativa × 150 W × 1 s =
 **150 J** num único `LEAK` — e o total do arquivo fecha com o acumulado.
 
 ## O formato `.vcad`
@@ -94,5 +94,5 @@ verificar a cadeia continua sendo papel do `ledger-verify`.
 
 ## Próximo passo
 
-[Receitas e anti-padrões](receitas.md): programas completos para os
+[Receitas e anti-padrões](recipes.md): programas completos para os
 problemas clássicos — e os padrões que o revisor ontológico rejeita.

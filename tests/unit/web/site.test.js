@@ -107,13 +107,13 @@ for (const entrada of entradas) {
 // capítulos da trilha, na ordem didática
 const trilha = entradas.filter((e) => e.startsWith("guide/"));
 assert.deepStrictEqual(trilha, [
-  "guide/visao-geral.md",
-  "guide/instalacao.md",
-  "guide/formas.md",
-  "guide/revisoes.md",
+  "guide/overview.md",
+  "guide/installation.md",
+  "guide/forms.md",
+  "guide/reviews.md",
   "guide/fxp.md",
-  "guide/caderno.md",
-  "guide/receitas.md",
+  "guide/notebook.md",
+  "guide/recipes.md",
 ], "ordem didática da trilha mudou — revise SUMMARY e este contrato");
 
 // landing (content/README.md) cita a versão da linha e a marca

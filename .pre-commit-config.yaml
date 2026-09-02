@@ -13,7 +13,7 @@
 #   6. e2e .............. make rust-e2e (CLI + FXP + Caderno de produção)
 #   7. pacote ........... make rust-package (verificação de pacote crates.io)
 #   8. asan ............. make rust-asan (vazamentos de heap, AGENTS §1.3)
-#   9. memoria .......... make rust-memoria (orçamentos de heap, Etapa 5)
+#   9. memory ........... make rust-memory (orçamentos de heap, Etapa 5)
 #  10. bench ............ make rust-bench BENCH_ARGS=--quick (≤100µs p95 etc.)
 #  11. fxp-probe ........ make rust-fxp-probe (registro FXP, FORMAL §6)
 #  12. llvm-cov ......... cargo-llvm-cov --fail-under-lines (gate com piso)
@@ -24,7 +24,7 @@
 #   git commit …          # bateria completa (padrão — os 12 estágios)
 #   make pc ARGS="run estaticos tdd-cobertura bdd clippy testes e2e"
 #                         # modo rápido (WIP); o CI SEMPRE roda o completo
-#   SKIP=asan,memoria git commit …   # pular estágios pontuais
+#   SKIP=asan,memory git commit …   # pular estágios pontuais
 #   git commit --no-verify           # fuga de emergência (deixa rastro no
 #                                    # reflog do commit — use com parceria)
 #
@@ -110,9 +110,9 @@ repos:
         verbose: true
 
       # 9. orçamentos de heap — auditor mede o processo: serial (Etapa 5)
-      - id: memoria
-        name: memoria — heap-audit, --test-threads=1
-        entry: make rust-memoria
+      - id: memory
+        name: memory — heap-audit, --test-threads=1
+        entry: make rust-memory
         language: system
         pass_filenames: false
         always_run: true

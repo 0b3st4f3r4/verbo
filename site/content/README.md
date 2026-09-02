@@ -21,13 +21,13 @@ código.
 
 <div class="vbl-cards">
 <ul>
-<li><span class="vbl-num">01</span><a href="guide/visao-geral.md">O que é a VerboLang</a> — formas, horizontes e a física por trás da sintaxe</li>
-<li><span class="vbl-num">02</span><a href="guide/instalacao.md">Instalação e primeiro run</a> — do clone ao primeiro Joule no Caderno</li>
-<li><span class="vbl-num">03</span><a href="guide/formas.md">As três conjugações</a> — <code>event</code>, <code>equilibrium</code>, <code>nonequilibrium</code></li>
-<li><span class="vbl-num">04</span><a href="guide/revisoes.md">Reviews</a> — <code>when</code>, <code>subvert</code>, <code>keep()</code> e atuação</li>
+<li><span class="vbl-num">01</span><a href="guide/overview.md">O que é a VerboLang</a> — formas, horizontes e a física por trás da sintaxe</li>
+<li><span class="vbl-num">02</span><a href="guide/installation.md">Instalação e primeiro run</a> — do clone ao primeiro Joule no Caderno</li>
+<li><span class="vbl-num">03</span><a href="guide/forms.md">As três conjugações</a> — <code>event</code>, <code>equilibrium</code>, <code>nonequilibrium</code></li>
+<li><span class="vbl-num">04</span><a href="guide/reviews.md">Reviews</a> — <code>when</code>, <code>subvert</code>, <code>keep()</code> e atuação</li>
 <li><span class="vbl-num">05</span><a href="guide/fxp.md">FXP</a> — sensores e atores por nome simbólico</li>
-<li><span class="vbl-num">06</span><a href="guide/caderno.md">O Caderno</a> — a contabilidade termodinâmica à prova de adulteração</li>
-<li><span class="vbl-num">07</span><a href="guide/receitas.md">Receitas</a> — padrões prontos e anti-padrões que o AD rejeita</li>
+<li><span class="vbl-num">06</span><a href="guide/notebook.md">O Caderno</a> — a contabilidade termodinâmica à prova de adulteração</li>
+<li><span class="vbl-num">07</span><a href="guide/recipes.md">Receitas</a> — padrões prontos e anti-padrões que o AD rejeita</li>
 </ul>
 </div>
 
@@ -51,7 +51,7 @@ review SpeculativeTrading {
 Quando a CPU passa de 85 °C, a forma é subvertida: seu valor vira o poético
 canônico, ela se dissolve no mesmo tick e o runtime limita a potência da CPU
 via FXP — tudo registrado no Caderno. O capítulo
-[Instalação e primeiro run](guide/instalacao.md) roda este programa em menos
+[Instalação e primeiro run](guide/installation.md) roda este programa em menos
 de um minuto.
 
 ## O livro inteiro

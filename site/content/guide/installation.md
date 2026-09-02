@@ -110,7 +110,7 @@ vbl ledger-verify tmp-logs/demo.vcad
 > [!TIP]
 > O JSONL exportado (`demo.vcad.jsonl`) é o mesmo log em texto — útil para
 > `jq` e para estudar o vocabulário de eventos
-> ([capítulo 6](caderno.md)). Para ver o Caderno **ao vivo** num painel,
+> ([capítulo 6](notebook.md)). Para ver o Caderno **ao vivo** num painel,
 > rode `make web` e abra `web/metrics.html` apontando para o arquivo.
 
 ## Brincando com o tempo
@@ -154,5 +154,5 @@ divergirem em dúvida, o blueprint documenta a intenção original.
 
 ## Próximo passo
 
-[As três conjugações](formas.md): `event`, `equilibrium` e
+[As três conjugações](forms.md): `event`, `equilibrium` e
 `nonequilibrium` — os três modos de existir e o que cada um custa.

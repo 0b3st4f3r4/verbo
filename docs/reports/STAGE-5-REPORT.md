@@ -18,7 +18,7 @@ BDD) segue verde, clippy `-D warnings` limpo, ASan/LSan limpo, e o formato
 
 | Entregável | Status | Onde |
 |---|---|---|
-| 5.1 "Vazamento inerte": nenhuma estrutura em heap além do horizon | ✅ demonstrado | Auditor de contagem de alocação (feature `heap-audit`) + churn de 200 mil ciclos + soak (`tests/memoria.rs`, `vbl-soak`) |
+| 5.1 "Vazamento inerte": nenhuma estrutura em heap além do horizon | ✅ demonstrado | Auditor de contagem de alocação (feature `heap-audit`) + churn de 200 mil ciclos + soak (`tests/memory.rs`, `vbl-soak`) |
 | 5.1 Ferramentas: Valgrind/Massif, PowerAPI, Flamegraphs/Perf | ⚠️→✅ honesto | Valgrind ausente na máquina → **alocador global de contagem** (zero-dep, determinístico, CI); `perf stat` usado; `perf record` e RAPL `energy_uj` exigem root — rotas laboratoriais documentadas (§5/§6) |
 | 5.2 Zero-cost abstractions (Rust) | ✅ | Caminho quente do tick sem snapshot de `String`s (`Rc<str>`), regras avaliadas por índice com clone restrito ao disparo, hash incremental em duas fatias, hex por tabela, encoder direto do Caderno |
 | 5.2 Deterministic memory management | ✅ | Heap medida e limitada por testes-gate; capacidade (não vazamento) discriminada do crescimento real |
@@ -88,7 +88,7 @@ alocador global de contagem (`src/heap_auditor.rs`, feature `heap-audit` —
 builds de produção não pagam nada), heap corrente/pico/total por delta, sem
 syscalls nem dependências.
 
-| Medição (serial; `make rust-memoria`) | Resultado |
+| Medição (serial; `make rust-memory`) | Resultado |
 |---|---|
 | Heap por forma `event` (10k, 5 ticks) | **743 B** (orçamento revisado: ≤ 1 KB) |
 | Heap por forma `equilibrium` | **743 B** (≤ 1 KB) |
@@ -162,7 +162,7 @@ o simulador determinístico (modo explícito, FORMAL §4.7).
 ```bash
 make rust-check                      # clippy -D warnings + suíte completa
 make rust-e2e                        # E2E com Caderno de produção
-make rust-memoria                    # orçamentos de heap (auditor serial)
+make rust-memory                    # orçamentos de heap (auditor serial)
 make rust-asan                       # ASan/LSan (nightly)
 make rust-bench                      # criterion completo
 cd core && cargo bench --bench notebook -- --baseline antes   # deltas

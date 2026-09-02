@@ -11,7 +11,7 @@ use vbl_runtime::FxpSimulator;
 
 fn tmpdir(nome: &str) -> std::path::PathBuf {
     let dir =
-        std::env::temp_dir().join(format!("vbl-cauda-{}-{nome}", std::process::id()));
+        std::env::temp_dir().join(format!("vbl-tail-{}-{nome}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -162,7 +162,7 @@ fn caderno_reset_e_busca_com_filtro_de_campo() {
 fn reload_ignora_diretorio_ausente_e_suportes_invalidos() {
     use vbl_runtime::loader::load as carregar;
     // 1. diretório nem existe → nada recarregado
-    let mut engine = Engine::new(FxpSimulator::new(), 1.0, "/nem-existe-vbl-cauda");
+    let mut engine = Engine::new(FxpSimulator::new(), 1.0, "/nem-existe-vbl-tail");
     assert_eq!(vbl_runtime::persist::reload_equilibrium(&mut engine), 0);
 
     // 2. diretório com .vl inválido → alerta, nada recarregado

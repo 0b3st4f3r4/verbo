@@ -530,7 +530,7 @@ VALOR_POETICO_CANONICO = (
 )
 
 # Orçamentos de retenção por conjugação (AGENTS.md §1.3, reancorados no
-# docs/adrs/ADR-001-linguagem-nucleo.md): o contador do runtime é um PROXY
+# docs/adrs/ADR-001-core-language.md): o contador do runtime é um PROXY
 # determinístico (estruturas de livro-razão), não medição de heap real —
 # a medição física fica para a Etapa 5 (PLAN §5.1).
 ORCAMENTO_RETENCAO = {"event": 256, "equilibrium": 1024, "nonequilibrium": 512}

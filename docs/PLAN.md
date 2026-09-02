@@ -270,7 +270,7 @@ Caminhos possíveis (não exclusivos, em ordem de custo):
 
 | Caminho | Descrição | Custo |
 |---|---|---|
-| **a. "Cheat sheet" canônico** ✅ | Prompt de sistema compacto (≤ ~1.200 tokens) derivado da `FORMAL.md`: EBNF resumida, as três conjugações, regras de `horizon`/`keep()`/`subvert`, registro mínimo do FXP. Artefatos versionados: [`docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md`](cheatsheet/VBL-CHEATSHEET-AGENTES.md) (denso, para agentes — injetado pela UI e pelo validador) e [`docs/cheatsheet/VBL-CHEATSHEET.md`](cheatsheet/VBL-CHEATSHEET.md) (completo — referência humana e fonte do denso); injetáveis na UI de consulta (alternância "Modelo puro ↔ + VerboLang") e no PoC. | Baixo — documentação |
+| **a. "Cheat sheet" canônico** ✅ | Prompt de sistema compacto (≤ ~1.200 tokens) derivado da `FORMAL.md`: EBNF resumida, as três conjugações, regras de `horizon`/`keep()`/`subvert`, registro mínimo do FXP. Artefatos versionados: [`docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md`](cheatsheet/VBL-CHEATSHEET-AGENTS.md) (denso, para agentes — injetado pela UI e pelo validador) e [`docs/cheatsheet/VBL-CHEATSHEET.md`](cheatsheet/VBL-CHEATSHEET.md) (completo — referência humana e fonte do denso); injetáveis na UI de consulta (alternância "Modelo puro ↔ + VerboLang") e no PoC. | Baixo — documentação |
 | **b. RAG sobre a spec** | Recuperação dos trechos relevantes da `FORMAL.md` por similaridade antes de cada consulta. Exige nó de embeddings (não cabe na VRAM junto do chat — ver `docs/setup/SETUP-LOCAL-LLM.md` §3.3) ou embeddings remotos. | Médio |
 | **c. Fine-tune / LoRA** | Ajuste do Qwen3-4B com pares (pergunta, trecho da spec); inviável nos 6 GB de VRAM atuais, exige hardware maior. | Alto |
 

@@ -10,7 +10,7 @@ use vbl_runtime::ledger::ChainLedger;
 use vbl_runtime::{load, validate, Engine, FxpSimulator, Registry};
 
 fn tmpdir(nome: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("vbl-travessia-{}-{nome}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("vbl-traversal-{}-{nome}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir

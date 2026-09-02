@@ -6,7 +6,7 @@
 > modelo**: a UI ([`web/chat.html`](../../web/chat.html)) e o validador
 > ([`../scripts/validate_cheatsheet.py`](../../scripts/validate_cheatsheet.py))
 > usam a versão densa para agentes,
-> [`VBL-CHEATSHEET-AGENTES.md`](VBL-CHEATSHEET-AGENTES.md) (~1.200 tokens —
+> [`VBL-CHEATSHEET-AGENTS.md`](VBL-CHEATSHEET-AGENTS.md) (~1.200 tokens —
 > cabe na janela de 4096 ao lado da conversa); este arquivo completo é a
 > referência humana e a fonte da versão densa.
 

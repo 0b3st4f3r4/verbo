@@ -134,7 +134,7 @@ Nenhum agente decide sozinho quando parar — a física do diálogo decide.
   qualquer semântica deste livro;
 - o [cheat sheet completo](../../../docs/cheatsheet/VBL-CHEATSHEET.md) — a
   linguagem em uma página;
-- os [exemplos executáveis](../exemplos.md) — todos rodando com o FXP
+- os [exemplos executáveis](../examples.md) — todos rodando com o FXP
   simulado;
 - o [processo de releases](../../../docs/RELEASES.md) — como a linguagem
   nasce em versões (`v2027.0.0-alpha.0` é a primeira da linha `v2027.0`).

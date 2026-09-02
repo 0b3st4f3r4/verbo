@@ -5,7 +5,7 @@ revisão formal. **Máquina de referência:** AMD Ryzen 7 7735HS, 16 threads,
 Linux 7.0.0-29, rustc 1.97.1 (release + `lto`? não — perfil padrão release),
  criterion 0.5. **Método:** benches criterion (`make rust-bench`, baselines
 `antes`/`depois` em `logs/stage5/`) e auditor de heap por contagem de
-alocação (`make rust-memoria` — feature `heap-audit`, medição serial).
+alocação (`make rust-memory` — feature `heap-audit`, medição serial).
 
 O AGENTS §4 prevê esta revisão: as metas numéricas eram **provisórias** e
 devem ser reancoradas nos resultados reais da primeira implementação
@@ -20,8 +20,8 @@ estimado: todos saem de ferramentas (criterion, auditor de heap, RSS de
 | Meta provisória | Medido (Etapa 5) | Veredito | Revisão proposta |
 |---|---|---|---|
 | Transição ≤ 100 µs p95 | **65,7 µs** (revisão que dispara + reclassify + persistência; era 73,9 µs na Etapa 4) | ✅ mantém | Manter ≤ 100 µs p95 |
-| Memória por forma: ≤ 256 B `event`, ≤ 1 KB `equilibrium`, ≤ 512 B `nonequilibrium` | **743 B / 743 B / 1 448 B** (heap real: contêineres std + chaves + entradas do escalonador; `tests/memoria.rs`) | ⚠️ orçamentos irreais para contêineres std — o nó de `BTreeMap` + chaves já excedem 256 B | **Reancorar:** heap total por forma `event` ≤ 1 KB, `equilibrium` ≤ 1 KB, `nonequilibrium` + 1 regra ≤ 2 KB. O contador-proxy da ADR-001 (96/128/160 B) permanece como **piso** do payload próprio |
-| Steady-state ≤ 10 MB @ 10.000 formas (PLAN §5) | **7,43 MB** @ 10k `event` (pico 7,43 MB) | ✅ mantém com folga | Manter; adicionar teste como gate (`make rust-memoria`) |
+| Memória por forma: ≤ 256 B `event`, ≤ 1 KB `equilibrium`, ≤ 512 B `nonequilibrium` | **743 B / 743 B / 1 448 B** (heap real: contêineres std + chaves + entradas do escalonador; `tests/memory.rs`) | ⚠️ orçamentos irreais para contêineres std — o nó de `BTreeMap` + chaves já excedem 256 B | **Reancorar:** heap total por forma `event` ≤ 1 KB, `equilibrium` ≤ 1 KB, `nonequilibrium` + 1 regra ≤ 2 KB. O contador-proxy da ADR-001 (96/128/160 B) permanece como **piso** do payload próprio |
+| Steady-state ≤ 10 MB @ 10.000 formas (PLAN §5) | **7,43 MB** @ 10k `event` (pico 7,43 MB) | ✅ mantém com folga | Manter; adicionar teste como gate (`make rust-memory`) |
 | Escalonador O(log N)/mutação, O(N+vencidos)/tick | agendar 45 ns (estável 100→100k); drenar 105 ns/prazo amortizado | ✅ mantém | Manter |
 | **Dissolução O(N)** — **gargalo identificado**, fora dos orçamentos originais | `remove_form` reconstrói o heap e `ordem.retain` varre a ordem **por dissolução**; com churn de N/3 por tick o custo domina | ⚠️ novo | Registrar otimização estrutural (tombstones + compaction amortizada) para etapa futura; risco: duplicação de nomes na `ordem` exige dedução por época |
 
@@ -54,7 +54,7 @@ equivalência (`vazamento_caminho_direto_identico_a_composicao_geral`).
 |---|---|---|
 | Zero vazamentos de heap em longa execução (24 h) | (a) churn **200 mil** ciclos vida→dissolução: heap retorna à base (+20 KB de capacidade, não cresce); (b) soak **15 min** ≈ 240 mil ticks, 666 formas vivas renovadas a cada 3 ticks: RSS estável (3 276 KiB plano, pico 3 312); (c) ASan/LSan limpo; (d) rota de 24 h: `make rust-soak` (padrão `SEGUNDOS=86400`) | Aceitar (a)–(c) como gate de CI/sessão **e** exigir a corrida de 24 h (d) como validação laboratorial formal |
 | Profiling mostra ausência de gargalos > 100 ms | p95 de toda operação unitária ≤ 2 ms (criterion); lotes amortizados: drenar 100k prazos = 10,5 ms (105 ns/prazo); varredura de tick linear (1,64 µs/forma @100 → 1,8 µs/forma @1000) | Manter; `perf record` (amostragem de ciclos) exige `perf_event_paranoid` menos restritivo/root — rota laboratorial documentada no relatório |
-| Vazamento inerte (PLAN §5.1) | Nenhuma estrutura sobrevive ao horizon: auditor de contagem + churn + soak provam retorno da heap à base | Gate permanente via `make rust-memoria` |
+| Vazamento inerte (PLAN §5.1) | Nenhuma estrutura sobrevive ao horizon: auditor de contagem + churn + soak provam retorno da heap à base | Gate permanente via `make rust-memory` |
 
 ## 5. Energia (PLAN §5.1 — PowerAPI/RAPL)
 

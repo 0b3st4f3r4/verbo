@@ -30,7 +30,7 @@ export PRE_COMMIT_HOME
 
 .PHONY: help check smoke release-check serve up stop ui web setup test test-unit test-bdd test-cov validate-cheatsheet hooks pc site-check site-build site
 .PHONY: rust-build rust-test rust-e2e rust-lint rust-asan rust-bench rust-check rust-package rust-coverage rust-clean
-.PHONY: rust-memoria rust-soak rust-fxp-probe
+.PHONY: rust-memory rust-soak rust-fxp-probe
 
 help:
 > @echo "VerboLang — atalhos:"
@@ -58,7 +58,7 @@ help:
 > @echo "  make rust-asan     testes sob AddressSanitizer (vazamentos, AGENTS §1.3)"
 > @echo "  make rust-bench    criterion: transição ≤100µs p95, escalonador, FXP, Caderno (gravação ≤200µs)"
 > @echo "  make rust-coverage cobertura via cargo-llvm-cov (relatório em core/target)"
-> @echo "  make rust-memoria orçamentos de heap (Etapa 5; auditor serial: --test-threads=1)"
+> @echo "  make rust-memory orçamentos de heap (Etapa 5; auditor serial: --test-threads=1)"
 > @echo "  make rust-soak     execução longa com churn (Etapa 5; VIVAS/TICKS/SEGUNDOS)"
 > @echo "  make rust-clean    limpa core/target"
 > @echo "  make validate-cheatsheet  banco de 20 prompts contra o LLM local (PLAN §7)"
@@ -94,7 +94,7 @@ release-check:
 smoke:
 > @set -e; \
   for p in web/index.html web/chat.html web/metrics.html web/docs.html web/md.js docs/cheatsheet/VBL-CHEATSHEET.md \
-           docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md web/verbolog.svg \
+           docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md web/verbolog.svg \
            web/vendor/mermaid.min.js web/vendor/katex/katex.min.js; do \
     code=$$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(UI_PORT)/$$p"); \
     echo "$$code  $$p"; \
@@ -207,8 +207,8 @@ rust-coverage:
 
 # Etapa 5 (PLAN §5.1): fechamento físico dos orçamentos de heap. O auditor
 # mede o PROCESSO — os testes de memória exigem execução serial.
-rust-memoria:
-> @cd core && $(CARGO) test -p vbl-runtime --features heap-audit --test memoria -- --test-threads=1 --nocapture
+rust-memory:
+> @cd core && $(CARGO) test -p vbl-runtime --features heap-audit --test memory -- --test-threads=1 --nocapture
 
 # Etapa 5 (AGENTS §2.2: zero vazamentos em longa execução). Padrão: 24 h de
 # parede. Sessão/CI: `make rust-soak SEGUNDOS=60` ou `TICKS=5000`.

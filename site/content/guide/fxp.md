@@ -80,16 +80,16 @@ leitura.
 
 O registro é validado **em compilação**: referenciar um sensor fora dele é
 erro antes de qualquer execução. O exemplo
-[`examples/example6_sensor_ausente.vl`](../../../examples/example6_sensor_ausente.vl)
+[`examples/example6_missing_sensor.vl`](../../../examples/example6_missing_sensor.vl)
 depende de `solar_panel`, que não está no registro mínimo:
 
 ```text
-$ vbl check examples/example6_sensor_ausente.vl
+$ vbl check examples/example6_missing_sensor.vl
 0:0 [erro] sensor_nao_registrado: source_path 'solar_panel' fora do registro do FXP
 0:0 [erro] sensor_nao_registrado: review VigiaSolar regra#0:
            sensor 'solar_panel' fora do registro
 
-$ vbl run examples/example6_sensor_ausente.vl \
+$ vbl run examples/example6_missing_sensor.vl \
       --allow-unregistered --ticks 3 --ledger tmp-logs/solar.vcad
 ■ 3 tick(s) — formas ativas restantes: VigiaSolar (nonequilibrium)
   cadeia SHA-256 ÍNTEGRA: 11 evento(s); atuações 0/0 ok;
@@ -138,5 +138,5 @@ linha de comando.
 
 ## Próximo passo
 
-[O Caderno](caderno.md): onde cada leitura, atuação e Joule vira evento
+[O Caderno](notebook.md): onde cada leitura, atuação e Joule vira evento
 encadeado por SHA-256 — e como verificar tudo de fora.

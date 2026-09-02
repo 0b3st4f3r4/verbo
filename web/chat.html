@@ -920,7 +920,7 @@ function applyLang() {
 let inFlight = null;         // AbortController da geração corrente (global)
 let genSession = null;       // sessão dona da geração corrente
 let vblMode = localStorage.getItem("vllm.vbl") === "1"; // + VerboLang?
-let sheetText = "";          // cheat sheet da linguagem (docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md, denso)
+let sheetText = "";          // cheat sheet da linguagem (docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md, denso)
 let lastQuery = "";          // última pergunta enviada (para retry)
 const sessions = [];         // sessões abertas (abas)
 let S = null;                // sessão ativa
@@ -1655,10 +1655,10 @@ async function loadSheet() {
   // Preferência: versão densa para agentes (cabe na janela de 4096 ao lado
   // da conversa); o cheat sheet completo é o fallback (referência humana).
   const candidates = [
-    "/docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md",        // absoluto: raiz do servidor = raiz do repo
-    "../docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md",      // página em web/
-    "../../docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md",   // página aninhada um nível abaixo da raiz
-    "docs/cheatsheet/VBL-CHEATSHEET-AGENTES.md",         // página na raiz do repositório
+    "/docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md",        // absoluto: raiz do servidor = raiz do repo
+    "../docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md",      // página em web/
+    "../../docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md",   // página aninhada um nível abaixo da raiz
+    "docs/cheatsheet/VBL-CHEATSHEET-AGENTS.md",         // página na raiz do repositório
     "/docs/cheatsheet/VBL-CHEATSHEET.md",                // fallback: versão completa
     "../docs/cheatsheet/VBL-CHEATSHEET.md",
     "../../docs/cheatsheet/VBL-CHEATSHEET.md",

@@ -5,7 +5,7 @@
 | **Status** | Concluída — critérios de "Done" do AGENTS.md §2.2 atendidos |
 | **Data** | 30/08/2026 |
 | **CI (§1.3 a)** | GitHub Actions (`.github/workflows/ci.yml`) + alvo local `make test` — a mesma suíte nos dois lugares |
-| **Linguagem (§1.3 d)** | **Rust** — [`docs/adrs/ADR-001-linguagem-nucleo.md`](../adrs/ADR-001-linguagem-nucleo.md), orçamentos reancorados |
+| **Linguagem (§1.3 d)** | **Rust** — [`docs/adrs/ADR-001-core-language.md`](../adrs/ADR-001-core-language.md), orçamentos reancorados |
 
 ## 1. Escopo entregue (PLAN §1.1–§1.3)
 
