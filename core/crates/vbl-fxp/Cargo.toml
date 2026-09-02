@@ -17,6 +17,10 @@ harness = false
 
 [dependencies]
 vbl-runtime = { workspace = true }
+lz4_flex = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+getrandom = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

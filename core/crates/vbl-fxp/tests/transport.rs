@@ -1,11 +1,12 @@
-//! Transporte Unix/TCP do schema v1: roundtrip, ack correlacionado por seq,
-//! timeout honesto (§4.1/§6) e servidor de referência.
+//! Transporte Unix/TCP do schema v1.1: roundtrip, ack correlacionado por seq,
+//! timeout honesto (§4.1/§6), servidor de referência e negociação CAPS (§4.5).
 
+use std::io::Read;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use vbl_fxp::registry::RemoteAddr;
-use vbl_fxp::schema::{AckAct, Body, DeviceDesc};
+use vbl_fxp::schema::{caps, op, AckAct, Body, DeviceDesc};
 use vbl_fxp::transport::{wait_ready_unix, serve_tcp, serve_unix, TransportError};
 use vbl_fxp::{Message, WireValue as WV};
 
@@ -144,4 +145,308 @@ fn connection_to_nonexistent_server_fails_without_panic() {
     ));
     // RemoteAddr descreve os dois esquemas (usado pelo Endpoint::Remote).
     let _ = RemoteAddr::Unix(path);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// v1.1 — Negociação CAPS (docs/FXP-SCHEMA-v1.md §4.5)
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Peer v1.1 de teste: concede apenas BATCH|TIMESTAMP (interseção honesta).
+fn caps_peer(msg: Message) -> Option<Message> {
+    match msg.opcode {
+        op::CAPS => {
+            let Body::Caps { capabilities } = msg.body else { return None };
+            Some(Message::caps_ok(capabilities & (caps::BATCH | caps::TIMESTAMP), msg.seq))
+        }
+        _ => None,
+    }
+}
+
+#[test]
+fn negociacao_caps_confirma_a_intersecao() {
+    let (srv, port) = serve_tcp(caps_peer).expect("subir servidor");
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", port, DEADLINE).unwrap();
+    let concedidas = c
+        .negotiate(caps::LZ4 | caps::BATCH | caps::TIMESTAMP, DEADLINE)
+        .expect("negociação");
+    assert_eq!(concedidas, caps::BATCH | caps::TIMESTAMP, "peer não anuncia LZ4");
+    assert_eq!(c.negotiated_caps(), caps::BATCH | caps::TIMESTAMP);
+    srv.parar();
+}
+
+#[test]
+fn negociacao_sem_capacidade_alguma_e_no_op() {
+    let (srv, port) = serve_tcp(caps_peer).expect("subir servidor");
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", port, DEADLINE).unwrap();
+    // Nada pedido ⇒ nada no fio, estado zerado.
+    assert_eq!(c.negotiate(0, DEADLINE).unwrap(), 0);
+    assert_eq!(c.negotiated_caps(), 0);
+    srv.parar();
+}
+
+#[test]
+fn negociacao_sem_resposta_do_peer_da_timeout() {
+    let (srv, port) = serve_tcp(|_msg| None).expect("subir servidor");
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", port, DEADLINE).unwrap();
+    let r = c.negotiate(caps::BATCH, SHORT_DEADLINE);
+    assert!(matches!(r, Err(TransportError::Timeout)), "esperado Timeout, veio {r:?}");
+    srv.parar();
+}
+
+#[test]
+fn peer_v1_0_diante_de_caps_falha_fechado() {
+    // Servidor v1.0 simulado com TCP cru: lê um frame, vê opcode desconhecido
+    // (0x06 = CAPS não existe no v1) e fecha a conexão — nunca interpreta.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        if let Ok((mut s, _)) = listener.accept() {
+            let mut buf = [0u8; 4096];
+            let _ = s.read(&mut buf); // lê o CAPS (e ignora o conteúdo)
+            drop(s); // v1.0 real rejeitaria o opcode e cairia
+        }
+    });
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", port, DEADLINE).unwrap();
+    let r = c.negotiate(caps::BATCH, DEADLINE);
+    assert!(
+        matches!(r, Err(TransportError::Broken(_))),
+        "peer v1.0 fechando a conexão ⇒ Broken (fail closed), veio {r:?}"
+    );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// v1.1 §4.6 — caminhos de erro do handshake AUTH (cliente × servidor cru).
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Servidor TCP cru que devolve o frame dado como primeira mensagem.
+fn servidor_cru_primeira(msg_bytes: Vec<u8>) -> (std::net::SocketAddr, std::thread::JoinHandle<()>) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let handle = std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            use std::io::Write;
+            let _ = stream.write_all(&msg_bytes);
+            let _ = stream.flush();
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    });
+    (addr, handle)
+}
+
+#[test]
+fn authenticate_primeira_mensagem_nao_e_challenge_falha() {
+    use vbl_fxp::schema::{encode_to_vec, Message};
+    // READ_OK forjado como primeira mensagem.
+    let bytes = encode_to_vec(&Message::read_ok(1.0, "cpu_temp", true, 7)).unwrap();
+    let (addr, handle) = servidor_cru_primeira(bytes);
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", addr.port(), Duration::from_secs(1)).expect("conectar");
+    let err = c.authenticate(b"chave", Duration::from_secs(1)).unwrap_err();
+    assert!(matches!(err, vbl_fxp::TransportError::Broken(m) if m.contains("AUTH_CHALLENGE")));
+    handle.join().ok();
+}
+
+#[test]
+fn authenticate_scheme_desconhecido_falha() {
+    use vbl_fxp::schema::{encode_to_vec, Message};
+    let mut bytes = encode_to_vec(&Message::auth_challenge(1, [0u8; 32], 1)).unwrap();
+    // O encode REJEITA scheme 9 (contrato); o servidor cru forja os bytes.
+    bytes[4 + 12] = 9;
+    bytes[4 + 13] = 0;
+    let (addr, handle) = servidor_cru_primeira(bytes);
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", addr.port(), Duration::from_secs(1)).expect("conectar");
+    // Rejeição TIPADA do schema (não confunde com quebra de transporte).
+    let err = c.authenticate(b"chave", Duration::from_secs(1)).unwrap_err();
+    assert!(matches!(
+        err,
+        vbl_fxp::TransportError::Schema(vbl_fxp::SchemaError::UnknownAuthScheme { received: 9 })
+    ));
+    handle.join().ok();
+}
+
+#[test]
+fn authenticate_resposta_sem_auth_ok_falha() {
+    // Challenge válido; na resposta do cliente, o servidor responde HELLO
+    // (não AUTH_OK) ⇒ recusa.
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    use vbl_fxp::schema::{encode_to_vec, Message};
+    let challenge = encode_to_vec(&Message::auth_challenge(1, [7u8; 32], 1)).unwrap();
+    let handle = std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let _ = stream.write_all(&challenge);
+            let _ = stream.flush();
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf); // consome AUTH_RESPONSE do cliente
+            let hello = Message::hello(Vec::new(), 1); // eco do seq do pedido
+            let _ = stream.write_all(&encode_to_vec(&hello).unwrap());
+            let _ = stream.flush();
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    });
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", addr.port(), Duration::from_secs(1)).expect("conectar");
+    let err = c.authenticate(b"chave", Duration::from_secs(1)).unwrap_err();
+    assert!(
+        matches!(err, vbl_fxp::TransportError::Broken(ref m) if m.contains("recusado")),
+        "erro inesperado: {err:?}"
+    );
+    handle.join().ok();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Robustez do receive: frame partido em duas escritas (buffering), servidor
+// que some no meio do frame e opcode genérico pré-autenticação.
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Servidor TCP cru que escreve o frame em DOIS pedaços (50 ms entre eles).
+fn servidor_frame_partido(bytes: Vec<u8>) -> (std::net::SocketAddr, std::thread::JoinHandle<()>) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let handle = std::thread::spawn(move || {
+        let (mut s, _) = listener.accept().expect("accept");
+        let meio = bytes.len() / 2;
+        use std::io::Write;
+        s.write_all(&bytes[..meio]).unwrap();
+        s.flush().unwrap();
+        std::thread::sleep(Duration::from_millis(50));
+        s.write_all(&bytes[meio..]).unwrap();
+        s.flush().unwrap();
+        std::thread::sleep(Duration::from_millis(300)); // dá tempo de o cliente ler
+    });
+    (addr, handle)
+}
+
+#[test]
+fn receive_monta_frame_que_chega_partido() {
+    use vbl_fxp::schema::{decode, encode_to_vec, Message};
+    let challenge = Message::auth_challenge(1, [3u8; 32], 1);
+    let bytes = encode_to_vec(&challenge).unwrap();
+    let (addr, handle) = servidor_frame_partido(bytes);
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", addr.port(), Duration::from_secs(2))
+        .expect("conectar");
+    let msg = c
+        .receive(Duration::from_secs(2))
+        .expect("challenge remontado de dois pedaços");
+    let (back, _) = decode(&encode_to_vec(&msg).unwrap()).unwrap();
+    assert_eq!(back, challenge);
+    handle.join().ok();
+}
+
+#[test]
+fn servidor_que_some_no_meio_do_frame_da_erro_honesto() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let handle = std::thread::spawn(move || {
+        let (mut s, _) = listener.accept().expect("accept");
+        use std::io::Write;
+        // METADE de um frame e fecha na sequência.
+        s.write_all(&[0x40, 0x00, 0x00, 0x00, b'F', b'X', b'P']).unwrap();
+        s.flush().unwrap();
+        drop(s);
+        drop(listener);
+    });
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", addr.port(), Duration::from_secs(2))
+        .expect("conectar");
+    let err = c.receive(Duration::from_secs(2)).unwrap_err();
+    assert!(
+        matches!(err, vbl_fxp::TransportError::Broken(ref m) if m.contains("leitura") || m.contains("fluxo")),
+        "erro inesperado: {err:?}"
+    );
+    handle.join().ok();
+}
+
+#[test]
+fn conexoes_recusadas_falham_honesto() {
+    use std::time::Duration;
+    // TCP: host não resolvível e porta fechada ⇒ ConnectionFailed tipado.
+    let dns = vbl_fxp::transport::Connection::tcp("host_invalido_sem_ponto", 1, Duration::from_millis(200))
+        .unwrap_err();
+    assert!(matches!(dns, vbl_fxp::TransportError::ConnectionFailed(_)), "{dns:?}");
+    let recusada =
+        vbl_fxp::transport::Connection::tcp("127.0.0.1", 1, Duration::from_millis(200)).unwrap_err();
+    assert!(matches!(recusada, vbl_fxp::TransportError::ConnectionFailed(_)), "{recusada:?}");
+    // Unix: caminho inexistente.
+    let unix = vbl_fxp::transport::Connection::unix(
+        std::path::Path::new("/tmp/vbl-não-existe-xyz.sock"),
+        Duration::from_millis(200),
+    )
+    .unwrap_err();
+    assert!(matches!(unix, vbl_fxp::TransportError::ConnectionFailed(_)), "{unix:?}");
+}
+
+#[test]
+fn receive_sem_resposta_respeita_o_timeout() {
+    // Servidor que aceita e NÃO responde: o cliente estoura o prazo com
+    // Timeout (não fica preso no WouldBlock para sempre).
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let handle = std::thread::spawn(move || {
+        let (_s, _) = listener.accept().expect("accept");
+        std::thread::sleep(Duration::from_millis(600)); // mudo
+    });
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", addr.port(), Duration::from_secs(1))
+        .expect("conectar");
+    let err = c.receive(Duration::from_millis(200)).unwrap_err();
+    assert!(matches!(err, vbl_fxp::TransportError::Timeout), "{err:?}");
+    handle.join().ok();
+}
+
+#[test]
+fn frame_com_tamanho_zero_e_recusado() {
+    // Prefixo de length 0: peek_frame_len recusa sem travar o cliente.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let handle = std::thread::spawn(move || {
+        let (mut s, _) = listener.accept().expect("accept");
+        use std::io::Write;
+        s.write_all(&[0, 0, 0, 0]).unwrap();
+        s.flush().unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+    });
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", addr.port(), Duration::from_secs(1))
+        .expect("conectar");
+    let err = c.receive(Duration::from_millis(500)).unwrap_err();
+    assert!(
+        matches!(err, vbl_fxp::TransportError::Schema(_)),
+        "erro inesperado: {err:?}"
+    );
+    handle.join().ok();
+}
+
+#[test]
+fn receive_monta_dois_frames_que_chegam_juntos_e_partidos() {
+    // Um único write com DOIS frames completos: o cliente deve devolver o
+    // primeiro e manter o segundo no buffer (receive encadeado).
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let f1 = vbl_fxp::schema::encode_to_vec(&Message::read("temp_a", 1, true)).unwrap();
+    let f2 = vbl_fxp::schema::encode_to_vec(&Message::read("temp_b", 2, true)).unwrap();
+    let handle = std::thread::spawn(move || {
+        let (mut s, _) = listener.accept().expect("accept");
+        use std::io::Write;
+        let mut dois = f1.clone();
+        dois.extend_from_slice(&f2);
+        s.write_all(&dois).unwrap();
+        s.flush().unwrap();
+        std::thread::sleep(Duration::from_millis(400));
+    });
+    let mut c = vbl_fxp::transport::Connection::tcp("127.0.0.1", addr.port(), Duration::from_secs(1))
+        .expect("conectar");
+    let m1 = c.receive(Duration::from_millis(500)).unwrap();
+    let m2 = c.receive(Duration::from_millis(500)).unwrap();
+    assert_eq!(m1.name, "temp_a");
+    assert_eq!(m2.name, "temp_b");
+    handle.join().ok();
+}
+
+#[test]
+fn compressao_que_infla_nao_viaja() {
+    // Mensagem pequena com LZ4 negociado: comprimir cresceria, então o
+    // codec manda o payload plano (§4.8) — ida e volta segue intacta.
+    let mut f = Vec::new();
+    let m = Message::heartbeat("x", 7);
+    vbl_fxp::schema::encode_with_compression(&m, &mut f).expect("encode comprimido");
+    let (back, _) = vbl_fxp::schema::decode(&f).expect("decode do frame comprimido");
+    assert_eq!(back.name, "x");
+    assert_eq!(back.body, m.body);
 }

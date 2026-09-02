@@ -21,6 +21,14 @@ repository = "https://github.com/0b3st4f3r4/verbo"
 [workspace.dependencies]
 sha2 = "0.10"
 criterion = "0.5"
+# v1.1 (docs/FXP-SCHEMA-v1.md §4.8): LZ4 block puro-Rust, sem unsafe, para a
+# compressão negociada do corpo — frames ≤ 8 KB não justificam zstd/dep C.
+lz4_flex = "0.11"
+# v1.1 (§4.6): PSK + HMAC-SHA256 para autenticação do canal remoto (a chave
+# nunca trafega; nonces por conexão) — hmac/getrandom puro-Rust, sha2 já era
+# dependência do workspace (cadeia do Caderno).
+hmac = "0.12"
+getrandom = "0.3"
 # Dependências internas carregam version + path: o path manda dentro do
 # workspace; no `cargo publish` o version é que entra no manifesto — sem ele
 # o crates.io recusa o pacote do dependente. O req ^2027.0.0-alpha.0 casa os

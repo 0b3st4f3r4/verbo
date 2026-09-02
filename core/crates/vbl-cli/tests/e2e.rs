@@ -70,6 +70,19 @@ fn clear(dir: &Path) {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// `vbl` com ambiente extra (PSK §4.6 vem de env, nunca de arquivo).
+fn run_env(dir: &Path, args: &[String], envs: &[(&str, &str)]) -> (Output, String) {
+    let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vbl"));
+    cmd.args(&refs).current_dir(dir);
+    for (k, v) in envs {
+        cmd.env(k, v);
+    }
+    let out = cmd.output().expect("executar vbl");
+    let text = stdout(&out);
+    (out, text)
+}
+
 // ======================================================================
 // BDD Caso 2 (PLAN §1.1): subversão poética por sobrecarga térmica
 // ======================================================================
@@ -533,5 +546,225 @@ fn e2e_corrupted_ledger_fails_the_verifier() {
         stdout(&verify)
     );
     assert!(stdout(&verify).contains("CORROMPIDA"));
+    clear(&dir);
+}
+
+// ======================================================================
+// FXP v1.1 — `vbl fxpd`: peer de referência do schema (§7) com AUTH,
+// CAPS, READ_BATCH, FLAG_TIMESTAMP e LZ4 negociados de verdade, cliente
+// `vbl run` em outro processo (PLAN §8 item 8).
+// ======================================================================
+
+use std::io::{BufRead, BufReader};
+use std::process::{Child, Stdio};
+use std::time::{Duration, Instant};
+
+/// Sobe o `vbl fxpd` e espera a linha "fxpd pronto em …" (teto de 10 s).
+/// Devolve o filho vivo e o endpoint impresso (ex.: `tcp:0.0.0.0:43117`).
+/// O filho é um daemon: quem encerra é o teste (`matar_fxpd`) — o aviso de
+/// processo sem `wait()` em todos os caminhos é o comportamento desejado.
+#[allow(clippy::zombie_processes)]
+fn spawn_fxpd(dir: &Path, envs: &[(&str, &str)], args: &[&str]) -> (Child, String) {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_vbl"));
+    cmd.arg("fxpd").args(args).current_dir(dir);
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    for (k, v) in envs {
+        cmd.env(k, v);
+    }
+    let mut child = cmd.spawn().expect("spawn fxpd");
+    let stdout = child.stdout.take().expect("stdout do fxpd");
+    let mut reader = BufReader::new(stdout);
+    let prazo = Instant::now() + Duration::from_secs(10);
+    loop {
+        if Instant::now() > prazo {
+            let _ = child.kill();
+            panic!("fxpd não ficou pronto em 10 s");
+        }
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => panic!("fxpd encerrou antes de ficar pronto"),
+            Ok(_) => {
+                if let Some(resto) = line.strip_prefix("fxpd pronto em ") {
+                    return (child, resto.trim().to_string());
+                }
+            }
+            Err(e) => {
+                let _ = child.kill();
+                panic!("lendo stdout do fxpd: {e}");
+            }
+        }
+    }
+}
+
+/// Porta TCP de um endpoint `tcp:0.0.0.0:PORTA`.
+fn porta_de(endpoint: &str) -> String {
+    endpoint
+        .split(':')
+        .next_back()
+        .unwrap_or_else(|| panic!("endpoint sem porta: {endpoint}"))
+        .to_string()
+}
+
+/// Mata o daemon no fim do cenário (filho não morre no drop).
+fn matar_fxpd(mut child: Child) {
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// Programa que avalia `cpu_temp` a cada tick (leitura no fio mesmo sem
+/// a condição disparar).
+const PROGRAMA_MONITOR: &str = "event Monitora {\n\
+ \x20 value: \"temperatura_monitorada\",\n\
+ \x20 horizon: 5s\n\
+ }\n\
+ review Monitora {\n\
+ \x20 when cpu_temp > 85°C -> subvert,\n\
+ \x20                         act(CpuPowerCap, 50)\n\
+ }";
+
+#[test]
+fn e2e_fxpd_batch_timestamp_compress_negociados_com_cliente_real() {
+    let dir = scenario("fxpd-v11");
+
+    // Peer: registro mínimo em modo simulado (serve cpu_temp etc.).
+    let cfg_peer = write(&dir, "peer.cfg", "mode = simulado\n");
+    let (filho, endpoint) = spawn_fxpd(
+        &dir,
+        &[],
+        &[
+            "--serve",
+            "tcp:0",
+            "--fxp-config",
+            &cfg_peer,
+            "--batch",
+            "--timestamp",
+            "--compress",
+        ],
+    );
+    assert!(
+        endpoint.starts_with("tcp:"),
+        "endpoint inesperado do fxpd: {endpoint}"
+    );
+    let porta = porta_de(&endpoint);
+
+    // Cliente: real + recursos v1.1 opt-in na config de texto (§6).
+    let cfg_cliente = write(
+        &dir,
+        "cliente.cfg",
+        &format!(
+            "mode = real\ncache_ttl_ms = 0\nread_timeout_ms = 2000\n\
+             batch_prefetch = true\nwire_timestamp = true\ncompression = true\n\
+             cpu_temp.mode = real\ncpu_temp.endpoint = tcp:127.0.0.1:{porta}\n\
+             cpu_power.mode = real\ncpu_power.endpoint = tcp:127.0.0.1:{porta}\n"
+        ),
+    );
+    let (out, text) = run(
+        &dir,
+        &args_run(
+            &dir,
+            &write(&dir, "monitora.vl", PROGRAMA_MONITOR),
+            "caderno.vcad",
+            &["--ticks", "2", "--fxp-config", &cfg_cliente],
+        ),
+    );
+    assert!(
+        out.status.success(),
+        "vbl run falhou contra fxpd:\n{text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let report = verify_external(&dir, "caderno.vcad");
+    assert!(report.contains("ÍNTEGRA"), "cadeia:\n{report}");
+
+    // §4.7: o lote de 2 sensores em 1 RTT está no Caderno do cliente.
+    let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
+    assert!(
+        jsonl.contains("\"kind\":\"fxp_batch\""),
+        "lote não registrado no Caderno:\n{jsonl}"
+    );
+    // Nenhum alerta de I/O: o daemon respondeu tudo.
+    assert!(
+        !jsonl.contains("sensor_inaccessible"),
+        "falha de leitura contra daemon sadio:\n{jsonl}"
+    );
+
+    matar_fxpd(filho);
+    clear(&dir);
+}
+
+#[test]
+fn e2e_fxpd_auth_psk_abre_com_chave_certa_e_fecha_com_errada() {
+    let dir = scenario("fxpd-auth");
+    let cfg_peer = write(&dir, "peer.cfg", "mode = simulado\n");
+    let (filho, endpoint) = spawn_fxpd(
+        &dir,
+        &[("E2E_PSK", "segredo-do-lab")],
+        &["--serve", "tcp:0", "--fxp-config", &cfg_peer, "--auth", "psk:E2E_PSK"],
+    );
+    let porta = porta_de(&endpoint);
+
+    let programa = write(&dir, "monitora.vl", PROGRAMA_MONITOR);
+    // read_timeout folgado: sob cobertura instrumentada e carga paralela,
+    // o 1º handshake pode passar de 2 s — a condição NÃO é avaliada e o
+    // Caderno registraria um sensor_inaccessible honesto (falso flake).
+    let cfg_base = format!(
+        "mode = real\ncache_ttl_ms = 0\nread_timeout_ms = 8000\n\
+         cpu_temp.mode = real\ncpu_temp.endpoint = tcp:127.0.0.1:{porta}\n"
+    );
+
+    // 1) Chave CERTA (env) — leitura abre e funciona.
+    let cfg_ok = write(&dir, "cliente-ok.cfg", &cfg_base);
+    let (out, text) = run_env(
+        &dir,
+        &args_run(
+            &dir,
+            &programa,
+            "certo.vcad",
+            &["--ticks", "2", "--fxp-config", &cfg_ok, "--fxp-psk-env", "E2E_PSK"],
+        ),
+        &[("E2E_PSK", "segredo-do-lab")],
+    );
+    assert!(
+        out.status.success(),
+        "run com PSK certa falhou:\n{text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let jsonl = std::fs::read_to_string(dir.join("certo.vcad.jsonl")).unwrap();
+    assert!(
+        !jsonl.contains("sensor_inaccessible"),
+        "leitura autenticada não deveria falhar:\n{jsonl}"
+    );
+
+    // 2) Chave ERRADA — peer fecha (§4.6 fail-closed); o cliente registra o
+    //    motivo honesto e a condição NÃO é avaliada.
+    let cfg_errada = write(&dir, "cliente-errada.cfg", &cfg_base);
+    let (out, text) = run_env(
+        &dir,
+        &args_run(
+            &dir,
+            &programa,
+            "errado.vcad",
+            &["--ticks", "2", "--fxp-config", &cfg_errada, "--fxp-psk-env", "E2E_PSK"],
+        ),
+        &[("E2E_PSK", "chave-errada")],
+    );
+    assert!(
+        out.status.success(),
+        "run com PSK errada deve ser honesto, não crashar:\n{text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let jsonl = std::fs::read_to_string(dir.join("errado.vcad.jsonl")).unwrap();
+    assert!(
+        jsonl.contains("sensor_inaccessible"),
+        "falha de autenticação não registrada:\n{jsonl}"
+    );
+    // §4.6 fail-closed: o peer fecha SEM resposta — o cliente registra a
+    // quebra no momento do handshake auth (não confunde com peer morto? o
+    // operador vê "auth:" no motivo).
+    assert!(
+        jsonl.contains("transporte: conexão quebrada: auth:"),
+        "motivo auth não está no Caderno:\n{jsonl}"
+    );
+
+    matar_fxpd(filho);
     clear(&dir);
 }

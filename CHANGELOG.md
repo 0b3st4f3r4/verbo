@@ -8,7 +8,59 @@ de suporte + 6 meses de descontinuação = 7 anos de ciclo de vida.
 
 ## [Não lançado]
 
-_(nada ainda — a próxima janela é a `v2027.0.0-alpha.1`, Setembro)_
+### Adicionado
+- **FXP v1.1** — as cinco extensões do fio registradas como futuras no §9 do
+  schema (`docs/FXP-SCHEMA-v1.md`, agora v1.1; o fio padrão continua byte a
+  byte o do v1.0, com teste de bytes-fixos na suíte):
+  - **CAPS/CAPS_OK (§4.5)** — negociação de capacidades na abertura da
+    conexão, interseção dos bits; recurso só existe se os dois lados
+    anunciarem (`vbl_fxp::schema::caps`).
+  - **Autenticação PSK (§4.6)** — handshake `AUTH_CHALLENGE`/`AUTH_RESPONSE`/
+    `AUTH_OK` com HMAC-SHA256 sobre `"FXP-AUTH1" ‖ nonce_cliente ‖
+    nonce_servidor` (nonces de 32 B por conexão, verificação em tempo
+    constante); cliente `vbl run --fxp-psk-env VAR`, servidor
+    `vbl fxpd --auth psk:VAR` — a chave só entra por env, nunca por arquivo;
+    chave errada **fecha a conexão** (sem degradação).
+  - **READ_BATCH (§4.7)** — lote de 1..=64 leituras em 1 RTT;
+    `batch_prefetch = true` no cliente prefetch todos os sensores vencidos do
+    peer no primeiro cache-miss; item que falha no lote **não vira alerta** —
+    o alerta continua pertencendo à pergunta do programa (honestidade §4.7).
+  - **Compressão LZ4 (§4.8)** — corpos grandes comprimidos com `lz4_flex`
+    (região < 512 B e blob que infla nunca viajam comprimidos; teto de 8192 B
+    descomprimido = guarda contra bomba).
+  - **FLAG_TIMESTAMP (§5)** — carimbo físico `fio_us` nas respostas
+    (`wire_timestamp = true`); o Caderno continua no relógio virtual —
+    timestamp físico é anotação de laboratório, não tick.
+  - **Descoberta multicast (§4.9)** — beacon UDP `FXPD` no grupo
+    `239.255.70.80:7080` (TTL 1, 2 s, opt-in): `vbl fxpd --announce ID`
+    anuncia, `endpoint = discover:ID` resolve no build do barramento; sem
+    anúncio no prazo ⇒ registrado porém inacessível.
+- **`vbl fxpd`** — o servidor de referência do schema (§7): `--serve
+  unix:PATH|tcp:PORTA`, recursos por flag (`--batch`/`--timestamp`/
+  `--compress`/`--announce`), Caderno com `--ledger`; máquina de estados
+  canônica em `vbl-fxp::peer::PeerServer` (AUTH → CAPS → trabalho).
+- Config de texto v1.1 (docs/FXP-SCHEMA-v1.md §6): `batch_prefetch`,
+  `compression`, `wire_timestamp`, `compress_threshold`; degradação v1.0
+  automática com peer antigo (evento `fxp_peer_v1` no Caderno).
+- Benches criterion v1.1 (`fxp_v11_*`) e relatório de medidas
+  (`docs/reports/FXP-V1.1-REPORT.md`).
+
+### Medido (máquina de referência, `cargo bench --quick`)
+- Lote §4.7: ciclo de atualização de 8 sensores remotos cai de **117,4 µs**
+  (8 RTTs) para **22,3 µs** (1 RTT + cache) — **5,3× mais rápido**.
+- FLAG_TIMESTAMP §5: +5 ns por roundtrip de codec (113,5 → 119,6 ns).
+- Handshake PSK+CAPS §4.6: ~4 µs sobre a conexão plana (custo do fio;
+  latência total dominada pelo polling do loop de aceitação).
+- LZ4 §4.8: HELLO de 60 dispositivos roundtrip 9,2 µs (comprimido) vs 7,9 µs
+  (plano) — o ganho é banda (wire menor), não CPU.
+
+### Corrigido
+- **FXP v1.1 — colisão de tag no item de lote (§4.7)**: a razão 0
+  (`nao_registrado`, §4.1) de um item de `READ_BATCH_OK` serializava como o
+  byte de status 0 — que significa "ok" — e o cliente leria um valor
+  fantasma, dessincronizando a conexão. A razão 0 agora viaja como tag 4
+  (bytes de status 0..=3 preservados; achado pela varredura de truncamento
+  do codec, que testa todos os prefixos de 13 mensagens).
 
 ## [v2027.0.0-alpha.0] — 2026-09-01
 

@@ -3,7 +3,7 @@
 //! timeout de parede (§6); [`serve_unix`]/[`serve_tcp`] são o servidor de
 //! referência (testes de integração e `fxpd` embutido).
 
-use crate::schema::{self, Message};
+use crate::schema::{self, Body, Message};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -42,13 +42,14 @@ impl From<schema::SchemaError> for TransportError {
 }
 
 /// Fluxo bidirecional: Unix local ou TCP remoto — mesma semântica de frame.
-enum Current {
+#[derive(Debug)]
+pub(crate) enum Current {
     Unix(UnixStream),
     Tcp(TcpStream),
 }
 
 impl Current {
-    fn set_timeout(&self, d: Duration) {
+    pub(crate) fn set_timeout(&self, d: Duration) {
         match self {
             Current::Unix(s) => {
                 let _ = s.set_read_timeout(Some(d));
@@ -68,7 +69,7 @@ impl Current {
         }
     }
 
-    fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
+    pub(crate) fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
         match self {
             Current::Unix(s) => s.write_all(buf),
             Current::Tcp(s) => s.write_all(buf),
@@ -76,9 +77,17 @@ impl Current {
     }
 }
 
-/// Conexão cliente falando frames v1 (docs/FXP-SCHEMA-v1.md §2).
+/// Conexão cliente falando frames v1.1 (docs/FXP-SCHEMA-v1.md §2). O estado
+/// de recursos negociados (`CAPS`, §4.5) vive aqui: nenhum frame com recurso
+/// novo parte sem `negotiate()` confirmado — o cliente falha fechado.
+#[derive(Debug)]
 pub struct Connection {
     current: Current,
+    /// Interseção pedidos × concedidos do handshake `CAPS` (0 = nada).
+    negotiated_caps: u16,
+    /// Contador próprio de seq dos frames de negociação (não colide com o
+    /// espaço de seq do bus — a correlação é por conexão).
+    neg_seq: u32,
 }
 
 impl Connection {
@@ -86,7 +95,7 @@ impl Connection {
         let s = UnixStream::connect(path)
             .map_err(|e| TransportError::ConnectionFailed(format!("{}: {e}", path.display())))?;
         s.set_nonblocking(false).ok();
-        let c = Connection { current: Current::Unix(s) };
+        let c = Connection { current: Current::Unix(s), negotiated_caps: 0, neg_seq: 0 };
         c.current.set_timeout(timeout);
         Ok(c)
     }
@@ -99,17 +108,29 @@ impl Connection {
             .ok_or_else(|| TransportError::ConnectionFailed(format!("{host}:{port} sem endereço")))?;
         let s = TcpStream::connect(addr)
             .map_err(|e| TransportError::ConnectionFailed(format!("{addr}: {e}")))?;
-        let c = Connection { current: Current::Tcp(s) };
+        let c = Connection { current: Current::Tcp(s), negotiated_caps: 0, neg_seq: 0 };
         c.current.set_timeout(timeout);
         Ok(c)
     }
 
-    /// Envia a mensagem (frame completo).
+    /// Envia a mensagem (frame completo). Com `CAPS` bit 0 negociado (§4.5),
+    /// frames acima do threshold (§4.8) partem comprimidos em LZ4.
     pub fn enviar(&mut self, msg: &Message) -> Result<(), TransportError> {
-        let frame = schema::encode_to_vec(msg)?;
+        let frame = self.encode_frame(msg)?;
         self.current
             .write_all(&frame)
             .map_err(|e| TransportError::Broken(format!("escrita: {e}")))
+    }
+
+    /// Encode do frame conforme as capacidades negociadas (§4.5/§4.8).
+    fn encode_frame(&self, msg: &Message) -> Result<Vec<u8>, TransportError> {
+        if self.negotiated_caps & schema::caps::LZ4 != 0 {
+            let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
+            schema::encode_with_compression(msg, &mut f)?;
+            Ok(f)
+        } else {
+            Ok(schema::encode_to_vec(msg)?)
+        }
     }
 
     /// Recebe **um** frame respeitando o prazo total (`timeout` de parede).
@@ -172,6 +193,66 @@ impl Connection {
         }
         Ok(resp)
     }
+
+    // -----------------------------------------------------------------
+    // v1.1 — Negociação de capacidades (docs/FXP-SCHEMA-v1.md §4.5)
+    // -----------------------------------------------------------------
+
+    /// Handshake `CAPS` → `CAPS_OK`: pede `wanted` e guarda a **interseção**
+    /// concedida pelo peer. `wanted = 0` é no-op no fio (zera o estado local).
+    /// Resposta que não seja `CAPS_OK` ⇒ conexão dessincronizada (erro).
+    pub fn negotiate(&mut self, wanted: u16, timeout: Duration) -> Result<u16, TransportError> {
+        if wanted == 0 {
+            self.negotiated_caps = 0;
+            return Ok(0);
+        }
+        self.neg_seq = self.neg_seq.wrapping_add(1);
+        let req = Message::caps(wanted, self.neg_seq);
+        let resp = self.request(&req, timeout)?;
+        let Body::Caps { capabilities } = resp.body else {
+            return Err(TransportError::Broken(
+                "resposta à negociação não é CAPS_OK (§4.5)".into(),
+            ));
+        };
+        self.negotiated_caps = capabilities;
+        Ok(capabilities)
+    }
+
+    /// Capacidades concedidas pelo peer (0 antes do handshake).
+    pub fn negotiated_caps(&self) -> u16 {
+        self.negotiated_caps
+    }
+
+    // -----------------------------------------------------------------
+    // v1.1 — Autenticação PSK do canal remoto (§4.6)
+    // -----------------------------------------------------------------
+
+    /// Handshake PSK: espera o `AUTH_CHALLENGE` do servidor, responde com
+    /// nonce próprio + HMAC e exige o `AUTH_OK` com o mesmo seq. Falha em
+    /// qualquer passo ⇒ erro (a conexão não deve ser usada).
+    pub fn authenticate(&mut self, key: &[u8], timeout: Duration) -> Result<(), TransportError> {
+        let challenge = self.receive(timeout)?;
+        let Body::AuthChallenge { scheme, nonce } = challenge.body else {
+            return Err(TransportError::Broken(
+                "primeira mensagem do peer não é AUTH_CHALLENGE (§4.6)".into(),
+            ));
+        };
+        if scheme != schema::AUTH_SCHEME_PSK_HMAC_SHA256 {
+            return Err(TransportError::Broken(format!(
+                "scheme de autenticação desconhecido: {scheme}"
+            )));
+        }
+        let nonce_cliente =
+            crate::auth::nonce().map_err(|e| TransportError::Broken(format!("RNG: {e}")))?;
+        let mac = crate::auth::mac(key, &nonce_cliente, &nonce);
+        let resp = self.request(&Message::auth_response(nonce_cliente, mac, challenge.seq), timeout)?;
+        if resp.opcode != schema::op::AUTH_OK {
+            return Err(TransportError::Broken(
+                "handshake PSK recusado pelo peer (chave errada?)".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -192,6 +273,15 @@ impl Server {
         if let Some(h) = self.handle.take() {
             let _ = h.join();
         }
+    }
+
+    /// Construtor interno para servidores com loop próprio (`peer.rs`).
+    pub(crate) fn from_parts(
+        identifier: String,
+        desligar: Arc<AtomicBool>,
+        handle: Option<std::thread::JoinHandle<()>>,
+    ) -> Self {
+        Self { identifier, desligar, handle }
     }
 }
 
@@ -316,7 +406,10 @@ where
 
 /// Extrai um frame de `rest` (buffer acumulado); devolve `None` se ainda
 /// incompleto. Os bytes consumidos são removidos do buffer.
-fn read_frame(flow: &mut Current, rest: &mut Vec<u8>) -> Result<Option<Message>, TransportError> {
+pub(crate) fn read_frame(
+    flow: &mut Current,
+    rest: &mut Vec<u8>,
+) -> Result<Option<Message>, TransportError> {
     if rest.len() >= 4 {
         let total = schema::peek_frame_len(rest)?;
         if rest.len() >= total {

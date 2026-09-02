@@ -465,3 +465,93 @@ fn display_de_todos_os_erros_de_registro() {
         "config inválida: linha 3: tudo errado"
     );
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// v1.1 — chaves de config (§6), endpoint discover: (§4.9) e descritor do fio
+// ══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn config_v11_chaves_globais_e_clausulas_de_erro() {
+    let cfg = FxpConfig::parse(
+        "batch_prefetch = true\ncompression = false\nwire_timestamp = true\n\
+         compress_threshold = 1024\n",
+    )
+    .unwrap();
+    assert_eq!(cfg.batch_prefetch, Some(true));
+    assert_eq!(cfg.compression, Some(false));
+    assert_eq!(cfg.wire_timestamp, Some(true));
+    assert_eq!(cfg.compress_threshold, Some(1024));
+
+    // Booleano inválido ⇒ erro com linha.
+    let err = FxpConfig::parse("batch_prefetch = talvez\n").unwrap_err();
+    assert!(err.to_string().contains("true|false"), "{err}");
+    // Threshold absurdamente grande ⇒ erro honesto.
+    let err = FxpConfig::parse("compress_threshold = 99999999999999999999\n").unwrap_err();
+    assert!(err.to_string().contains("compress_threshold"), "{err}");
+}
+
+#[test]
+fn endpoint_discover_exige_identificador_e_descreve_de_volta() {
+    use vbl_fxp::registry::Endpoint;
+    let err = Endpoint::parse("discover:").unwrap_err();
+    assert!(err.to_string().contains("discover:"), "{err}");
+    match Endpoint::parse("discover:fxpd-lab").unwrap() {
+        Endpoint::AutoRemote { identifier } => assert_eq!(identifier, "fxpd-lab"),
+        other => panic!("esperava AutoRemote, veio {other:?}"),
+    }
+    assert_eq!(
+        Endpoint::AutoRemote { identifier: "fxpd-lab".into() }.description(),
+        "discover:fxpd-lab"
+    );
+}
+
+#[test]
+fn to_device_desc_cobre_sensor_e_ator() {
+    use vbl_fxp::schema::DeviceDesc;
+    use vbl_runtime::fxp::ActorLimits;
+    let sensor = DeviceEntry::sensor("cpu_temp", "temperature", "°C", 1.5);
+    match sensor.to_device_desc() {
+        DeviceDesc::Sensor { name, quantity, unit, precision_pct, .. } => {
+            assert_eq!(name, "cpu_temp");
+            assert_eq!(quantity, "temperature");
+            assert_eq!(unit, "°C");
+            assert!((precision_pct - 1.5).abs() < f64::EPSILON);
+        }
+        other => panic!("esperava Sensor, veio {other:?}"),
+    }
+    let ator = DeviceEntry::actor(
+        "Fan",
+        ActorLimits { min: Some(10.0), max: Some(255.0), safety_limit: Some(200.0) },
+    );
+    match ator.to_device_desc() {
+        DeviceDesc::Actor { name, min, max, safety } => {
+            assert_eq!(name, "Fan");
+            assert_eq!(min, Some(10.0));
+            assert_eq!(max, Some(255.0));
+            assert_eq!(safety, Some(200.0));
+        }
+        other => panic!("esperava Actor, veio {other:?}"),
+    }
+}
+
+#[test]
+fn clausulas_de_erro_do_registro_e_do_config() {
+    use vbl_fxp::registry::RegistryError;
+    let mut r = DeviceRegistry::new();
+    let _ = r.register(DeviceEntry::sensor("attention", "attention", "%", 0.0));
+    r.set_alias("human_attention", "attention").unwrap();
+
+    // registrar forma cuja LISTA de apelidos ocupa nome existente ⇒ conflito.
+    let mut invasor = DeviceEntry::sensor("invasor", "attention", "%", 0.0);
+    invasor.aliases = vec!["human_attention".to_string()];
+    let colisao = r.register(invasor);
+    assert!(matches!(colisao, Err(RegistryError::ConflictingAlias(_))), "{colisao:?}");
+
+    // alias encadeado (apelido de apelido) ⇒ recusado.
+    let chained = r.set_alias("alias_de_human", "human_attention").unwrap_err();
+    assert!(matches!(chained, RegistryError::ChainedAlias(_)), "{chained:?}");
+
+    // compress_threshold precisa ser inteiro — negativo é recusado no parse.
+    let parse_err = FxpConfig::parse("mode = simulado\ncompress_threshold = -5\n").unwrap_err();
+    assert!(parse_err.to_string().contains("compress_threshold"), "{parse_err}");
+}

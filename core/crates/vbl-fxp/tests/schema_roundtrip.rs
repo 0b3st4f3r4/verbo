@@ -3,8 +3,9 @@
 //! mensagens malformadas (decodificador nunca devolve mensagem parcial).
 
 use vbl_fxp::schema::{
-    decode, encode_to_vec, peek_frame_len, AckAct, Body, DeviceDesc, SchemaError, Message,
-    WireValue, HEADER_LEN, MAGIC, MAX_NAME, MAX_PAYLOAD, MAX_STRING, VERSION,
+    caps, decode, encode_to_vec, flag, peek_frame_len, reason, AckAct, BatchResult, Body,
+    DeviceDesc, Message, SchemaError, WireValue, AUTH_SCHEME_PSK_HMAC_SHA256, HEADER_LEN, MAGIC,
+    MAX_BATCH, MAX_NAME, MAX_PAYLOAD, MAX_STRING, VERSION,
 };
 
 /// Corpus representativo: toda opcode × corpo × valor-limite.
@@ -17,6 +18,7 @@ fn corpus() -> Vec<Message> {
             flags: 0,
             seq: u32::MAX,
             name: "C".repeat(MAX_NAME),
+            timestamp_us: None,
             body: Body::Act { value: WireValue::Num(0.0) }, // 0.0 é leitura/comando válido
         },
         Message::act(
@@ -319,6 +321,7 @@ fn encode_rejeita_opcode_desconhecido_e_flag_reservada() {
         flags: 0,
         seq: 1,
         name: "cpu_temp".into(),
+        timestamp_us: None,
         body: Body::Empty,
     };
     assert!(matches!(
@@ -370,4 +373,424 @@ fn string_longa_usa_prefixo_de_dois_bytes() {
     // o texto de 300 bytes está inteiro no frame (prefixo de 2 bytes)
     assert!(frame.len() > HEADER_LEN + 300);
     let _ = (MAX_STRING, MAGIC, VERSION);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// v1.1 — CAPS, AUTH, READ_BATCH e FLAG_TIMESTAMP
+// (docs/FXP-SCHEMA-v1.md §4.5–§4.8 e §5; contrato escrito antes do código)
+// ══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn v11_novos_opcodes_roadtrip_bit_a_bit() {
+    let msgs = vec![
+        Message::caps(caps::LZ4 | caps::BATCH | caps::TIMESTAMP, 30),
+        Message::caps_ok(caps::BATCH | caps::TIMESTAMP, 31),
+        Message::read_batch(vec!["cpu_temp".into(), "cpu_power".into()], 32),
+        Message::read_batch_ok(
+            vec![
+                BatchResult::Ok { value: 45.5, canonical: "cpu_temp".into() },
+                BatchResult::Err { reason: reason::INACCESSIBLE },
+                BatchResult::Err { reason: reason::TIMEOUT },
+            ],
+            33,
+        ),
+        Message::auth_challenge(AUTH_SCHEME_PSK_HMAC_SHA256, [7u8; 32], 34),
+        Message::auth_response([7u8; 32], [9u8; 32], 35),
+        Message::auth_ok(36),
+    ];
+    for msg in msgs {
+        let bytes = encode_to_vec(&msg).unwrap_or_else(|e| panic!("encode falhou: {e}"));
+        let (back, consumed) = decode(&bytes).unwrap_or_else(|e| panic!("decode falhou: {e}"));
+        assert_eq!(consumed, bytes.len());
+        assert_eq!(back, msg, "roundtrip v1.1 alterou a mensagem");
+    }
+}
+
+#[test]
+fn timestamp_deriva_da_flag_e_occupa_o_lugar_do_doc() {
+    let plain_msg = Message::read_ok(70.0, "cpu_temp", false, 40);
+    let plain = encode_to_vec(&plain_msg).unwrap();
+    // wire default: sem FLAG_TIMESTAMP e sem bytes extras
+    assert_eq!(plain[4 + 5] & flag::TIMESTAMP, 0);
+    assert_eq!(plain.len(), 4 + HEADER_LEN + 8 + 1 + 8); // +canonical("cpu_temp")
+
+    let stamped =
+        Message::read_ok(70.0, "cpu_temp", false, 41).with_timestamp(1_756_845_000_000_123);
+    let bytes = encode_to_vec(&stamped).unwrap();
+    // flag derivada do campo
+    assert_eq!(bytes[4 + 5] & flag::TIMESTAMP, flag::TIMESTAMP);
+    // layout: u64 LE entre o header (12 B) e o nome/corpo
+    let ts = u64::from_le_bytes([
+        bytes[4 + HEADER_LEN],
+        bytes[4 + HEADER_LEN + 1],
+        bytes[4 + HEADER_LEN + 2],
+        bytes[4 + HEADER_LEN + 3],
+        bytes[4 + HEADER_LEN + 4],
+        bytes[4 + HEADER_LEN + 5],
+        bytes[4 + HEADER_LEN + 6],
+        bytes[4 + HEADER_LEN + 7],
+    ]);
+    assert_eq!(ts, 1_756_845_000_000_123);
+    assert_eq!(bytes.len(), plain.len() + 8, "timestamp custa exatamente 8 B");
+    let (back, _) = decode(&bytes).unwrap();
+    assert_eq!(back.timestamp_us, Some(1_756_845_000_000_123));
+    let Body::ReadOk { value, .. } = back.body else { panic!("corpo errado") };
+    assert_eq!(value, 70.0);
+    // truncamento em qualquer byte do frame com timestamp também é erro
+    for n in 0..bytes.len() {
+        assert!(decode(&bytes[..n]).is_err(), "truncado em {n} decodificou");
+    }
+}
+
+#[test]
+fn golden_wire_default_igual_ao_v1_0() {
+    // Aditividade (aceite do plano FXP v1.1): nenhum byte novo no wire default.
+    let casos = [
+        Message::read("cpu_temp", 1, true),
+        Message::read_ok(1.0, "cpu_temp", true, 2),
+        Message::read_err(2, 3),
+        Message::act("Fan", WireValue::Num(128.0), 4, true),
+        Message::act_ack(AckAct::Delivered, false, 5),
+        Message::heartbeat("Fan", 6),
+        Message::heartbeat_ack(true, 7),
+        Message::bye(8),
+    ];
+    for msg in casos {
+        let b = encode_to_vec(&msg).unwrap();
+        assert_eq!(b[10], 0, "byte reservado deve ser 0 no wire default");
+        assert_eq!(b[9] & 0b1111_0000, 0, "bits novos não podem aparecer sem recurso");
+    }
+    // Frame v1.0 congelado: READ "cpu_temp" seq=1 com FLAG_ACK.
+    let mut esperado = vec![20, 0, 0, 0, b'F', b'X', b'P', 1, 0x01, 0x01, 0, 8, 1, 0, 0, 0];
+    esperado.extend_from_slice(b"cpu_temp");
+    assert_eq!(encode_to_vec(&Message::read("cpu_temp", 1, true)).unwrap(), esperado);
+}
+
+#[test]
+fn encode_rejeita_bits_de_recurso_setados_a_mao() {
+    // FLAG_TIMESTAMP/FLAG_COMPRESSED são derivados no encode (fonte única:
+    // o campo `timestamp_us` e o pedido de compressão do transporte).
+    let mut msg = Message::read("s", 1, true);
+    msg.flags |= flag::TIMESTAMP;
+    assert_eq!(encode_to_vec(&msg), Err(SchemaError::ReservedFlag));
+    msg.flags = flag::COMPRESSED;
+    assert_eq!(encode_to_vec(&msg), Err(SchemaError::ReservedFlag));
+}
+
+#[test]
+fn batch_respeita_limites_e_erro_por_item_e_honesto() {
+    // 64 = limite aceito.
+    let nomes: Vec<String> = (0..MAX_BATCH).map(|i| format!("sensor{i}")).collect();
+    let msg = Message::read_batch(nomes, 1);
+    let (back, _) = decode(&encode_to_vec(&msg).unwrap()).unwrap();
+    assert_eq!(back, msg);
+    // 65 e vazio → BatchTooLarge (contrato: 1..=64).
+    let sessenta_cinco: Vec<String> = (0..MAX_BATCH + 1).map(|i| format!("s{i}")).collect();
+    assert_eq!(
+        encode_to_vec(&Message::read_batch(sessenta_cinco, 1)),
+        Err(SchemaError::BatchTooLarge)
+    );
+    assert_eq!(
+        encode_to_vec(&Message::read_batch(vec![], 1)),
+        Err(SchemaError::BatchTooLarge)
+    );
+    let resultados: Vec<BatchResult> =
+        (0..MAX_BATCH + 1).map(|_| BatchResult::Err { reason: 1 }).collect();
+    assert_eq!(
+        encode_to_vec(&Message::read_batch_ok(resultados, 1)),
+        Err(SchemaError::BatchTooLarge)
+    );
+    // Razão fora de §4.1 é rejeitada no encode…
+    assert_eq!(
+        encode_to_vec(&Message::read_batch_ok(vec![BatchResult::Err { reason: 5 }], 1)),
+        Err(SchemaError::MissingField)
+    );
+    // …e no decode (byte de status adulterado à mão: status fica após header+count).
+    let mut bytes = encode_to_vec(&Message::read_batch_ok(vec![BatchResult::Err { reason: 1 }], 1)).unwrap();
+    bytes[4 + HEADER_LEN + 2] = 9;
+    assert_eq!(decode(&bytes).unwrap_err(), SchemaError::MissingField);
+
+    // §4.7: razão 0 (nao_registrado) viaja como tag 4 — o byte 0 do item é
+    // o status "ok"; ida e volta preserva a razão.
+    let item = Message::read_batch_ok(vec![BatchResult::Err { reason: reason::NOT_REGISTERED }], 1);
+    let (back, _) = decode(&encode_to_vec(&item).unwrap()).unwrap();
+    assert_eq!(
+        back.body,
+        Body::ReadBatchOk { results: vec![BatchResult::Err { reason: reason::NOT_REGISTERED }] }
+    );
+}
+
+#[test]
+fn auth_scheme_e_nonce_sao_validados() {
+    let ruim = Message::auth_challenge(99, [0u8; 32], 1);
+    assert!(matches!(
+        encode_to_vec(&ruim),
+        Err(SchemaError::UnknownAuthScheme { received: 99 })
+    ));
+    // Nonce tem exatamente 32 bytes no fio (u16 scheme + 32 B).
+    let ok = Message::auth_challenge(AUTH_SCHEME_PSK_HMAC_SHA256, [0xAB; 32], 2);
+    let b = encode_to_vec(&ok).unwrap();
+    assert_eq!(b.len(), 4 + HEADER_LEN + 2 + 32);
+    assert_eq!(&b[4 + HEADER_LEN..4 + HEADER_LEN + 2], &[1, 0], "scheme LE");
+}
+
+#[test]
+fn caps_reservados_sao_rejeitados_no_encode() {
+    let msg = Message::caps(0b0000_0000_0000_1000, 1); // bit 3 é reservado
+    assert!(matches!(encode_to_vec(&msg), Err(SchemaError::ReservedCaps)));
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// v1.1 §4.8 — Compressão LZ4 do corpo
+// ══════════════════════════════════════════════════════════════════════════
+
+/// HELLO grande (região > threshold de 512 B).
+fn hello_grande() -> Message {
+    let devices: Vec<DeviceDesc> = (0..40)
+        .map(|i| DeviceDesc::Sensor {
+            name: format!("sensor_numero_{i:02}_do_registro_completo"),
+            min: Some(-40.0),
+            max: Some(120.0),
+            quantity: "temperature".into(),
+            unit: "°C".into(),
+            precision_pct: 1.5,
+        })
+        .collect();
+    Message::hello(devices, 9)
+}
+
+#[test]
+fn compressao_roundtrip_e_marca_o_frame() {
+    use vbl_fxp::schema::encode_with_compression;
+    let hello = hello_grande();
+    let plano = encode_to_vec(&hello).unwrap();
+    let mut comprimido = Vec::new();
+    encode_with_compression(&hello, &mut comprimido).unwrap();
+
+    // Header marca flag + algoritmo.
+    assert_eq!(comprimido[4 + 5] & flag::COMPRESSED, flag::COMPRESSED);
+    assert_eq!(comprimido[4 + 6], vbl_fxp::schema::compress::ALGO_LZ4);
+    // Wire menor que o plano (60+ nomes repetidos comprimem bem).
+    assert!(
+        comprimido.len() < plano.len(),
+        "lz4: {} vs plano {}",
+        comprimido.len(),
+        plano.len()
+    );
+    // E o roundtrip devolve a mensagem exata.
+    let (back, _) = decode(&comprimido).unwrap();
+    assert_eq!(back, hello);
+}
+
+#[test]
+fn compressao_nao_viaja_abaixo_do_threshold_ou_quando_infla() {
+    use vbl_fxp::schema::encode_with_compression;
+    // READ pequeno: região < 512 B ⇒ sai plano, sem flag.
+    let read = Message::read("cpu_temp", 1, true);
+    let mut fora = Vec::new();
+    encode_with_compression(&read, &mut fora).unwrap();
+    assert_eq!(fora[4 + 5] & flag::COMPRESSED, 0, "frame pequeno não comprime");
+    assert_eq!(fora, encode_to_vec(&read).unwrap(), "byte a byte igual ao plano");
+}
+
+#[test]
+fn compressao_rejeita_algoritmo_desconhecido_e_bomba() {
+    // Frame com FLAG_COMPRESSED e algoritmo 9 ⇒ UnknownCompression.
+    let hello = hello_grande();
+    let mut bytes = encode_to_vec(&hello).unwrap();
+    // Forja: length +1 (byte extra), flags bit6, reservado 9, byte extra 0xFF.
+    let len = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    bytes[0..4].copy_from_slice(&(len + 1).to_le_bytes());
+    bytes[4 + 5] |= flag::COMPRESSED;
+    bytes[4 + 6] = 9;
+    bytes.push(0xFF);
+    assert_eq!(
+        decode(&bytes).unwrap_err(),
+        SchemaError::UnknownCompression { received: 9 }
+    );
+
+    // Bomba: blob não-LZ4 de 100 bytes ⇒ DecompressionFailed (nunca executa
+    // parcialmente).
+    let mut bomba = Vec::new();
+    bomba.extend_from_slice(&(12u32 + 100).to_le_bytes());
+    bomba.extend_from_slice(&encode_to_vec(&Message::bye(1)).unwrap()[4..4 + 12]);
+    bomba[4 + 5] |= flag::COMPRESSED;
+    bomba[4 + 6] = 1;
+    bomba.extend_from_slice(&[0xAB; 100]);
+    assert!(matches!(decode(&bomba), Err(SchemaError::DecompressionFailed)));
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Varredura de robustez do codec: truncamento em TODOS os prefixos, WireValue
+// nos 3 sabores e lote com itens de erro — o fio é estrito (§5).
+// ══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn truncamento_em_qualquer_prefixo_nunca_panica() {
+    let mensagens = vec![
+        Message::read("cpu_temp", 1, true),
+        Message::read_ok(42.0, "cpu_temp", false, 1),
+        Message::read_batch(vec!["a".into(), "b".into()], 1),
+        Message::read_batch_ok(
+            vec![BatchResult::Ok { value: 1.0, canonical: "a".into() },
+                 BatchResult::Err { reason: vbl_fxp::schema::reason::NOT_REGISTERED }],
+            1,
+        ),
+        Message::auth_challenge(vbl_fxp::schema::AUTH_SCHEME_PSK_HMAC_SHA256, [9u8; 32], 1),
+        Message::auth_response([8u8; 32], [7u8; 32], 1),
+        Message::act("Fan", vbl_fxp::WireValue::Num(50.0), 1, false),
+        Message::act("Led", vbl_fxp::WireValue::Str("azul".into()), 1, false),
+        Message::act("Led", vbl_fxp::WireValue::Ident("auto".into()), 1, false),
+        Message::act_ack(AckAct::Delivered, false, 1),
+        Message::hello(Vec::new(), 1),
+        Message::bye(1),
+        Message::heartbeat("cpu_temp", 1),
+    ];
+    for m in mensagens {
+        let bytes = encode_to_vec(&m).unwrap();
+        // Truncar em qualquer tamanho < completo ⇒ erro tipado, nunca pânico
+        // nem leitura fora do buffer.
+        for corte in 0..bytes.len() {
+            assert!(
+                decode(&bytes[..corte]).is_err(),
+                "truncamento em {} de {} decodificou: {:?}",
+                corte,
+                bytes.len(),
+                m
+            );
+        }
+        // E o frame completo sempre volta.
+        let (back, _) = decode(&bytes)
+            .unwrap_or_else(|e| panic!("frame completo falhou ({e}): {:?}", m.opcode));
+        assert_eq!(back, m);
+    }
+}
+
+#[test]
+fn act_ack_e_reason_cobrem_todos_os_estados() {
+    use vbl_fxp::schema::AckAct;
+    let acks = vec![
+        AckAct::Delivered,
+        AckAct::Rejected { limit: 0, limit_value: 10.0 },
+        AckAct::Rejected { limit: 1, limit_value: 255.0 },
+        AckAct::Rejected { limit: 2, limit_value: 200.0 },
+        AckAct::MissingActor,
+        AckAct::Unavailable,
+        AckAct::InvalidValue { reason: "valor não numérico".into() },
+        AckAct::FallbackExecuted { alternativo: "ReserveFan".into() },
+        AckAct::FallbackExhausted,
+    ];
+    for ack in acks {
+        let m = Message::act_ack(ack, true, 7);
+        let (back, _) = decode(&encode_to_vec(&m).unwrap()).unwrap();
+        assert_eq!(back, m);
+    }
+}
+
+#[test]
+fn mensagens_de_erro_do_schema_sao_legiveis() {
+    use vbl_fxp::schema::{SchemaError, compress};
+    let casos: Vec<(SchemaError, &str)> = vec![
+        (SchemaError::NonFiniteValue, "NaN/infinito"),
+        (SchemaError::InvalidUtf8, "UTF-8"),
+        (SchemaError::UnknownCompression { received: 9 }, "compressão"),
+        (SchemaError::ReservedCaps, "reservados"),
+        (SchemaError::DecompressionFailed, "bomba"),
+    ];
+    for (err, pedaco) in casos {
+        let msg = err.to_string();
+        assert!(msg.contains(pedaco), "{err} ⇒ {msg}");
+    }
+    let _ = compress::ALGO_LZ4;
+}
+
+#[test]
+fn hello_com_dispositivos_variados_codifica_e_decodifica_tudo() {
+    use vbl_fxp::schema::DeviceDesc;
+    // A matriz completa do §4.4: sensor COM limites, sensor SEM limites,
+    // ator COM safety e ator sem limites — ida e volta byte a byte.
+    let devices = vec![
+        DeviceDesc::Sensor {
+            name: "temp_a".into(),
+            min: Some(0.0),
+            max: Some(150.0),
+            quantity: "temperature".into(),
+            unit: "°C".into(),
+            precision_pct: 1.5,
+        },
+        DeviceDesc::Sensor {
+            name: "aberto".into(),
+            min: None,
+            max: None,
+            quantity: "power".into(),
+            unit: "W".into(),
+            precision_pct: 5.0,
+        },
+        DeviceDesc::Actor {
+            name: "Fan".into(),
+            min: Some(0.0),
+            max: Some(255.0),
+            safety: Some(200.0),
+        },
+        DeviceDesc::Actor { name: "Led".into(), min: None, max: None, safety: None },
+    ];
+    let m = Message::hello(devices, 3);
+    let (back, _) = decode(&encode_to_vec(&m).unwrap()).unwrap();
+    assert_eq!(back, m);
+}
+
+#[test]
+fn frames_forjados_com_campos_invalidos_falham_tipado() {
+    use vbl_fxp::schema::op;
+    // helper: frame cru no layout do fio (§4.2):
+    // [len u32][MAGIC 4B][ver][opcode][flags][rsv][name_len][seq u32][nome][corpo]
+    let cru = |opcode: u8, nome: &str, corpo: &[u8]| {
+        let mut f = Vec::with_capacity(12 + nome.len() + corpo.len());
+        let length = (12 + nome.len() + corpo.len()) as u32;
+        f.extend_from_slice(&length.to_le_bytes());
+        f.extend_from_slice(&vbl_fxp::schema::MAGIC);
+        f.push(vbl_fxp::schema::VERSION);
+        f.push(opcode);
+        f.push(0); // flags (sem TIMESTAMP/COMPRESSED)
+        f.push(0); // reservado
+        f.push(nome.len() as u8);
+        f.extend_from_slice(&1u32.to_le_bytes()); // seq
+        f.extend_from_slice(nome.as_bytes());
+        f.extend_from_slice(corpo);
+        f
+    };
+    // ACT com nome vazio ⇒ InvalidName
+    let e = decode(&cru(op::ACT, "", &[0, 0, 0, 0, 0, 0, 0, 0])).unwrap_err();
+    assert!(e.to_string().contains("nome"), "{e}");
+    // ACT com kind desconhecido (9) ⇒ MissingField
+    assert!(decode(&cru(op::ACT, "Fan", &[9])).is_err());
+    // ACT_ACK com status desconhecido (9) ⇒ MissingField
+    assert!(decode(&cru(op::ACT_ACK, "Fan", &[9])).is_err());
+    // HELLO com descritor de kind 9 ⇒ MissingField
+    assert!(decode(&cru(op::HELLO, "", &[0, 1, 9])).is_err());
+    // AUTH_CHALLENGE com nonce cortado ⇒ MissingField (guard do take)
+    assert!(decode(&cru(0x08, "", &[1, 2, 3])).is_err());
+}
+
+#[test]
+fn hello_com_mais_de_64k_dispositivos_e_recusado() {
+    use vbl_fxp::schema::DeviceDesc;
+    let devices: Vec<DeviceDesc> = (0..=u16::MAX as usize)
+        .map(|i| DeviceDesc::Actor {
+            name: format!("a{i}"),
+            min: None,
+            max: None,
+            safety: None,
+        })
+        .collect();
+    let m = Message::hello(devices, 0);
+    assert!(encode_to_vec(&m).is_err(), "65.537 descritores devem estourar u16");
+}
+
+#[test]
+fn opcode_name_cobre_os_opcodes_de_corpo_vazio() {
+    use vbl_fxp::schema::op;
+    for o in [op::READ, op::HEARTBEAT, op::BYE, op::AUTH_OK] {
+        assert!(vbl_fxp::schema::op::name(o).is_some(), "opcode {o} sem nome");
+    }
 }

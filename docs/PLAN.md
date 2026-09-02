@@ -2,17 +2,27 @@
 
 ---
 
+> **Revisto em 02/09/2026 — plano executado.** As cinco etapas foram
+> **concluídas** entre 30/08 e 01/09/2026, com relatórios e medidas em
+> [`docs/reports/`](reports/) (revisão formal das metas:
+> [`STAGE-5-GOALS-REVIEW.md`](reports/STAGE-5-GOALS-REVIEW.md)); primeira
+> release: **`v2027.0.0-alpha.0`** (01/09/2026). O texto preserva o plano
+> original; cada etapa traz o **status com evidências** e o §8 consolida o
+> **roteiro pós-alpha**.
+
+---
+
 ### Introdução
 
-Este documento define o roadmap de desenvolvimento técnico para a implementação da **VerboLang** em Rust ou C, estruturado em cinco etapas sequenciais. A arquitetura adota o **FXP (Flux Protocol)** como barramento de I/O que unifica **sensores** (entrada) e **atores** (saída), eliminando a necessidade de módulos separados para hardware. Inclui análise de riscos e estratégias de mitigação para leitura de sensores, atuação de atores, testes térmicos e a gestão de memória (“zero heap”). O objetivo é garantir desenvolvimento seguro, mensurável e alinhado aos princípios do Materialismo Computacional.
+Este documento define o roadmap de desenvolvimento técnico para a implementação da **VerboLang** em Rust ([ADR-001](adrs/ADR-001-core-language.md)), estruturado em cinco etapas sequenciais. A arquitetura adota o **FXP (Flux Protocol)** como barramento de I/O que unifica **sensores** (entrada) e **atores** (saída), eliminando a necessidade de módulos separados para hardware. Inclui análise de riscos e estratégias de mitigação para leitura de sensores, atuação de atores, testes térmicos e a gestão de memória (“zero heap”). O objetivo é garantir desenvolvimento seguro, mensurável e alinhado aos princípios do Materialismo Computacional. O plano foi **executado integralmente** entre 30/08 e 01/09/2026; esta revisão registra o resultado medido de cada etapa e consolida a continuação no §8.
 
 ```mermaid
 flowchart LR
-    E1["Etapa 1<br/>suíte TDD/BDD/E2E<br/>mocks + simulador FXP"]
-    E2["Etapa 2<br/>núcleo da linguagem<br/>lexer · parser · AST · runtime"]
-    E3["Etapa 3<br/>FXP real<br/>sensores e atores"]
-    E4["Etapa 4<br/>Caderno de produção<br/>+ validação E2E"]
-    E5["Etapa 5<br/>profiling termodinâmico<br/>e otimização"]
+    E1["✅ Etapa 1<br/>suíte TDD/BDD/E2E<br/>mocks + simulador FXP"]
+    E2["✅ Etapa 2<br/>núcleo da linguagem<br/>lexer · parser · AST · runtime"]
+    E3["✅ Etapa 3<br/>FXP real<br/>sensores e atores"]
+    E4["✅ Etapa 4<br/>Caderno de produção<br/>+ validação E2E"]
+    E5["✅ Etapa 5<br/>profiling termodinâmico<br/>e otimização"]
 
     E1 --> E2 --> E3 --> E4 --> E5
 ```
@@ -22,6 +32,8 @@ flowchart LR
 ## Etapa 1: Pesquisa & Arquitetura de Escopo via Código em TDD, BDD & E2E
 
 **Foco:** Estabelecer a suíte de testes de integridade física e comportamental antes de escrever qualquer linha do compilador ativo.
+
+**Status:** ✅ **Concluída (30/08/2026)** — [`STAGE-1-REPORT.md`](reports/STAGE-1-REPORT.md). Entregas do §1.3: (a) CI = **GitHub Actions** + `make test`; (b) `MockFXP` (mock em processo) × `FXPSimulator` (simulador físico determinístico); (c) banco fixo de 20 prompts (`CHEATSHEET-PROMPTS.yaml`) — validado na v4 com **93,3 %** (§7); (d) linguagem **Rust** ([ADR-001](adrs/ADR-001-core-language.md)). Suíte: 3 cenários BDD (behave, 17 steps) + 63 testes pytest; **6/6 cláusulas de erro** cobertas (+9 adicionais).
 
 ### 1.1 Cenários de Teste em BDD (Gherkin/Cucumber)
 
@@ -78,6 +90,8 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
 
 **Foco:** Construir a gramática do movimento e o motor assíncrono de transições de estado na memória.
 
+**Status:** ✅ **Concluída** — [`STAGE-2-REPORT.md`](reports/STAGE-2-REPORT.md). Núcleo em Rust (`vbl-lang` · `vbl-runtime` · `vbl-cli`); matriz de rastreabilidade **28/28 produções e 9/9 notas semânticas** ([`STAGE-2-TRACEABILITY-MATRIX.md`](reports/STAGE-2-TRACEABILITY-MATRIX.md)); 36 testes de transição; ASan/LSan limpo; persistência `nonequilibrium` → `equilibrium` como `.vl` canônico com SHA-256.
+
 ### 2.1 Lexer & Parser (Front-End)
 
 *   Implementar o parser conforme a especificação EBNF (FORMAL.md).
@@ -101,6 +115,8 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
 ## Etapa 3: Implementação do FXP (Sensores e Atores)
 
 **Foco:** Desenvolver o Flux Protocol como camada única de I/O, integrando sensores e atores reais e simulados.
+
+**Status:** ✅ **Concluída (31/08/2026)** — [`STAGE-3-REPORT.md`](reports/STAGE-3-REPORT.md). Schema de mensagem v1 definido **antes** dos drivers ([`FXP-SCHEMA-v1.md`](FXP-SCHEMA-v1.md)); registro com aliases/fallback; drivers reais (thermal_zone, RAPL, hwmon PWM, LED class) e simulados; barramento real/simulado/híbrido; transporte local/remoto (Unix/TCP); **6/6 atores obrigatórios** (FORMAL §6). Latências medidas: leitura real 6,45 µs · leitura remota 11,7 µs · roundtrip do schema ~86 ns.
 
 ### 3.1 Arquitetura do FXP
 
@@ -147,6 +163,8 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
 
 **Foco:** Contabilidade ecológica e validação de testes fim-a-fim, incluindo sensores e atores.
 
+**Status:** ✅ **Concluída (31/08/2026)** — [`STAGE-4-REPORT.md`](reports/STAGE-4-REPORT.md). Caderno de produção em formato binário compacto `.vcad` v1 com cadeia SHA-256 ([`NOTEBOOK-FORMAT-v1.md`](NOTEBOOK-FORMAT-v1.md)); gravação assíncrona em buffer; E2E **7/7** cenários no binário real; estresse de 60.000 eventos íntegro; verificador externo `vbl ledger-verify`; logs reais exportados em `logs/stage4/`.
+
 ### 4.1 O Auditor do Caderno
 
 *   Cálculo da integral de energia ativa por tempo (Joules) para cada forma.
@@ -176,6 +194,8 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
 
 **Foco:** Profiling termodinâmico profundo, eliminação de inércia oculta e refatoração com padrões de baixo nível.
 
+**Status:** ✅ **Concluída (31/08/2026)** — [`STAGE-5-REPORT.md`](reports/STAGE-5-REPORT.md); revisão formal das metas (AGENTS §4): [`STAGE-5-GOALS-REVIEW.md`](reports/STAGE-5-GOALS-REVIEW.md); validação laboratorial (soak 24 h **SOAK OK**, RAPL real com |ε| ≤ 0,019 %, perf fino, FXP híbrido em hardware): [`STAGE-5-LABORATORY.md`](reports/STAGE-5-LABORATORY.md). Metas reancoradas com números medidos: transição 65,7 µs · heap por forma 743 B/743 B/1 448 B · steady-state 7,43 MB @ 10.000 formas · overhead do Caderno 0,024 % CPU · `subvert` no mesmo tick 28,4 µs.
+
 ### 5.1 Profiling de Memória e Energia
 
 *   **"Vazamento Inerte":** Qualquer estrutura mantida em heap além do `horizon` é incoerente.
@@ -199,6 +219,8 @@ Os cenários comportamentais validam os limites de segurança da matéria, inclu
 ---
 
 ## 6. Análise de Riscos e Estratégias de Mitigação (Resumo Consolidado)
+
+> **Saldo da execução:** os riscos abaixo foram tratados conforme o plano — simulador determinístico em CI, fallbacks honestos (FORMAL §4.7) e a redefinição de "zero heap" validada por churn (200 mil ciclos), ASan/LSan limpo e soak de 24 h ([`STAGE-5-LABORATORY.md`](reports/STAGE-5-LABORATORY.md) §6). As tabelas permanecem como registro histórico das decisões.
 
 ### 6.1 Leitura de Sensores Físicos via FXP
 
@@ -285,6 +307,26 @@ do modelo local para assuntos da linguagem deve assumir explicitamente que
 
 ---
 
+## 8. Roteiro pós-alpha — continuação registrada (janela `v2027.0.0-alpha.1`)
+
+Com as cinco etapas concluídas, a continuação evolui por linhas de release
+([`RELEASES.md`](RELEASES.md) — próxima janela: `alpha.1`, Setembro/2026) e
+pelo trabalho futuro registrado nos relatórios. Nenhum item abaixo bloqueia a
+release atual; a ordem reflete o custo/benefício medido.
+
+| # | Item | Origem / justificativa |
+|---|------|------------------------|
+| 1 | **Dissolução O(1) amortizada** (tombstones + compaction no escalonador) | Gargalo medido por perf fino: `remove_form` = 22,7 % dos ciclos e `memcmp` = 28,8 % ([LABORATORY §5](reports/STAGE-5-LABORATORY.md)); proposta e risco (duplicação na `ordem`) em [GOALS-REVIEW §1](reports/STAGE-5-GOALS-REVIEW.md) |
+| 2 | **Metering energético por forma** | Extensão prevista na FORMAL §4.2 ([STAGE-5-REPORT §10](reports/STAGE-5-REPORT.md)) |
+| 3 | **Atuação física de `CpuPowerCap`** | No laboratório o host não expunha `constraint_0_power_limit_uw` — a subversão térmica real disparou, com falha honesta do ator (§4.7). Validar o capping real em host que exponha o constraint ([LABORATORY §1](reports/STAGE-5-LABORATORY.md)) |
+| 4 | **Medidor externo de referência (wattímetro)** | A precisão Caderno × RAPL (|ε| ≤ 0,019 %) valida a contabilidade de partilha; a precisão do sensor contra referência independente segue em aberto ([LABORATORY §4](reports/STAGE-5-LABORATORY.md), escopo honesto) |
+| 5 | **Backends reais de `AttentionSource`** (EEG, eye tracking, heurísticas de uso) | Hoje só o backend simulado (padrão) existe — cf. §3.2 |
+| 6 | **Release `v2027.0.0-alpha.1`** | Congelar changelog e cortar a janela de Setembro ([`RELEASES.md`](RELEASES.md); ver CHANGELOG "Não lançado") |
+| 7 | **Caminhos (b) RAG e (c) fine-tune do §7** | Registrados, não programados; a cada mudança na FORMAL, revalidar o cheat sheet com `make validate-cheatsheet` |
+| 8 | **FXP v1.1 — extensões do fio** *(concluído nesta janela)* | Origem: §9 do [FXP-SCHEMA-v1](FXP-SCHEMA-v1.md) (que virou o contrato v1.1 — sem arquivo duplicado). CAPS, AUTH PSK, READ_BATCH, LZ4, FLAG_TIMESTAMP e beacon FXPD, tudo negociado/opt-in, fio padrão byte a byte v1.0. Medidas: lote 5,3× (117,4→22,3 µs no ciclo de 8 sensores), timestamp +5 ns, handshake +4 µs — [FXP-V1.1-REPORT](reports/FXP-V1.1-REPORT.md) |
+
+---
+
 ## Conclusão
 
-Com a integração de sensores e atores no FXP, o plano de execução torna-se mais coeso e alinhado à filosofia do Materialismo Computacional. A inclusão da análise de riscos e a adoção de um simulador para CI garantem que o desenvolvimento seja seguro e viável, mantendo o rigor termodinâmico e os critérios de aceite mensuráveis definidos no AGENTS.md.
+O plano cumpriu seu papel: as cinco etapas foram executadas com os critérios de aceite mensuráveis definidos no AGENTS.md, os riscos mapeados foram tratados com o simulador determinístico e os fallbacks honestos, e o resultado está ancorado em evidência — relatórios por etapa, benches criterion, auditor de heap, soak de 24 h e laboratório com RAPL real. A integração de sensores e atores no FXP mostrou-se coesa com a filosofia do Materialismo Computacional. A primeira release da linha (`v2027.0.0-alpha.0`) consolida esse estado; a continuação segue o roteiro do §8 e o calendário de releases ([`RELEASES.md`](RELEASES.md)), mantendo a honestidade termodinâmica como critério permanente.

@@ -14,6 +14,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use vbl_runtime::fxp::{ActorLimits, Registry as RuntimeRegistry, SensorInfo};
+use crate::schema::DeviceDesc;
 
 /// Modo de operação global do barramento (PLAN §3.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -125,6 +126,10 @@ pub enum Endpoint {
     LedClass { dir: PathBuf },
     /// Peer remoto falando schema v1 (`unix:/path` ou `tcp:host:porta`).
     Remote { addr: RemoteAddr },
+    /// Descoberta multicast v1.1 (§4.9): resolve no `build()` do barramento
+    /// ouvindo o grupo FXPD pelo `identifier`; sem anúncio no prazo ⇒
+    /// registrado porém inacessível (FORMAL §4.7).
+    AutoRemote { identifier: String },
 }
 
 impl Endpoint {
@@ -138,6 +143,12 @@ impl Endpoint {
             "simulado" => return Ok(Endpoint::Simulated),
             "auto" => return Ok(Endpoint::Auto),
             _ => {}
+        }
+        if let Some(id) = s.strip_prefix("discover:") {
+            if id.is_empty() {
+                return Err(RegistryError::InvalidEndpoint(s.into()));
+            }
+            return Ok(Endpoint::AutoRemote { identifier: id.into() });
         }
         let (schema, rest) = s
             .split_once(':')
@@ -180,6 +191,7 @@ impl Endpoint {
                 RemoteAddr::Unix(p) => format!("unix:{}", p.display()),
                 RemoteAddr::Tcp { host, port } => format!("tcp:{host}:{port}"),
             },
+            Endpoint::AutoRemote { identifier } => format!("discover:{identifier}"),
         }
     }
 
@@ -229,6 +241,29 @@ impl DeviceEntry {
             endpoint: Endpoint::Simulated,
             fallback: Vec::new(),
             aliases: Vec::new(),
+        }
+    }
+
+    /// Conversão para o descritor do fio (`HELLO`, schema §4.4) — publicado
+    /// pelo `PeerServer` para o lado remoto enxergar limites (FORMAL §4.3).
+    pub fn to_device_desc(&self) -> DeviceDesc {
+        match &self.kind {
+            DeviceKind::Sensor { quantity, unit, range: (min, max), precision_pct } => {
+                DeviceDesc::Sensor {
+                    name: self.name.clone(),
+                    min: *min,
+                    max: *max,
+                    quantity: quantity.clone(),
+                    unit: unit.clone(),
+                    precision_pct: *precision_pct,
+                }
+            }
+            DeviceKind::Actor { limits } => DeviceDesc::Actor {
+                name: self.name.clone(),
+                min: limits.min,
+                max: limits.max,
+                safety: limits.safety_limit,
+            },
         }
     }
 }
@@ -457,6 +492,15 @@ pub struct FxpConfig {
     pub devices: BTreeMap<String, DeviceCfg>,
     /// `fallback.<actor> = alt1, alt2`.
     pub fallback: BTreeMap<String, Vec<String>>,
+    /// v1.1 §4.7: prefetch em lote ao primeiro cache-miss (default off).
+    pub batch_prefetch: Option<bool>,
+    /// v1.1 §4.8: anunciar LZ4 (respostas comprimidas; default off).
+    pub compression: Option<bool>,
+    /// v1.1 §5: anunciar FLAG_TIMESTAMP (carimbo físico no fio; default off —
+    /// o Caderno continua no relógio virtual).
+    pub wire_timestamp: Option<bool>,
+    /// v1.1 §4.8: região menor que isso nunca comprime (default 512 B).
+    pub compress_threshold: Option<usize>,
 }
 
 /// Bloco de configuração de um dispositivo.
@@ -477,6 +521,17 @@ pub struct DeviceCfg {
 impl FxpConfig {
     /// Faz o parse de linhas `key = value`. Chaves compostas:
     /// `<device>.<field>` e `fallback.<actor>`.
+    /// `true|false` (chave global v1.1); erro honesto com linha.
+    fn bool_cfg(nome: &str, valor: &str, linha: usize) -> Result<bool, RegistryError> {
+        match valor {
+            "true" => Ok(true),
+            "false" => Ok(false),
+            other => Err(RegistryError::InvalidConfig(format!(
+                "linha {linha}: {nome} espera true|false (recebido '{other}')"
+            ))),
+        }
+    }
+
     pub fn parse(text: &str) -> Result<Self, RegistryError> {
         let mut cfg = Self::default();
         for (i, bruta) in text.lines().enumerate() {
@@ -504,6 +559,22 @@ impl FxpConfig {
                 "act_timeout_local_ms" => cfg.act_timeout_local_ms = Some(num(key)?),
                 "act_timeout_remote_ms" => cfg.act_timeout_remote_ms = Some(num(key)?),
                 "queue_timeout_ms" => cfg.queue_timeout_ms = Some(num(key)?),
+                "batch_prefetch" => {
+                    cfg.batch_prefetch = Some(Self::bool_cfg("batch_prefetch", value, i)?)
+                }
+                "compression" => cfg.compression = Some(Self::bool_cfg("compression", value, i)?),
+                "wire_timestamp" => {
+                    cfg.wire_timestamp = Some(Self::bool_cfg("wire_timestamp", value, i)?)
+                }
+                "compress_threshold" => {
+                    cfg.compress_threshold =
+                        Some(usize::try_from(num("compress_threshold")?).map_err(|_| {
+                            RegistryError::InvalidConfig(format!(
+                                "linha {}: compress_threshold muito grande",
+                                i + 1
+                            ))
+                        })?)
+                }
                 "retries" => {
                     cfg.retries = Some(u32::try_from(num("retries")?).map_err(|_| {
                         RegistryError::InvalidConfig(format!("linha {}: retries muito grande", i + 1))

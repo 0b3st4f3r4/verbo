@@ -19,7 +19,7 @@
 use crate::drivers::{actor_from, discover, sensor_from, ActorDriver, SensorDriver};
 use crate::queue::{Command, CommandQueue};
 use crate::registry::{DeviceKind, DeviceMode, DeviceRegistry, Endpoint, OperationMode, RemoteAddr};
-use crate::schema::{flag, reason, AckAct, Body, Message, WireValue};
+use crate::schema::{caps, flag, reason, AckAct, BatchResult, Body, Message, WireValue};
 use crate::transport::{Connection, TransportError};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -33,12 +33,18 @@ use vbl_runtime::sim::FxpSimulator;
 
 /// Kinds de evento acrescentados pelo barramento (vocabulário do Caderno —
 /// FORMAL §6 lista os canônicos de fim de forma; estes cobrem o ciclo de
-/// vida da fila prioritária).
+/// vida da fila prioritária e os recursos de transporte v1.1).
 pub mod kinds {
     /// Comando enfileirado foi entregue numa re-entrega do `on_tick`.
     pub const COMANDO_REENTREGUE: &str = "comando_reentregue";
     /// Comando excedeu `queue_timeout_ticks` e foi descartado com alerta.
     pub const COMANDO_EXPIRADO: &str = "comando_expirado";
+    /// Lote de leituras remotas (`READ_BATCH`, schema §4.7) — diagnóstico de
+    /// transporte; o evento semântico de leitura continua sendo o do runtime.
+    pub const FXP_BATCH: &str = "fxp_batch";
+    /// Peer remoto não anunciou a capacidade pedida — segue em v1.0
+    /// (degradação honesta e logada, nunca silenciosa).
+    pub const FXP_PEER_V1: &str = "fxp_peer_v1";
 }
 
 /// Trilha de atuação com a latência medida (Etapa 4 — PLAN §4.1): o Caderno
@@ -76,6 +82,20 @@ pub struct BusConfig {
     pub retries: u32,
     /// Ticks virtuais que um comando pode esperar na fila.
     pub queue_timeout_ticks: u64,
+    // -- v1.1 (docs/FXP-SCHEMA-v1.md §4.5–§4.8): tudo opt-in; defaults
+    // -- preservam o wire bit a bit v1.0.
+    /// Prefetch de lote no primeiro cache-miss do tick (`READ_BATCH` §4.7).
+    pub batch_prefetch: bool,
+    /// Compressão LZ4 negociada dos frames (§4.8).
+    pub compression: bool,
+    /// Pedir `FLAG_TIMESTAMP` ao peer e propagar como `fio_us` (§5).
+    pub wire_timestamp: bool,
+    /// PSK de autenticação do canal remoto (§4.6) — bytes da chave; o CLI
+    /// resolve de env (`psk:VAR`); a chave nunca trafega no fio.
+    pub psk: Option<Vec<u8>>,
+    /// Janela de escuta da descoberta multicast (§4.9) para endpoints
+    /// `discover:<identificador>`.
+    pub discover_window: Duration,
 }
 
 impl Default for BusConfig {
@@ -88,6 +108,11 @@ impl Default for BusConfig {
             act_timeout_remote: Duration::from_millis(500),
             retries: 1,
             queue_timeout_ticks: 2,
+            batch_prefetch: false,
+            compression: false,
+            wire_timestamp: false,
+            psk: None,
+            discover_window: Duration::from_millis(500),
         }
     }
 }
@@ -130,8 +155,13 @@ pub struct FxpBus {
     routes: BTreeMap<String, Route>, // canônico → rota
     real_sensors: BTreeMap<String, Box<dyn SensorDriver + Send>>,
     real_actors: BTreeMap<String, Box<dyn ActorDriver + Send>>,
-    connections: BTreeMap<String, Connection>, // canônico → transporte remoto
+    connections: BTreeMap<String, Connection>, // endereço do peer → transporte
     cache: BTreeMap<String, (Instant, f64)>,
+    /// Timestamp físico do fio por canônico (§5 — anotação de laboratório;
+    /// o Caderno segue no relógio virtual). Presente só quando o peer carimbou.
+    wire_ts: BTreeMap<String, u64>,
+    /// Peers que não anunciaram v1.1 (CAPS falhou) — degradação honesta.
+    v1_peers: BTreeMap<String, bool>,
     queue: CommandQueue,
     seq: u32,
     disk_bytes: u64,
@@ -195,8 +225,30 @@ impl FxpBus {
                 RouteSpec::Simulator => Route::Simulator,
                 RouteSpec::Inaccessible { reason } => Route::Inaccessible { reason },
                 RouteSpec::Concrete => {
+                    // v1.1 §4.9: descoberta multicast resolve AQUI (build) —
+                    // sem anúncio no prazo ⇒ registrado porém inacessível.
                     let endpoint = match &d.endpoint {
                         Endpoint::Auto => discover(&d.name),
+                        Endpoint::AutoRemote { identifier } => {
+                            match crate::discover::discover_peers(
+                                config.discover_window,
+                                crate::discover::DEFAULT_GROUP,
+                            ) {
+                                Ok(peers) => match peers
+                                    .into_iter()
+                                    .find(|p| p.identifier == *identifier)
+                                {
+                                    Some(p) => Some(Endpoint::Remote {
+                                        addr: RemoteAddr::Tcp {
+                                            host: p.source.ip().to_string(),
+                                            port: p.tcp_port,
+                                        },
+                                    }),
+                                    None => None,
+                                },
+                                Err(_) => None,
+                            }
+                        }
                         e => Some(e.clone()),
                     };
                     match endpoint {
@@ -251,6 +303,8 @@ impl FxpBus {
             real_actors,
             connections: BTreeMap::new(),
             cache: BTreeMap::new(),
+            wire_ts: BTreeMap::new(),
+            v1_peers: BTreeMap::new(),
             queue: CommandQueue::default(),
             seq: 0,
             disk_bytes: 0,
@@ -345,7 +399,8 @@ impl FxpBus {
         }
     }
 
-    /// Leitura remota via schema v1 (READ → READ_OK/READ_ERR, ack por seq).
+    /// Leitura remota via schema v1.1: batch prefetch (§4.7, opt-in) →
+    /// READ individual → READ_OK/READ_ERR, ack por seq.
     fn read_remote(
         &mut self,
         canonical: &str,
@@ -357,23 +412,51 @@ impl FxpBus {
         let Some(Route::Remote(addr)) = self.routes.get(canonical).cloned() else {
             return Err(SensorFailure::Inaccessible);
         };
+        if self.config.batch_prefetch {
+            // Conexão+negociação antes da decisão: CAPS precisa estar viva.
+            if let Err(e) = self.ensure_remote(&addr, self.config.read_timeout, ledger) {
+                self.sensor_alert(ledger, "sensor_inaccessible", canonical, &format!("transporte: {e}."));
+                return Err(SensorFailure::Inaccessible);
+            }
+            if self.granted_caps_of(&addr) & caps::BATCH != 0
+                && self.alvos_de_batch(&addr).len() >= 2
+            {
+                return self.read_remote_batch(canonical, &addr, ledger);
+            }
+        }
+        self.read_remote_individual(canonical, ledger)
+    }
+
+    /// Caminho individual (v1.0 compatível), com captura de timestamp do fio.
+    fn read_remote_individual(
+        &mut self,
+        canonical: &str,
+        ledger: &mut dyn Ledger,
+    ) -> Result<f64, SensorFailure> {
+        let Some(Route::Remote(addr)) = self.routes.get(canonical).cloned() else {
+            return Err(SensorFailure::Inaccessible);
+        };
         let seq = self.next_seq();
         let request = Message::read(canonical, seq, true);
-        match self.request_remote(canonical, &addr, &request, self.config.read_timeout) {
+        match self.request_remote(&addr, &request, self.config.read_timeout, ledger) {
             Ok(resp) => {
                 let synthetic = resp.flags & flag::SYNTHETIC != 0;
+                let fio_us = resp.timestamp_us;
+                if let Some(ts) = fio_us {
+                    self.wire_ts.insert(canonical.into(), ts);
+                }
                 match resp.body {
-                    Body::ReadOk { value, canonical: can } => {
+                    Body::ReadOk { value, .. } => {
                         if synthetic {
                             // §4.7: dado sintético sempre marcado no Caderno.
                             ledger.warn(
                                 &format!("Leitura remota de '{canonical}' é de origem simulada (measurement_status: simulado)."),
-                                Json::obj([
-                                    ("motivo", Json::str("measurement_status_simulado")),
-                                    ("sensor", Json::str(canonical)),
-                                    ("canonical", Json::str(can)),
-                                    ("valor", Json::num(value)),
-                                ]),
+                                fio_us_json(
+                                    "measurement_status_simulado",
+                                    canonical,
+                                    value,
+                                    fio_us,
+                                ),
                             );
                         }
                         self.cache.insert(canonical.into(), (Instant::now(), value));
@@ -381,13 +464,8 @@ impl FxpBus {
                         Ok(value)
                     }
                     Body::ReadErr { reason } => {
-                        let (failure, reason) = match reason {
-                            reason::NOT_REGISTERED => {
-                                (SensorFailure::NotRegistered, "sensor_not_registered")
-                            }
-                            _ => (SensorFailure::Inaccessible, "sensor_inaccessible"),
-                        };
-                        self.sensor_alert(ledger, reason, canonical, "peer respondeu erro.");
+                        let (failure, motivo) = motivo_de_reason(reason);
+                        self.sensor_alert(ledger, motivo, canonical, "peer respondeu erro.");
                         Err(failure)
                     }
                     _ => {
@@ -402,7 +480,7 @@ impl FxpBus {
                 }
             }
             Err(e) => {
-                self.connections.remove(canonical); // conexão suspeita: reconectar
+                self.connections.remove(&addr_key(&addr)); // conexão suspeita
                 self.sensor_alert(
                     ledger,
                     "sensor_inaccessible",
@@ -422,23 +500,209 @@ impl FxpBus {
         }
     }
 
-    /// Pedido-resposta remoto com reconexão preguiçosa.
+    /// Pedido-resposta remoto com reconexão preguiçosa. Uma conexão **por
+    /// endereço de peer** (sensores do mesmo peer compartilham o fio —
+    /// pressuposto do batching §4.7). Na abertura: AUTH (§4.6, se PSK) e
+    /// depois CAPS (§4.5, se algum recurso foi pedido); peer que não responde
+    /// à negociação ⇒ degradação honesta para v1.0 com evento no Caderno.
     fn request_remote(
         &mut self,
-        canonical: &str,
         addr: &RemoteAddr,
         request: &Message,
         timeout: Duration,
+        ledger: &mut dyn Ledger,
     ) -> Result<Message, TransportError> {
-        if !self.connections.contains_key(canonical) {
-            let c = match addr {
-                RemoteAddr::Unix(p) => Connection::unix(p, timeout)?,
-                RemoteAddr::Tcp { host, port } => Connection::tcp(host, *port, timeout)?,
-            };
-            self.connections.insert(canonical.into(), c);
-        }
-        let c = self.connections.get_mut(canonical).expect("inserido acima");
+        self.ensure_remote(addr, timeout, ledger)?;
+        let key = addr_key(addr);
+        let c = self.connections.get_mut(&key).expect("garantido acima");
         c.request(request, timeout)
+    }
+
+    /// Garante conexão aberta (e negociada) com o peer — separada do pedido
+    /// para que a decisão de batching veja as CAPS já concedidas (§4.5).
+    fn ensure_remote(
+        &mut self,
+        addr: &RemoteAddr,
+        timeout: Duration,
+        ledger: &mut dyn Ledger,
+    ) -> Result<(), TransportError> {
+        let key = addr_key(addr);
+        if self.connections.contains_key(&key) {
+            return Ok(());
+        }
+        let mut c = match addr {
+            RemoteAddr::Unix(p) => Connection::unix(p, timeout)?,
+            RemoteAddr::Tcp { host, port } => Connection::tcp(host, *port, timeout)?,
+        };
+        // §6 — ordem: AUTH → CAPS → trabalho. Falha de AUTENTICAÇÃO é
+        // terminativa (segurança não degrada para canal aberto).
+        if let Some(psk) = &self.config.psk {
+            if let Err(e) = c.authenticate(psk, timeout) {
+                return Err(TransportError::Broken(format!("auth: {e}")));
+            }
+        }
+        let wanted = self.wanted_caps();
+        if wanted != 0 {
+            if let Err(e) = c.negotiate(wanted, timeout) {
+                if matches!(e, TransportError::Timeout) {
+                    return Err(e);
+                }
+                // Peer provavelmente v1.0 (fechou diante de CAPS): reconecta
+                // em modo v1.0 puro e REGISTRA a degradação (nunca silenciosa).
+                let c2 = match addr {
+                    RemoteAddr::Unix(p) => Connection::unix(p, timeout)?,
+                    RemoteAddr::Tcp { host, port } => Connection::tcp(host, *port, timeout)?,
+                };
+                self.connections.insert(key.clone(), c2);
+                self.v1_peers.insert(key.clone(), true);
+                ledger.record(
+                    kinds::FXP_PEER_V1,
+                    &format!(
+                        "Peer remoto ({key}) não anunciou v1.1 (CAPS); seguindo em modo v1.0 — recursos de fio desligados."
+                    ),
+                    Json::obj([
+                        ("motivo", Json::str("fxp_peer_v1")),
+                        ("peer", Json::str(key.clone())),
+                    ]),
+                );
+                return Ok(());
+            }
+        }
+        self.connections.insert(key, c);
+        Ok(())
+    }
+
+    /// Capacidades que este bus pede ao peer (config opt-in v1.1).
+    fn wanted_caps(&self) -> u16 {
+        let mut w = 0;
+        if self.config.compression {
+            w |= caps::LZ4;
+        }
+        if self.config.batch_prefetch {
+            w |= caps::BATCH;
+        }
+        if self.config.wire_timestamp {
+            w |= caps::TIMESTAMP;
+        }
+        w
+    }
+
+    /// Capacidades concedidas pelo peer do endereço (0 sem negociação) —
+    /// observação para testes/probe.
+    pub fn granted_caps_of(&self, addr: &RemoteAddr) -> u16 {
+        self.connections
+            .get(&addr_key(addr))
+            .map(|c| c.negotiated_caps())
+            .unwrap_or(0)
+    }
+
+    /// Invalida o cache de leitura (probe/bench/testes: força re-I/O na
+    /// próxima leitura de cada sensor).
+    pub fn invalidate_cache(&mut self) {
+        self.cache.clear();
+    }
+
+    /// Timestamp físico do fio da última leitura do canônico (§5) —
+    /// anotação de laboratório; `None` = peer não carimbou.
+    pub fn wire_timestamp_of(&self, name: &str) -> Option<u64> {
+        self.wire_ts.get(self.registry.canonical_of(name)).copied()
+    }
+
+    /// Sensores remotos de um peer com cache vencido (alvos do prefetch).
+    fn alvos_de_batch(&self, addr: &RemoteAddr) -> Vec<String> {
+        self.registry
+            .devices()
+            .filter(|d| matches!(d.kind, DeviceKind::Sensor { .. }))
+            .map(|d| d.name.clone())
+            .filter(|n| {
+                matches!(self.routes.get(n), Some(Route::Remote(a)) if a == addr)
+                    && self.cache_valid(n).is_none()
+            })
+            .collect()
+    }
+
+    /// Leitura por lote (§4.7): um RTT para todos os sensores vencidos do
+    /// peer. Sucesso pré-preenche o cache; falha de item NÃO vira alerta —
+    /// o alerta continua pertencendo à pergunta feita (§4.7 do schema).
+    fn read_remote_batch(
+        &mut self,
+        canonical: &str,
+        addr: &RemoteAddr,
+        ledger: &mut dyn Ledger,
+    ) -> Result<f64, SensorFailure> {
+        let alvos = self.alvos_de_batch(addr);
+        if alvos.len() < 2 {
+            // Lote de 1 = READ individual sem ganho: mantém o caminho v1.0.
+            return self.read_remote_individual(canonical, ledger);
+        }
+        let seq = self.next_seq();
+        let request = Message::read_batch(alvos.clone(), seq);
+        match self.request_remote(addr, &request, self.config.read_timeout, ledger) {
+            Ok(resp) => {
+                let synthetic = resp.flags & flag::SYNTHETIC != 0;
+                let fio_us = resp.timestamp_us;
+                match resp.body {
+                    Body::ReadBatchOk { results } => {
+                        ledger.record(
+                            kinds::FXP_BATCH,
+                            &format!(
+                                "Lote de {} sensor(es) remotos em 1 RTT ({}).",
+                                results.len(),
+                                addr_descricao(addr)
+                            ),
+                            Json::obj([
+                                ("motivo", Json::str("fxp_batch")),
+                                ("itens", Json::num(results.len() as f64)),
+                                ("peer", Json::str(addr_descricao(addr))),
+                            ]),
+                        );
+                        let mut pedido: Option<(String, BatchResult)> = None;
+                        for (nome, r) in alvos.iter().zip(results) {
+                            if let BatchResult::Ok { value, .. } = &r {
+                                self.cache.insert(nome.clone(), (Instant::now(), *value));
+                                self.note_power(nome, *value);
+                                if let Some(ts) = fio_us {
+                                    self.wire_ts.insert(nome.clone(), ts);
+                                }
+                            }
+                            if nome == canonical {
+                                pedido = Some((nome.clone(), r));
+                            }
+                        }
+                        match pedido {
+                            Some((_, BatchResult::Ok { value, .. })) => {
+                                if synthetic {
+                                    // §4.7: dado sintético sempre marcado.
+                                    ledger.warn(
+                                        &format!("Lote remoto inclui '{canonical}' de origem simulada (measurement_status: simulado)."),
+                                        fio_us_json("measurement_status_simulado", canonical, value, fio_us),
+                                    );
+                                }
+                                Ok(value)
+                            }
+                            Some((nome, BatchResult::Err { reason })) => {
+                                let (failure, motivo) = motivo_de_reason(reason);
+                                self.sensor_alert(ledger, motivo, &nome, "peer respondeu erro no lote.");
+                                Err(failure)
+                            }
+                            None => {
+                                self.sensor_alert(ledger, "sensor_inaccessible", canonical, "lote sem o sensor pedido.");
+                                Err(SensorFailure::Inaccessible)
+                            }
+                        }
+                    }
+                    _ => {
+                        self.sensor_alert(ledger, "sensor_inaccessible", canonical, "resposta inesperada ao lote.");
+                        Err(SensorFailure::Inaccessible)
+                    }
+                }
+            }
+            Err(e) => {
+                self.connections.remove(&addr_key(addr));
+                self.sensor_alert(ledger, "sensor_inaccessible", canonical, &format!("transporte: {e}."));
+                Err(SensorFailure::Inaccessible)
+            }
+        }
     }
 
     fn route_description(&self, canonical: &str) -> String {
@@ -580,9 +844,12 @@ impl FxpBus {
             self.config.act_timeout_local
         };
         let t0 = Instant::now();
-        match self.request_remote(canonical, &addr, &request, timeout) {
+        match self.request_remote(&addr, &request, timeout, ledger) {
             Ok(resp) => {
                 let latency_us = t0.elapsed().as_micros() as u64;
+                if let Some(ts) = resp.timestamp_us {
+                    self.wire_ts.insert(canonical.into(), ts);
+                }
                 match resp.body {
                     Body::ActAck { status } => match status {
                         AckAct::Delivered => {
@@ -643,7 +910,7 @@ impl FxpBus {
                 }
             }
             Err(e) => {
-                self.connections.remove(canonical);
+                self.connections.remove(&addr_key(&addr));
                 actuation_with_latency(ledger, canonical, value, t0.elapsed().as_micros() as u64, false);
                 ledger.record(
                     rt_kinds::ACTOR_UNAVAILABLE,
@@ -858,12 +1125,52 @@ fn base_route(config: &BusConfig, d: &crate::registry::DeviceEntry) -> RouteSpec
     }
 }
 
-fn wire_of(v: &Value) -> WireValue {
+pub(crate) fn wire_of(v: &Value) -> WireValue {
     match v {
         Value::Num(n) => WireValue::Num(*n),
         Value::Str(s) => WireValue::Str(s.clone()),
         Value::Ident(s) => WireValue::Ident(s.clone()),
     }
+}
+
+/// Chave de conexão por ENDEREÇO do peer (sensores do mesmo peer
+/// compartilham o fio — pressuposto do batching §4.7).
+pub(crate) fn addr_key(addr: &RemoteAddr) -> String {
+    match addr {
+        RemoteAddr::Unix(p) => format!("unix:{}", p.display()),
+        RemoteAddr::Tcp { host, port } => format!("tcp:{host}:{port}"),
+    }
+}
+
+/// Descrição legível do endereço (eventos do Caderno).
+pub(crate) fn addr_descricao(addr: &RemoteAddr) -> String {
+    addr_key(addr)
+}
+
+/// `READ_ERR.reason` → (falha do runtime, motivo do evento) — FORMAL §4.7.
+pub(crate) fn motivo_de_reason(reason: u8) -> (SensorFailure, &'static str) {
+    match reason {
+        reason::NOT_REGISTERED => (SensorFailure::NotRegistered, "sensor_not_registered"),
+        _ => (SensorFailure::Inaccessible, "sensor_inaccessible"),
+    }
+}
+
+/// JSON de evento de leitura com o timestamp do fio quando presente (§5).
+pub(crate) fn fio_us_json(
+    motivo: &str,
+    sensor: &str,
+    valor: f64,
+    fio_us: Option<u64>,
+) -> Json {
+    let mut pares = vec![
+        ("motivo", Json::str(motivo)),
+        ("sensor", Json::str(sensor)),
+        ("valor", Json::num(valor)),
+    ];
+    if let Some(ts) = fio_us {
+        pares.push(("fio_us", Json::num(ts as f64)));
+    }
+    Json::obj(pares)
 }
 
 impl Fxp for FxpBus {

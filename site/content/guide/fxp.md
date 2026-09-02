@@ -136,6 +136,33 @@ A configuração é do registro (`--fxp-config ARQUIVO` — schema completo em
 [FXP-SCHEMA-v1](../../../docs/FXP-SCHEMA-v1.md)); `--fxp-mode` sobrepõe na
 linha de comando.
 
+## FXP v1.1 — recursos negociados no fio (opt-in)
+
+O fio padrão é byte a byte o do v1.0. Quatro extensões (e a descoberta)
+existem e **só entram em cena se os dois lados negociarem** — a mensagem
+`CAPS` (§4.5 do schema) troca bits de capacidade na abertura da conexão:
+
+| Recurso | Config (cliente) | Flag (`vbl fxpd`) | O que muda |
+|---|---|---|---|
+| `batch` (§4.7) | `batch_prefetch = true` | `--batch` | Sensores vencidos do mesmo peer vão num READ_BATCH único — 1 RTT em vez de N |
+| `timestamp` (§5) | `wire_timestamp = true` | `--timestamp` | Respostas carregam `fio_us`: hora física da leitura (anotação de laboratório; o Caderno continua no relógio virtual) |
+| `compress` (§4.8) | `compression = true` | `--compress` | Corpos grandes (HELLO, respostas) viajam LZ4, com teto de 8192 B e guarda contra bomba |
+| auth (§4.6) | `--fxp-psk-env VAR` | `--auth psk:VAR` | Handshake PSK+HMAC-SHA256 antes de qualquer dado; chave errada **fecha a conexão** (sem fallback) |
+
+A descoberta (§4.9) é um beacon UDP `FXPD` no grupo multicast
+`239.255.70.80:7080`, opt-in dos dois lados: o peer anuncia com
+`--announce IDENTIFICADOR` e o cliente resolve `endpoint =
+discover:IDENTIFICADOR` na hora de montar o barramento. Sem anúncio no
+prazo, o dispositivo fica registrado porém **inacessível** — honesto como
+todo o resto.
+
+Com um peer antigo (v1.0), o cliente degrada: reconecta sem recursos e
+registra o evento `fxp_peer_v1` no Caderno. Medidas de laboratório (ciclos
+de atualização de 8 sensores remotos) estão em
+[FXP-V1.1-REPORT](../../../docs/reports/FXP-V1.1-REPORT.md): o lote troca
+8 RTTs por 1 (**5,3× mais rápido**), o carimbo custa ~5 ns no codec e o
+handshake PSK+CAPS, ~4 µs sobre a conexão plana.
+
 ## Próximo passo
 
 [O Caderno](notebook.md): onde cada leitura, atuação e Joule vira evento

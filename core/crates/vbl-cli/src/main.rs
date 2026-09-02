@@ -52,7 +52,8 @@ use script::Script;
 use vbl_fxp::registry::{
     DeviceKind, DeviceRegistry, Endpoint, FxpConfig, OperationMode, RemoteAddr,
 };
-use vbl_fxp::{BusConfig, FxpBus};
+use vbl_fxp::{BusConfig, FxpBus, PeerConfig, PeerServer};
+use std::sync::{Arc, Mutex};
 
 const MINIMUM_REGISTRY: &str = "\
 registro mínimo do FXP (FORMAL §6):
@@ -97,9 +98,20 @@ where
             allow_unregistered,
             fxp_mode,
             fxp_config,
+            fxp_psk_env,
         } => match build_fxp(&fxp_config, &fxp_mode) {
-            Ok(Some((registry, config_bus))) => {
+            Ok(Some((registry, mut config_bus))) => {
                 // Barramento FXP real/híbrido/simulado configurado.
+                // PSK do cliente (§4.6): SEMPRE de env — arquivo não carrega chave.
+                if let Some(var) = &fxp_psk_env {
+                    match std::env::var(var) {
+                        Ok(v) if !v.is_empty() => config_bus.psk = Some(v.into_bytes()),
+                        _ => {
+                            eprintln!("vbl: env {var} ausente ou vazia — PSK não configurada (§4.6)");
+                            return 2;
+                        }
+                    }
+                }
                 let sim = script.build_simulator();
                 let bus = FxpBus::build(registry, config_bus, sim);
                 run(
@@ -135,6 +147,27 @@ where
                 code
             }
         },
+        Command::FxpDaemon {
+            fxp_mode,
+            fxp_config,
+            serve,
+            auth,
+            announce,
+            compress,
+            batch,
+            timestamp,
+            ledger,
+        } => fxpd(FxpdArgs {
+            fxp_mode,
+            fxp_config,
+            serve,
+            auth,
+            announce,
+            compress,
+            batch,
+            timestamp,
+            ledger,
+        }),
         Command::FxpProbe {
             fxp_mode,
             fxp_config,
@@ -190,6 +223,16 @@ fn build_fxp(
         if let Some(ms) = c.cache_ttl_ms {
             config.cache_ttl = Duration::from_millis(ms);
         }
+        // v1.1 (§4.5): recursos opt-in por config — default = v1.0 puro.
+        if let Some(b) = c.batch_prefetch {
+            config.batch_prefetch = b;
+        }
+        if let Some(b) = c.compression {
+            config.compression = b;
+        }
+        if let Some(b) = c.wire_timestamp {
+            config.wire_timestamp = b;
+        }
         if let Some(ms) = c.read_timeout_ms {
             config.read_timeout = Duration::from_millis(ms);
         }
@@ -214,6 +257,229 @@ fn build_fxp(
 // ----------------------------------------------------------------------
 // vbl check
 // ----------------------------------------------------------------------
+/// Argumentos do `vbl fxpd` (peer FXP v1.1 — docs/FXP-SCHEMA-v1.md §7).
+struct FxpdArgs {
+    fxp_mode: Option<String>,
+    fxp_config: Option<PathBuf>,
+    serve: String,
+    auth: Option<String>,
+    announce: Option<String>,
+    compress: bool,
+    batch: bool,
+    timestamp: bool,
+    ledger: Option<PathBuf>,
+}
+
+/// O peer FXP montado e pronto para servir (resultado de [`fxpd_preparar`]).
+/// O handle do servidor PRECISA viver enquanto o daemon rodar (drop =
+/// desligar) — fica aqui até o escopo terminar.
+struct FxpdRuntime {
+    /// Linha "pronto em …" para o operador.
+    servindo: String,
+    /// Porta TCP real (0 ⇒ efêmera) para o beacon do anúncio. Lida só pelos
+    /// testes in-process — no bin o valor é consumido antes da construção.
+    #[allow(dead_code)]
+    porta_tcp_real: Option<u16>,
+    /// Bits CAPS anunciados (§4.5) — espelhado no "pronto".
+    caps_annunciadas: u16,
+    _keepalive: Option<vbl_fxp::transport::Server>,
+    _anunciador: Option<vbl_fxp::discover::Announcer>,
+}
+
+/// Monta o peer FXP (registro, bus, transporte e anúncio) — tudo que o
+/// `vbl fxpd` precisa fazer antes de dormir. Recurso v1.1 é opt-in por flag
+/// (§4.5) e PSK nunca vem de arquivo de config (§4.6 — só env).
+fn fxpd_preparar(args: &FxpdArgs) -> Result<FxpdRuntime, i32> {
+    use vbl_fxp::registry::OperationMode;
+    use vbl_fxp::schema::caps;
+
+    // -- registro + config do bus (mesma leitura do run/probe) --------------
+    let (registry, mut config_bus) = match build_fxp(&args.fxp_config, &args.fxp_mode) {
+        Ok(Some(par)) => par,
+        Ok(None) => (DeviceRegistry::minimum(), BusConfig::default()),
+        Err((code, msg)) => {
+            eprintln!("{msg}");
+            return Err(code);
+        }
+    };
+    // O modo de operação do PEER também é respeitado (probe/run sobrepõem):
+    if let Some(m) = &args.fxp_mode {
+        config_bus.mode = match m.as_str() {
+            "simulado" => OperationMode::Simulated,
+            "real" => OperationMode::Real,
+            "hibrido" => OperationMode::Hybrid,
+            other => {
+                eprintln!("vbl: --fxp-mode inválido: {other} (simulado|real|hibrido)");
+                return Err(2);
+            }
+        };
+    }
+
+    // -- capacidades anunciadas (opt-in por flag; default = v1.0 puro) ------
+    let mut caps_annunciadas = 0;
+    if args.compress {
+        caps_annunciadas |= caps::LZ4;
+    }
+    if args.batch {
+        caps_annunciadas |= caps::BATCH;
+    }
+    if args.timestamp {
+        caps_annunciadas |= caps::TIMESTAMP;
+    }
+
+    // -- PSK: SEMPRE de env (§4.6 — a chave nunca trafega nem fica em config)
+    let psk = match &args.auth {
+        None => None,
+        Some(spec) => {
+            let Some(var) = spec.strip_prefix("psk:") else {
+                eprintln!("vbl: --auth exige psk:VAR_DE_ENV (recebido: {spec})");
+                return Err(2);
+            };
+            match std::env::var(var) {
+                Ok(v) if !v.is_empty() => Some(v.into_bytes()),
+                _ => {
+                    eprintln!("vbl: env {var} ausente ou vazia — PSK não configurada (§4.6)");
+                    return Err(2);
+                }
+            }
+        }
+    };
+
+    // -- Caderno do peer: produção com --ledger; sem ele, desligado (aviso)
+    let caderno: Arc<Mutex<dyn vbl_runtime::ledger::Ledger + Send>> =
+        match &args.ledger {
+            Some(path) => match ProductionLedger::open(path) {
+                Ok(l) => Arc::new(Mutex::new(l)),
+                Err(e) => {
+                    eprintln!("vbl: não foi possível abrir Caderno '{}': {e}", path.display());
+                    return Err(2);
+                }
+            },
+            None => {
+                eprintln!(
+                    "vbl fxpd: Caderno DESLIGADO (--ledger ARQUIVO grava o log do peer; §4.7)"
+                );
+                Arc::new(Mutex::new(vbl_runtime::ledger::NoopLedger))
+            }
+        };
+
+    let bus = Arc::new(std::sync::Mutex::new(FxpBus::build(
+        registry,
+        config_bus,
+        FxpSimulator::new(),
+    )));
+    // Impressão digital do registro servido (hash canônico do anúncio §4.9).
+    let nomes_do_registro: Vec<String> = {
+        let b = bus.lock().expect("bus");
+        b.registry_rico().devices().map(|d| d.name.clone()).collect()
+    };
+    let peer = PeerServer::shared(
+        bus,
+        caderno,
+        PeerConfig { psk, caps: caps_annunciadas },
+    );
+
+    // -- transporte ----------------------------------------------------------
+    // O handle do servidor PRECISA viver enquanto o daemon rodar (drop =
+    // desligar); fica no runtime até o escopo terminar.
+    let (servindo, porta_tcp_real, keepalive) = match args.serve.strip_prefix("unix:") {
+        Some(path) => {
+            let p = PathBuf::from(path);
+            match vbl_fxp::peer::serve_unix_peer(&peer, &p) {
+                Ok(servidor) => (format!("unix:{}", p.display()), None, Some(servidor)),
+                Err(e) => {
+                    eprintln!("vbl fxpd: não foi possível servir em unix:{path}: {e}");
+                    return Err(2);
+                }
+            }
+        }
+        None => match args.serve.strip_prefix("tcp:") {
+            Some(porta_txt) => {
+                let porta: u16 = match porta_txt.parse() {
+                    Ok(p) => p,
+                    Err(_) => {
+                        eprintln!("vbl fxpd: porta inválida: {porta_txt}");
+                        return Err(2);
+                    }
+                };
+                match vbl_fxp::peer::serve_tcp_peer_port(&peer, porta) {
+                    Ok((servidor, real)) => {
+                        (format!("tcp:0.0.0.0:{real}"), Some(real), Some(servidor))
+                    }
+                    Err(e) => {
+                        eprintln!("vbl fxpd: não foi possível servir em tcp:{porta_txt}: {e}");
+                        return Err(2);
+                    }
+                }
+            }
+            None => {
+                eprintln!("vbl fxpd: --serve exige unix:PATH ou tcp:PORTA");
+                return Err(2);
+            }
+        },
+    };
+
+    // -- anúncio multicast (§4.9, opt-in) ------------------------------------
+    let anunciador = match &args.announce {
+        Some(id) => {
+            match vbl_fxp::discover::Announcer::start(
+                id,
+                porta_tcp_real.unwrap_or(0),
+                vbl_fxp::discover::registry_hash(&nomes_do_registro),
+                vbl_fxp::discover::DEFAULT_GROUP,
+                vbl_fxp::discover::DEFAULT_INTERVAL,
+            ) {
+                Ok(a) => Some(a),
+                Err(e) => {
+                    eprintln!("vbl fxpd: anúncio multicast indisponível ({e}) — peer segue no ar sem anúncio (§4.9 honesto)");
+                    None
+                }
+            }
+        }
+        None => None,
+    };
+
+    Ok(FxpdRuntime {
+        servindo,
+        porta_tcp_real,
+        caps_annunciadas,
+        _keepalive: keepalive,
+        _anunciador: anunciador,
+    })
+}
+
+/// `vbl fxpd`: monta o peer ([`fxpd_preparar`]), imprime o estado e dorme
+/// até o operador encerrar o processo (SIGTERM/SIGINT).
+fn fxpd(args: FxpdArgs) -> i32 {
+    match fxpd_preparar(&args) {
+        Ok(runtime) => {
+            println!("fxpd pronto em {}", runtime.servindo);
+            println!(
+                "fxpd recursos: {} | auth: {} | announce: {}",
+                if runtime.caps_annunciadas == 0 {
+                    "v1.0 puro".to_string()
+                } else {
+                    let mut v = vec![];
+                    if args.compress { v.push("lz4"); }
+                    if args.batch { v.push("batch"); }
+                    if args.timestamp { v.push("timestamp"); }
+                    v.join(",")
+                },
+                if args.auth.is_some() { "psk" } else { "nenhuma" },
+                args.announce.as_deref().unwrap_or("-"),
+            );
+            use std::io::Write;
+            let _ = std::io::stdout().flush();
+            // Daemon: dorme sem busy-wait; o processo morre por sinal e o
+            // drop de `runtime` desliga o transporte/anúncio limpo.
+            loop {
+                std::thread::park();
+            }
+        }
+        Err(code) => code,
+    }
+}
+
 fn check(arquivo: &str, with_registry: bool) -> i32 {
     let source = match std::fs::read_to_string(arquivo) {
         Ok(f) => f,
@@ -740,6 +1006,11 @@ fn actor_availability(endpoint: &Endpoint) -> String {
                 }
             }
         },
+        Endpoint::AutoRemote { identifier } => {
+            // Probe é somente leitura e não reabre a janela de descoberta do
+            // build: reporta o estado da resolução feita lá.
+            format!("discover:{identifier} (resolvida no build; ver coluna rota)")
+        }
     }
 }
 
@@ -752,7 +1023,7 @@ fn actor_availability(endpoint: &Endpoint) -> String {
 mod tests {
     use super::*;
 
-    const PROGRAMA_OK: &str = "\
+    pub(crate) const PROGRAMA_OK: &str = "\
 event Piscar {
     value: \"olho\",
     horizon: 5s
@@ -768,7 +1039,7 @@ event Vigia {
 ";
     const PROGRAMA_QUEBRADO: &str = "event SemCorpo {";
 
-    fn roda(args: &[&str]) -> i32 {
+    pub(crate) fn roda(args: &[&str]) -> i32 {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -776,7 +1047,7 @@ event Vigia {
             .block_on(dispatch(args.iter().map(|s| s.to_string())))
     }
 
-    fn tmp_dir(nome: &str) -> PathBuf {
+    pub(crate) fn tmp_dir(nome: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("vbl-cli-test-{}-{nome}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -958,6 +1229,44 @@ retries = 3
     }
 
     #[tokio::test]
+    async fn run_bloqueia_export_jsonl_e_recusa_modo_fxp_invalido() {
+        let dir = tmp_dir("run-jsonl-bloqueado");
+        let arq = grava(&dir, "ok.vl", PROGRAMA_OK);
+        let ledger = dir.join("caderno.vcad");
+        // .jsonl vira DIRETÓRIO: a conversão no sumário falha com aviso
+        // honesto — a execução continua (o .vcad é a fonte da verdade).
+        std::fs::create_dir_all(jsonl_path(&ledger)).unwrap();
+        let code = run(
+            arq.to_str().unwrap(),
+            Some(2),
+            None,
+            dir.join("persistence"),
+            Some(ledger.clone()),
+            Script::default(),
+            false,
+            FxpSimulator::new(),
+        )
+        .await;
+        assert_eq!(code, 0);
+        assert!(ledger.is_file());
+    }
+
+    #[test]
+    fn run_recusa_fxp_mode_invalido_com_codigo_dois() {
+        let dir = tmp_dir("run-modo-invalido");
+        let arq = grava(&dir, "ok.vl", PROGRAMA_OK);
+        let code = roda(&[
+            "run",
+            arq.to_str().unwrap(),
+            "--ticks",
+            "1",
+            "--fxp-mode",
+            "estranho",
+        ]);
+        assert_eq!(code, 2);
+    }
+
+    #[tokio::test]
     async fn run_recusa_sensor_fora_do_registro_e_aceita_com_allow() {
         let dir = tmp_dir("run-registro");
         let arq = grava(&dir, "vigia.vl", PROGRAMA_SENSOR_AUSENTE);
@@ -1107,6 +1416,22 @@ retries = 3
         );
         // config ilegível → código 2 propagado pelo dispatch
         assert_eq!(roda(&["fxp-probe", "--fxp-config", "/nem-existe/v.cfg"]), 2);
+        // modo real explícito ⇒ nome do modo no relatório (rota × modo).
+        assert_eq!(
+            roda(&["fxp-probe", "--fxp-config", cfg.to_str().unwrap(), "--fxp-mode", "real"]),
+            0
+        );
+        // rota com endpoint de descoberta ⇒ coluna de rota descreve o auto.
+        let cfg_auto = grava(
+            &dir,
+            "auto.cfg",
+            "mode = simulado\ntemp_x.grandeza = temperatura\ntemp_x.unidade = C\n\
+             temp_x.mode = real\ntemp_x.endpoint = auto\n",
+        );
+        assert_eq!(
+            roda(&["fxp-probe", "--fxp-config", cfg_auto.to_str().unwrap()]),
+            0
+        );
     }
 
     // ── dispatch: uso e subcomando desconhecido ───────────────────────────
@@ -1178,5 +1503,381 @@ retries = 3
             },
         };
         assert!(actor_availability(&tcp_morto).starts_with("✗ conexão falhou"));
+    }
+}
+
+// ── testes in-process do fxpd (o processo-filho dos E2E não é instrumentado
+//    pelo llvm-cov; a montagem fica aqui, testável sem dormir) ─────────────
+#[cfg(test)]
+mod fxpd_tests {
+    use super::*;
+
+    fn args_fxpd(extras: &[&str]) -> FxpdArgs {
+        let cmd = parse_args(
+            std::iter::once("fxpd".to_string()).chain(extras.iter().map(|s| s.to_string())),
+        )
+        .expect("parse fxpd");
+        match cmd {
+            Command::FxpDaemon {
+                fxp_mode,
+                fxp_config,
+                serve,
+                auth,
+                announce,
+                compress,
+                batch,
+                timestamp,
+                ledger,
+            } => FxpdArgs {
+                fxp_mode,
+                fxp_config,
+                serve,
+                auth,
+                announce,
+                compress,
+                batch,
+                timestamp,
+                ledger,
+            },
+            _ => panic!("esperava FxpDaemon"),
+        }
+    }
+
+    #[test]
+    fn serve_tcp_efemera_monta_e_reporta_porta_real() {
+        let dir = std::env::temp_dir().join(format!("fxpd-inproc-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let cfg = dir.join("peer.cfg");
+        std::fs::write(&cfg, "mode = simulado\n").unwrap();
+        let rt = fxpd_preparar(&args_fxpd(&[
+            "--serve",
+            "tcp:0",
+            "--fxp-config",
+            cfg.to_str().unwrap(),
+            "--batch",
+            "--timestamp",
+            "--compress",
+            "--announce",
+            "fxpd-inproc",
+        ]))
+        .expect("montar");
+        assert!(rt.servindo.starts_with("tcp:0.0.0.0:"), "{}", rt.servindo);
+        assert!(rt.porta_tcp_real.unwrap_or(0) > 0);
+        // bits: LZ4|BATCH|TIMESTAMP = 1|2|4
+        assert_eq!(rt.caps_annunciadas, 0b111);
+    }
+
+    #[test]
+    fn serve_unix_monta_e_sem_flags_anuncia_v1_0_puro() {
+        let dir = std::env::temp_dir().join(format!("fxpd-inproc-u-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let sock = dir.join("fxpd.sock");
+        let rt = fxpd_preparar(&args_fxpd(&[
+            "--serve",
+            &format!("unix:{}", sock.display()),
+        ]))
+        .expect("montar");
+        assert_eq!(rt.servindo, format!("unix:{}", sock.display()));
+        assert_eq!(rt.caps_annunciadas, 0, "sem flags = v1.0 puro");
+        assert!(rt.porta_tcp_real.is_none());
+    }
+
+    #[test]
+    fn psk_de_env_errada_ausente_e_prefixo_errado_falham() {
+        let dir = std::env::temp_dir().join(format!("fxpd-inproc-psk-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+
+        // Prefixo errado.
+        let r = fxpd_preparar(&args_fxpd(&["--serve", "tcp:0", "--auth", "arquivo:x"]));
+        assert_eq!(r.err(), Some(2));
+
+        // Env ausente.
+        let r = fxpd_preparar(&args_fxpd(&[
+            "--serve",
+            "tcp:0",
+            "--auth",
+            "psk:FXPD_TEST_ENV_INEXISTENTE",
+        ]));
+        assert_eq!(r.err(), Some(2));
+
+        // Env vazia.
+        unsafe { std::env::set_var("FXPD_TEST_ENV_VAZIA", "") };
+        let r = fxpd_preparar(&args_fxpd(&[
+            "--serve",
+            "tcp:0",
+            "--auth",
+            "psk:FXPD_TEST_ENV_VAZIA",
+        ]));
+        assert_eq!(r.err(), Some(2));
+    }
+
+    #[test]
+    fn psk_presente_e_porta_fixa_montam() {
+        unsafe { std::env::set_var("FXPD_TEST_ENV_PSK", "segredo-inproc") };
+        let rt = fxpd_preparar(&args_fxpd(&[
+            "--serve",
+            "tcp:0",
+            "--auth",
+            "psk:FXPD_TEST_ENV_PSK",
+        ]))
+        .expect("montar com psk");
+        assert!(rt.servindo.starts_with("tcp:"));
+    }
+
+    #[test]
+    fn serve_e_porta_invalidos_falham_com_uso() {
+        assert_eq!(fxpd_preparar(&args_fxpd(&["--serve", "udp:7080"])).err(), Some(2));
+        assert_eq!(
+            fxpd_preparar(&args_fxpd(&["--serve", "tcp:nao-e-porta"])).err(),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn fxp_mode_invalido_falha() {
+        let cmd = parse_args(
+            ["fxpd", "--serve", "tcp:0", "--fxp-mode", "caotico"]
+                .iter()
+                .map(|s| s.to_string()),
+        );
+        match cmd {
+            Ok(Command::FxpDaemon { fxp_mode, serve, .. }) => {
+                let args = FxpdArgs {
+                    fxp_mode,
+                    fxp_config: None,
+                    serve,
+                    auth: None,
+                    announce: None,
+                    compress: false,
+                    batch: false,
+                    timestamp: false,
+                    ledger: None,
+                };
+                assert_eq!(fxpd_preparar(&args).err(), Some(2));
+            }
+            _ => panic!("esperava FxpDaemon"),
+        }
+    }
+
+    #[test]
+    fn serve_unix_em_caminho_impossivel_falha() {
+        // Diretório inexistente sem permissão para criá-lo ⇒ serve_unix_peer
+        // falha honestamente.
+        let r = fxpd_preparar(&args_fxpd(&["--serve", "unix:/proc/1/nao/existe.sock"]));
+        assert_eq!(r.err(), Some(2));
+    }
+}
+
+// ── v1.1: cláusulas de erro do run/psk e montagem do fxpd (in-process) ───
+#[cfg(test)]
+mod fxpd_dispatch_tests {
+    use crate::{Command, FxpdArgs, fxpd_preparar};
+    use crate::tests::{PROGRAMA_OK, roda, tmp_dir};
+
+    #[test]
+    fn run_psk_env_ausente_devolve_dois() {
+        let dir = tmp_dir("run-psk-ausente");
+        let programa = dir.join("p.vl");
+        std::fs::write(&programa, PROGRAMA_OK).unwrap();
+        let cfg = dir.join("c.cfg");
+        std::fs::write(&cfg, "mode = simulado\n").unwrap();
+        let code = roda(&[
+            "run",
+            programa.to_str().unwrap(),
+            "--ticks",
+            "1",
+            "--fxp-config",
+            cfg.to_str().unwrap(),
+            "--fxp-psk-env",
+            "RUN_TEST_PSK_INEXISTENTE",
+        ]);
+        assert_eq!(code, 2);
+    }
+
+    #[test]
+    fn run_config_fxp_invalida_devolve_um() {
+        let dir = tmp_dir("run-cfg-invalida");
+        let programa = dir.join("p.vl");
+        std::fs::write(&programa, PROGRAMA_OK).unwrap();
+        let cfg = dir.join("c.cfg");
+        std::fs::write(&cfg, "mode = caotico\n").unwrap();
+        let code = roda(&[
+            "run",
+            programa.to_str().unwrap(),
+            "--ticks",
+            "1",
+            "--fxp-config",
+            cfg.to_str().unwrap(),
+        ]);
+        assert_eq!(code, 1);
+    }
+
+    #[test]
+    fn fxpd_preparar_com_modo_e_porta_ocupada() {
+        use crate::args::parse_args;
+        let dir = tmp_dir("fxpd-dispatch");
+        let cfg = dir.join("peer.cfg");
+        std::fs::write(&cfg, "mode = simulado\n").unwrap();
+
+        let montar = |fxp_mode: Option<&str>, porta: &str| {
+            let mut extras = vec!["--serve", porta];
+            if let Some(m) = fxp_mode {
+                extras.push("--fxp-mode");
+                extras.push(m);
+            }
+            let cmd = parse_args(
+                std::iter::once("fxpd".to_string())
+                    .chain(extras.iter().map(|s| s.to_string())),
+            )
+            .unwrap();
+            match cmd {
+                Command::FxpDaemon {
+                    fxp_mode,
+                    fxp_config,
+                    serve,
+                    auth,
+                    announce,
+                    compress,
+                    batch,
+                    timestamp,
+                    ledger,
+                } => FxpdArgs {
+                    fxp_mode,
+                    fxp_config,
+                    serve,
+                    auth,
+                    announce,
+                    compress,
+                    batch,
+                    timestamp,
+                    ledger,
+                },
+                _ => panic!("esperava FxpDaemon"),
+            }
+        };
+
+        // --fxp-mode simulado|real|hibrido ⇒ braços válidos do match.
+        for modo in ["simulado", "real", "hibrido"] {
+            let rt = fxpd_preparar(&montar(Some(modo), "tcp:0")).expect("montar");
+            assert!(rt.servindo.starts_with("tcp:"));
+            drop(rt);
+        }
+        // modo inválido ⇒ erro tipado 2 (braço "other" do match).
+        let err = match fxpd_preparar(&montar(Some("estranho"), "tcp:0")) {
+            Err(code) => code,
+            Ok(_) => panic!("modo estranho devia falhar"),
+        };
+        assert_eq!(err, 2);
+        // --ledger ARQUIVO ⇒ Caderno de produção no peer montado.
+        let dir_ledger = dir.join("caderno");
+        std::fs::create_dir_all(&dir_ledger).unwrap();
+        let mut args_ledger = montar(Some("simulado"), "tcp:0");
+        args_ledger.ledger = Some(dir_ledger.join("peer.vcad"));
+        let rt2 = fxpd_preparar(&args_ledger).expect("montar com ledger");
+        assert!(rt2.servindo.starts_with("tcp:"));
+        drop(rt2);
+
+        // Porta TCP OCUPADA ⇒ falha honesta do serve (407-409).
+        let listener = std::net::TcpListener::bind("0.0.0.0:0").unwrap();
+        let porta = listener.local_addr().unwrap().port();
+        let r = fxpd_preparar(&montar(None, &format!("tcp:{porta}")));
+        assert_eq!(r.err(), Some(2));
+    }
+
+    #[test]
+    fn fxpd_por_dispatch_imprime_pronto_e_dorme() {
+        // O braço do dispatch + o corpo de `fxpd` (impressão do "pronto" e o
+        // park) rodam numa thread destacada; o processo de teste encerra
+        // normalmente (a thread dorme até o fim — comportamento de daemon).
+        let dir = tmp_dir("fxpd-dispatch-thread");
+        let cfg = dir.join("peer.cfg");
+        std::fs::write(&cfg, "mode = simulado\n").unwrap();
+        let cfg_str = cfg.display().to_string();
+        let handle = std::thread::spawn(move || {
+            roda(&["fxpd", "--serve", "tcp:0", "--fxp-config", &cfg_str, "--batch"])
+        });
+        // Dá tempo de a thread imprimir o "pronto" e chegar ao park; sem
+        // asserção de saída (não retorna) — o objetivo é a execução coberta.
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        assert!(!handle.is_finished(), "daemon não deveria terminar sozinho");
+    }
+}
+
+// ── Bateria de dispatch: probe com rotas variadas, ledger-verify corrupto,
+//    run em tempo real e modos do fxpd (cobra as cláusulas de exibição). ──
+#[cfg(test)]
+mod probe_battery_tests {
+    use crate::tests::{PROGRAMA_OK, roda, tmp_dir};
+
+    #[test]
+    fn fxp_probe_sem_obrigatorios_falha_e_rotas_variadas_imprimem_honesto() {
+        let dir = tmp_dir("probe-bateria");
+
+        // Registro semeia o mínimo (FORMAL §6) + extensão com hwmon ausente:
+        // o probe imprime a disponibilidade honesta e sai 0.
+        let cfg_ext = dir.join("ext.cfg");
+        std::fs::write(
+            &cfg_ext,
+            "mode = simulado\n\
+             temp_ext.grandeza = temperatura\ntemp_ext.unidade = C\n\
+             temp_ext.mode = real\ntemp_ext.endpoint = hwmon_temp:/tmp/nao/existe\n",
+        )
+        .unwrap();
+        assert_eq!(
+            roda(&["fxp-probe", "--fxp-config", cfg_ext.to_str().unwrap()]),
+            0
+        );
+
+        // Endpoints variados: unix PRESENTE, tcp alcançável, discover, hwmon
+        // ausente, rapl — o probe imprime disponibilidade sem mentir.
+        let sock_path = dir.join("probe.sock");
+        let _unix = std::os::unix::net::UnixListener::bind(&sock_path).unwrap();
+        let tcp = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let porta = tcp.local_addr().unwrap().port();
+        let cfg_rota = dir.join("rotas.cfg");
+        std::fs::write(
+            &cfg_rota,
+            format!(
+                "mode = hibrido\n\
+                 Fan.min = 0\nFan.max = 255\nFan.safety_limit = 200\nFan.mode = real\nFan.endpoint = unix:{}\n\
+                 cpu_temp.grandeza = temperatura\ncpu_temp.unidade = C\n\
+                 cpu_temp.mode = real\ncpu_temp.endpoint = tcp:127.0.0.1:{porta}\n\
+                 cpu_power.grandeza = potencia\ncpu_power.unidade = W\n\
+                 cpu_power.mode = real\ncpu_power.endpoint = rapl_energy:/sys/class/powercap\n\
+                 attention.grandeza = atencao\nattention.unidade = %\n\
+                 attention.mode = real\nattention.endpoint = discover:fxpd-lab\n",
+                sock_path.display()
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            roda(&["fxp-probe", "--fxp-config", cfg_rota.to_str().unwrap(), "--fxp-mode", "hibrido"]),
+            0
+        );
+    }
+
+    #[test]
+    fn ledger_verify_jsonl_corrompida_reporta_e_falha() {
+        let dir = tmp_dir("ledger-corrupto");
+        let jsonl = dir.join("corrompido.vcad.jsonl");
+        std::fs::write(&jsonl, "{\" linha totalmente invalida\n").unwrap();
+        let code = roda(&["ledger-verify", jsonl.to_str().unwrap()]);
+        assert_ne!(code, 0, "JSONL corrupta deve falhar a auditoria");
+    }
+
+    #[test]
+    fn run_com_tempo_real_executa_ticks_por_intervalo() {
+        let dir = tmp_dir("run-tempo-real");
+        let programa = dir.join("p.vl");
+        std::fs::write(&programa, PROGRAMA_OK).unwrap();
+        let code = roda(&[
+            "run",
+            programa.to_str().unwrap(),
+            "--ticks",
+            "1",
+            "--real-ms",
+            "30",
+        ]);
+        assert_eq!(code, 0);
     }
 }

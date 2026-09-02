@@ -23,12 +23,36 @@ pub enum Command {
         fxp_mode: Option<String>,
         /// Arquivo de registro/config FXP (`key = value`, docs/FXP-SCHEMA-v1.md §7).
         fxp_config: Option<PathBuf>,
+        /// PSK do cliente remoto (§4.6): lida da env `VAR` — a chave nunca
+        /// trafega nem fica em arquivo.
+        fxp_psk_env: Option<String>,
     },
     /// `vbl fxp-probe` — tabela de dispositivos/modos/rotas/disponibilidade
     /// (auditoria do registro FXP no host; PLAN Etapa 3).
     FxpProbe {
         fxp_mode: Option<String>,
         fxp_config: Option<PathBuf>,
+    },
+    /// `vbl fxpd` — o peer FXP v1.1 (schema §7: servidor de referência):
+    /// AUTH → CAPS → trabalho; recursos v1.1 opt-in (PLAN §8 item 8).
+    FxpDaemon {
+        fxp_mode: Option<String>,
+        fxp_config: Option<PathBuf>,
+        /// `unix:PATH` ou `tcp:PORTA` (porta 0 = efêmera, impressa no pronto).
+        serve: String,
+        /// PSK de env (`--auth psk:NOME_DA_VAR`) — §4.6; handshake obrigatório.
+        auth: Option<String>,
+        /// Anuncia o beacon multicast FXPD (§4.9) com este identificador.
+        announce: Option<String>,
+        /// Anuncia LZ4 (§4.8) — compressão negociada das respostas.
+        compress: bool,
+        /// Anuncia BATCH (§4.7) — lote de leituras.
+        batch: bool,
+        /// Anuncia TIMESTAMP (§5) — carimbo físico nas respostas.
+        timestamp: bool,
+        /// Caderno do peer (produção); sem ele, o Caderno fica desligado
+        /// (aviso honesto — §4.7 não registra eventos sem Caderno).
+        ledger: Option<PathBuf>,
     },
     /// `vbl ledger-verify ARQUIVO` — verificação externa do log do Caderno
     /// (binário `.vcad` ou JSONL): recomputa a cadeia SHA-256 e emite o
@@ -54,6 +78,64 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                 with_registry,
             })
         }
+        "fxpd" => {
+            let mut fxp_mode = None;
+            let mut fxp_config = None;
+            let mut serve: Option<String> = None;
+            let mut auth = None;
+            let mut announce = None;
+            let mut compress = false;
+            let mut batch = false;
+            let mut timestamp = false;
+            let mut ledger = None;
+            while let Some(a) = args.next() {
+                match a.as_str() {
+                    "--fxp-mode" => {
+                        fxp_mode = Some(
+                            args.next()
+                                .ok_or("--fxp-mode exige simulado|real|hibrido")?,
+                        )
+                    }
+                    "--fxp-config" => {
+                        fxp_config = Some(PathBuf::from(
+                            args.next().ok_or("--fxp-config exige ARQUIVO")?,
+                        ))
+                    }
+                    "--serve" => {
+                        serve = Some(
+                            args.next()
+                                .ok_or("--serve exige unix:PATH|tcp:PORTA")?,
+                        )
+                    }
+                    "--auth" => {
+                        auth = Some(args.next().ok_or("--auth exige psk:VAR_DE_ENV")?)
+                    }
+                    "--announce" => {
+                        announce = Some(args.next().ok_or("--announce exige IDENTIFICADOR")?)
+                    }
+                    "--compress" => compress = true,
+                    "--batch" => batch = true,
+                    "--timestamp" => timestamp = true,
+                    "--ledger" => {
+                        ledger = Some(PathBuf::from(
+                            args.next().ok_or("--ledger exige ARQUIVO")?,
+                        ))
+                    }
+                    other => return Err(format!("argumento de fxpd inesperado: {other}\n{USAGE}")),
+                }
+            }
+            Ok(Command::FxpDaemon {
+                fxp_mode,
+                fxp_config,
+                serve: serve.ok_or(format!("fxpd exige --serve unix:PATH|tcp:PORTA\n{USAGE}"))?,
+                auth,
+                announce,
+                compress,
+                batch,
+                timestamp,
+                ledger,
+            })
+        }
         "run" => {
             let mut arquivo = None;
             let mut ticks = None;
@@ -64,8 +146,12 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
             let mut allow_unregistered = false;
             let mut fxp_mode = None;
             let mut fxp_config = None;
+            let mut fxp_psk_env = None;
             while let Some(a) = args.next() {
                 match a.as_str() {
+                    "--fxp-psk-env" => {
+                        fxp_psk_env = Some(args.next().ok_or("--fxp-psk-env exige VAR")?)
+                    }
                     "--ticks" => {
                         ticks = Some(
                             args.next()
@@ -153,6 +239,7 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                 allow_unregistered,
                 fxp_mode,
                 fxp_config,
+                fxp_psk_env,
             })
         }
         "fxp-probe" => {
@@ -202,7 +289,19 @@ uso:
   vbl check <arquivo.vl> [--no-registry]
   vbl run <arquivo.vl> [opções]
   vbl fxp-probe [--fxp-config ARQUIVO] [--fxp-mode MODO]
+  vbl fxpd --serve unix:PATH|tcp:PORTA [opções]
   vbl ledger-verify <ARQUIVO>
+
+opções de fxpd (schema v1.1 — docs/FXP-SCHEMA-v1.md §7/§4.5–§4.9):
+  --fxp-config ARQUIVO             registro/config FXP servido pelo peer
+  --fxp-mode MODO                  simulado|real|hibrido (padrão: o da config, senão simulado)
+  --serve unix:PATH|tcp:PORTA      transporte do peer (porta 0 = efêmera)
+  --auth psk:VAR_DE_ENV            PSK (§4.6): handshake AUTH obrigatório; chave NUNCA em arquivo
+  --announce IDENTIFICADOR         beacon multicast FXPD (§4.9) com este identificador
+  --compress                       anuncia LZ4 (§4.8)
+  --batch                          anuncia READ_BATCH (§4.7)
+  --timestamp                      anuncia FLAG_TIMESTAMP (§5 — carimbo físico)
+  --ledger ARQUIVO                 Caderno do peer (produção .vcad); sem ele, desligado
 
 opções de run:
   --ticks N                        número de ticks virtuais (padrão: até esvaziar o mundo)
@@ -218,6 +317,7 @@ opções de run:
   --allow-unregistered             executa mesmo com referências fora do registro (§4.7)
   --fxp-mode MODO                  simulado|real|hibrido (padrão: simulado; sobrepõe a config)
   --fxp-config ARQUIVO             registro/config FXP (dispositivos, endpoints, fallback)
+  --fxp-psk-env VAR                PSK do cliente remoto (§4.6): chave vem da env VAR
 
 opções de fxp-probe:
   --fxp-config ARQUIVO             registro/config FXP a auditar
@@ -239,6 +339,22 @@ mod tests {
     #[test]
     fn sem_subcomando_devolve_uso() {
         assert!(parse_args(args(&[])).is_err());
+    }
+
+    #[test]
+    fn posicionais_extras_sao_rejeitados() {
+        // run com dois arquivos, probe com posicional e check com posicional
+        // extra: todos caem em "argumento inesperado" com o USAGE.
+        for caso in [
+            vec!["run", "a.vl", "b.vl"],
+            vec!["fxp-probe", "estranho"],
+            vec!["check", "a.vl", "b.vl"],
+            vec!["ledger-verify", "a.vcad", "b.vcad"],
+        ] {
+            let err = match parse_args(args(&caso)) { Err(e) => e, Ok(_) => panic!("{caso:?} devia falhar") };
+            assert!(err.contains("argumento inesperado"), "{caso:?}: {err}");
+            assert!(err.contains("USO") || err.contains("uso"), "{err}");
+        }
     }
 
     #[test]
@@ -279,6 +395,7 @@ mod tests {
             allow_unregistered,
             fxp_mode,
             fxp_config,
+            fxp_psk_env: _,
         } = parse_args(args(&[
             "run",
             "p.vl",
@@ -374,5 +491,82 @@ mod tests {
         };
         assert_eq!(arquivo, "log.vcad");
         assert!(parse_args(args(&["ledger-verify"])).is_err());
+    }
+
+    #[test]
+    fn fxpd_flags_completos_e_clausulas_de_erro() {
+        let Command::FxpDaemon {
+            fxp_mode,
+            fxp_config,
+            serve,
+            auth,
+            announce,
+            compress,
+            batch,
+            timestamp,
+            ledger,
+        } = parse_args(args(&[
+            "fxpd",
+            "--serve",
+            "tcp:7080",
+            "--fxp-config",
+            "p.cfg",
+            "--fxp-mode",
+            "hibrido",
+            "--auth",
+            "psk:MINHA_VAR",
+            "--announce",
+            "fxpd-lab",
+            "--compress",
+            "--batch",
+            "--timestamp",
+            "--ledger",
+            "peer.vcad",
+        ]))
+        .unwrap()
+        else {
+            panic!("esperado FxpDaemon")
+        };
+        assert_eq!(serve, "tcp:7080");
+        assert_eq!(fxp_config, Some(PathBuf::from("p.cfg")));
+        assert_eq!(fxp_mode.as_deref(), Some("hibrido"));
+        assert_eq!(auth.as_deref(), Some("psk:MINHA_VAR"));
+        assert_eq!(announce.as_deref(), Some("fxpd-lab"));
+        assert!(compress && batch && timestamp);
+        assert_eq!(ledger, Some(PathBuf::from("peer.vcad")));
+
+        // Cláusulas de erro: sem --serve, argumento estranho, flags que
+        // exigem valor sem o valor.
+        assert!(parse_args(args(&["fxpd"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--turbo"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--serve"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--auth"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--announce"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--ledger"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--fxp-config"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--fxp-mode"])).is_err());
+    }
+
+    #[test]
+    fn run_psk_env_flag_e_erro_sem_valor() {
+        let Command::Run {
+            fxp_psk_env,
+            fxp_config,
+            ..
+        } = parse_args(args(&[
+            "run",
+            "p.vl",
+            "--fxp-psk-env",
+            "VAR_PSK",
+            "--fxp-config",
+            "c.cfg",
+        ]))
+        .unwrap()
+        else {
+            panic!("esperado Run")
+        };
+        assert_eq!(fxp_psk_env.as_deref(), Some("VAR_PSK"));
+        assert_eq!(fxp_config, Some(PathBuf::from("c.cfg")));
+        assert!(parse_args(args(&["run", "p.vl", "--fxp-psk-env"])).is_err());
     }
 }

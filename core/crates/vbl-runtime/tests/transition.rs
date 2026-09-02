@@ -985,3 +985,26 @@ fn rules_stay_active_in_equilibrium_ad_decision() {
     assert_eq!(b.engine.form("Sentinela").unwrap().maintenance, None);
     assert!(!b.engine.retention.labor.contains_key("Sentinela"));
 }
+
+#[test]
+fn simulador_builder_default_e_fallback_de_ator() {
+    // Default do builder = new(): o mesmo registro mínimo.
+    use vbl_runtime::fxp::Fxp;
+
+    let via_default = vbl_runtime::sim::SimulatorBuilder::default();
+    let via_new = vbl_runtime::sim::SimulatorBuilder::new();
+    let mut a = via_default.build();
+    let mut b = via_new.build();
+    let mut la = vbl_runtime::ledger::ChainLedger::new();
+    let mut lb = vbl_runtime::ledger::ChainLedger::new();
+    let ra = a.read_sensor("cpu_temp", &mut la);
+    let rb = b.read_sensor("cpu_temp", &mut lb);
+    assert_eq!(ra.is_ok(), rb.is_ok());
+
+    // Fallback de ator no SIM: Fan primário → ReserveFan alternativo.
+    a.set_fallback("Fan", &["ReserveFan"]);
+    let mut built = a;
+    let mut l = vbl_runtime::ledger::ChainLedger::new();
+    assert!(built.read_sensor("cpu_temp", &mut l).is_ok());
+    let _ = built.read_sensor("cpu_power", &mut l);
+}

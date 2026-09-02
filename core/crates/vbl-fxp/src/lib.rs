@@ -21,16 +21,25 @@
 //! compatível com a Etapa 2.
 
 
+pub mod auth;
 pub mod bus;
+pub mod discover;
 pub mod drivers;
+pub mod peer;
 pub mod queue;
 pub mod registry;
 pub mod schema;
 pub mod transport;
 
+pub use auth::{mac as auth_mac, nonce as auth_nonce, verify as auth_verify, NONCE_LEN as AUTH_NONCE_BYTES};
 pub use bus::{BusConfig, FxpBus, Route};
+pub use discover::{
+    decode_beacon, discover_peers, encode_beacon, registry_hash, Announcer, Beacon,
+    DEFAULT_GROUP, DEFAULT_INTERVAL, DiscoveredPeer, DiscoveryError, MULTICAST_TTL,
+};
 pub use drivers::{ActorDriver, AttentionSource, SensorDriver, SimulatedAttention};
+pub use peer::{PeerConfig, PeerServer};
 pub use queue::{Command, QueueError, CommandQueue, PRIORITY_NORMAL, PRIORITY_SUBVERT};
 pub use registry::{DeviceEntry, DeviceKind, DeviceMode, DeviceRegistry, Endpoint, RegistryError, FxpConfig, OperationMode, RemoteAddr};
-pub use schema::{AckAct, Body, DeviceDesc, SchemaError, Message, WireValue};
+pub use schema::{AckAct, BatchResult, Body, DeviceDesc, SchemaError, Message, WireValue};
 pub use transport::{TransportError, Server};

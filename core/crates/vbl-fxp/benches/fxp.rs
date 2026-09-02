@@ -1,18 +1,21 @@
-//! Orçamentos de latência do FXP (AGENTS §1.2/§1.3, PLAN Etapa 3):
+//! Orçamentos de latência do FXP (AGENTS §1.2/§1.3, PLAN Etapa 3 + v1.1):
 //! - schema v1: encode+decode sem perda;
 //! - leitura local simulada e real (fixture sysfs): meta ≤ 1 ms p95;
 //! - leitura remota Unix (schema v1 sobre socket): meta ≤ 10 ms p95;
-//! - atuação local (ack do driver): meta ≤ 10 µs (overhead de integração).
+//! - atuação local (ack do driver): meta ≤ 10 µs (overhead de integração);
+//! - v1.1 (PLAN §8): lote×individual, timestamp no fio, compressão LZ4 —
+//!   números para docs/reports/FXP-V1.1-REPORT.md.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use vbl_fxp::bus::{BusConfig, FxpBus};
-use vbl_fxp::registry::{DeviceRegistry, FxpConfig, OperationMode};
-use vbl_fxp::schema::{decode, encode_to_vec, AckAct, Message};
+use vbl_fxp::registry::{DeviceEntry, DeviceRegistry, FxpConfig, OperationMode};
+use vbl_fxp::schema::{caps, decode, encode_to_vec, AckAct, BatchResult, Message};
 use vbl_fxp::transport::{wait_ready_unix, serve_unix};
+use vbl_fxp::{PeerConfig, PeerServer};
 use vbl_runtime::ledger::ChainLedger;
 use vbl_runtime::fxp::{Fxp, Value};
 
@@ -178,5 +181,198 @@ fn local_actuation(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, schema_v1, local_read, remote_read, local_actuation);
+// ══════════════════════════════════════════════════════════════════════════
+// v1.1 — lote × individual, timestamp no fio e compressão LZ4
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Registra `n` sensores simulados num registro novo.
+fn registry_n_sensores(n: usize) -> DeviceRegistry {
+    let mut r = DeviceRegistry::new();
+    for i in 0..n {
+        let _ = r.register(DeviceEntry::sensor(&format!("temp_{i}"), "temperature", "°C", 1.0));
+    }
+    r
+}
+
+/// Peer real (PeerServer) anunciando todas as CAPS + bus cliente com os
+/// recursos pedidos; devolve (bus, ledger, servidor — que precisa continuar
+/// vivo durante o bench).
+fn setup_peer_v11(
+    features: impl FnOnce(&mut BusConfig),
+) -> (FxpBus, ChainLedger, vbl_fxp::transport::Server) {
+    // tmpdir() cria um DIRETÓRIO; o socket unix vive dentro dele.
+    let sock = tmpdir("bench-v11").join("fxpd.sock");
+    let peer = PeerServer::new(
+        FxpBus::build(
+            registry_n_sensores(8),
+            BusConfig { mode: OperationMode::Simulated, ..Default::default() },
+            vbl_runtime::FxpSimulator::new(),
+        ),
+        ChainLedger::new(),
+        PeerConfig { psk: None, caps: caps::LZ4 | caps::BATCH | caps::TIMESTAMP },
+    );
+    let _srv = vbl_fxp::peer::serve_unix_peer(&peer, Path::new(&sock)).expect("servidor");
+    std::thread::sleep(Duration::from_millis(20));
+
+    let mut cli_txt = String::from("mode = hibrido\n");
+    for i in 0..8 {
+        cli_txt.push_str(&format!(
+            "temp_{i}.grandeza = temperatura\ntemp_{i}.unidade = C\n\
+             temp_{i}.mode = real\ntemp_{i}.endpoint = unix:{}\n",
+            sock.display()
+        ));
+    }
+    let mut cli_reg = DeviceRegistry::new();
+    FxpConfig::parse(&cli_txt).unwrap().apply(&mut cli_reg).unwrap();
+    let bus = bus_cliente_com(cli_reg, features);
+    (bus, ChainLedger::new(), _srv)
+}
+
+fn bus_cliente_com(reg: DeviceRegistry, features: impl FnOnce(&mut BusConfig)) -> FxpBus {
+    let mut cfg = BusConfig { mode: OperationMode::Hybrid, cache_ttl: Duration::ZERO, ..Default::default() };
+    features(&mut cfg);
+    FxpBus::build(reg, cfg, vbl_runtime::FxpSimulator::new())
+}
+
+fn v11_batch(c: &mut Criterion) {
+    let mut group = c.benchmark_group("fxp_v11_batch");
+    // Ciclo completo de atualização de 8 sensores remotos:
+    // - caminho v1.0: 8 READs = 8 RTTs (cache_ttl 0 ⇒ toda leitura é I/O);
+    let (mut bus_ind, mut ledger, _srv1) = setup_peer_v11(|c| { c.cache_ttl = Duration::ZERO; });
+    group.bench_function("ciclo_8_sensores_individual", |b| {
+        b.iter(|| {
+            ledger.reset();
+            for i in 0..8 {
+                black_box(bus_ind.read_sensor(black_box(&format!("temp_{i}")), &mut ledger).expect("leitura"));
+            }
+        })
+    });
+    // - v1.1 (§4.7): 1 READ_BATCH = 1 RTT + 7 acertos de cache (TTL 1 s,
+    //   cache invalidado no setup de cada iteração para medir sempre o fio).
+    let (mut bus_batch, mut ledger2, _srv2) = setup_peer_v11(|c| {
+        c.cache_ttl = Duration::from_secs(1);
+        c.batch_prefetch = true;
+        c.wire_timestamp = true;
+    });
+    group.bench_function("ciclo_8_sensores_lote_1rtt", |b| {
+        b.iter(|| {
+            bus_batch.invalidate_cache(); // setup barato: mede sempre o fio
+            ledger2.reset();
+            for i in 0..8 {
+                black_box(bus_batch.read_sensor(black_box(&format!("temp_{i}")), &mut ledger2).expect("leitura"));
+            }
+        })
+    });
+    group.finish();
+}
+
+fn v11_timestamp_and_compression(c: &mut Criterion) {
+    let mut group = c.benchmark_group("fxp_v11_fio");
+    let msg = Message::read_ok(86.5, "cpu_temp", false, 42);
+
+    // Custo do FLAG_TIMESTAMP no roundtrip (§5): 8 bytes + branch.
+    let stamped = msg.clone().with_timestamp(1_756_845_000_000_123);
+    group.bench_function("roundtrip_com_timestamp", |b| {
+        b.iter(|| {
+            let bytes = encode_to_vec(black_box(&stamped)).expect("encode");
+            let (dec, _) = decode(&bytes).expect("roundtrip");
+            black_box(dec)
+        })
+    });
+
+    // Compressão LZ4 (§4.8): HELLO grande (onde a compressão atua) × plano.
+    let mut reg = DeviceRegistry::new();
+    for i in 0..60 {
+        let _ = reg.register(DeviceEntry::sensor(&format!("sensor_numero_{i:02}_do_registro"), "temperature", "°C", 1.5));
+    }
+    let hello = Message::hello(reg.devices().map(|d| d.to_device_desc()).collect(), 9);
+    group.bench_function("encode_decode_hello_plano", |b| {
+        b.iter(|| {
+            let bytes = encode_to_vec(black_box(&hello)).expect("encode");
+            let (dec, _) = decode(&bytes).expect("roundtrip");
+            black_box(dec)
+        })
+    });
+    group.bench_function("encode_decode_hello_lz4", |b| {
+        b.iter(|| {
+            let mut bytes = Vec::new();
+            vbl_fxp::schema::encode_with_compression(black_box(&hello), &mut bytes).expect("encode");
+            let (dec, _) = decode(&bytes).expect("roundtrip");
+            black_box(dec)
+        })
+    });
+
+    // Lote no codec (§4.7): 64 itens.
+    let nomes: Vec<String> = (0..64).map(|i| format!("temp_{i}")).collect();
+    let lote = Message::read_batch(nomes.clone(), 1);
+    let resp = Message::read_batch_ok(
+        nomes.iter().map(|n| BatchResult::Ok { value: 42.0, canonical: n.clone() }).collect(),
+        1,
+    );
+    group.bench_function("roundtrip_lote_64", |b| {
+        b.iter(|| {
+            let b1 = encode_to_vec(black_box(&lote)).expect("encode");
+            let (d1, _) = decode(&b1).expect("roundtrip");
+            let b2 = encode_to_vec(black_box(&resp)).expect("encode");
+            let (d2, _) = decode(&b2).expect("roundtrip");
+            black_box((d1, d2))
+        })
+    });
+
+    group.finish();
+}
+
+fn v11_auth(c: &mut Criterion) {
+    use vbl_fxp::transport::Connection;
+    let mut group = c.benchmark_group("fxp_v11_auth");
+
+    let sock_plana = tmpdir("bench-auth-plana").join("fxpd.sock");
+    let peer_plana = PeerServer::new(
+        FxpBus::build(
+            registry_n_sensores(1),
+            BusConfig { mode: OperationMode::Simulated, ..Default::default() },
+            vbl_runtime::FxpSimulator::new(),
+        ),
+        ChainLedger::new(),
+        PeerConfig::default(),
+    );
+    let _srv_plana = vbl_fxp::peer::serve_unix_peer(&peer_plana, Path::new(&sock_plana)).expect("srv");
+    std::thread::sleep(Duration::from_millis(20));
+
+    let sock_auth = tmpdir("bench-auth-psk").join("fxpd.sock");
+    let peer_auth = PeerServer::new(
+        FxpBus::build(
+            registry_n_sensores(1),
+            BusConfig { mode: OperationMode::Simulated, ..Default::default() },
+            vbl_runtime::FxpSimulator::new(),
+        ),
+        ChainLedger::new(),
+        PeerConfig {
+            psk: Some(b"chave-do-bench".to_vec()),
+            caps: caps::LZ4 | caps::BATCH | caps::TIMESTAMP,
+        },
+    );
+    let _srv_auth = vbl_fxp::peer::serve_unix_peer(&peer_auth, Path::new(&sock_auth)).expect("srv");
+    std::thread::sleep(Duration::from_millis(20));
+
+    group.bench_function("conectar_ler_plano", |b| {
+        b.iter(|| {
+            let mut c = Connection::unix(Path::new(&sock_plana), Duration::from_secs(1)).expect("con");
+            let r = c.request(&Message::read("temp_0", 1, true), Duration::from_secs(1)).expect("r");
+            black_box(r)
+        })
+    });
+    group.bench_function("conectar_auth_caps_ler", |b| {
+        b.iter(|| {
+            let mut c = Connection::unix(Path::new(&sock_auth), Duration::from_secs(1)).expect("con");
+            c.authenticate(b"chave-do-bench", Duration::from_secs(1)).expect("auth");
+            c.negotiate(caps::LZ4 | caps::BATCH | caps::TIMESTAMP, Duration::from_secs(1)).expect("caps");
+            let r = c.request(&Message::read("temp_0", 1, true), Duration::from_secs(1)).expect("r");
+            black_box(r)
+        })
+    });
+    group.finish();
+}
+
+criterion_group!(benches, schema_v1, local_read, remote_read, local_actuation, v11_batch, v11_timestamp_and_compression, v11_auth);
 criterion_main!(benches);

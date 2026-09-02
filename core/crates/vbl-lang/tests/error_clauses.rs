@@ -158,3 +158,43 @@ fn expression_decimal_e_horizon_decimal_sao_validos() {
 }
 
 use vbl_lang::{Declaration, ExprKind};
+
+#[test]
+fn clausulas_complementares_atores_string_e_bordas() {
+    // Atores com STRING (aspas) são válidos em regra e no main — braços
+    // irmãos do identificador (o FXP aceita ator citado).
+    let regra = "event A { value: 1, horizon: 5s }\n\
+                 review A { when cpu_temp > 1 -> act(\"Fan\", 2) }";
+    let (_p, d) = parse(regra);
+    assert!(!d.has_errors(), "{d}");
+
+    let main_str = "event A { value: 1, horizon: 5s }\n\
+                    main { act(\"Fan\", 2) }";
+    let (_p2, d2) = parse(main_str);
+    assert!(!d2.has_errors(), "{d2}");
+
+    // Duração com número e EOF imediato (sem unidade e sem '}').
+    contem("event A { value: 1, horizon: 5", &["duracao_invalida", "bloco_nao_fechado"]);
+
+    // every sem '{' após o período.
+    contem(
+        "event A { value: 1, horizon: 5s }\nmain { every 5s keep(A) }",
+        &["estrutura_main"],
+    );
+
+    // aninhamento de every além do teto ⇒ every_muito_profundo.
+    let profundo: String = {
+        let n = 12; // MAX_EVERY_DEPTH + folga
+        let mut s = String::from("event A { value: 1, horizon: 5s }\nmain { ");
+        for _ in 0..n {
+            s.push_str("every 5s { ");
+        }
+        s.push_str("keep(A)");
+        for _ in 0..n {
+            s.push_str(" }");
+        }
+        s.push_str(" }");
+        s
+    };
+    contem(&profundo, &["every_muito_profundo"]);
+}

@@ -1,13 +1,17 @@
-//! Codec do schema de mensagem FXP **v1** — implementação de referência de
-//! [`docs/FXP-SCHEMA-v1.md`] (PLAN §3.5: schema definido antes dos drivers).
+//! Codec do schema de mensagem FXP **v1.1** — implementação de referência de
+//! [`docs/FXP-SCHEMA-v1.md`] (PLAN §3.5: schema definido antes dos drivers;
+//! v1.1: extensões do fio — PLAN §8 item 8).
 //!
-//! Garantias canônicas do v1:
+//! Garantias canônicas:
 //! - `encode → decode` é identidade bit a bit (f64 IEEE-754, UTF-8 exato);
 //! - `NaN`/`±∞` rejeitados no encode **e** no decode (leitura física inválida
 //!   é falha de I/O — FORMAL §4.7 —, nunca valor mágico);
 //! - violação de enquadramento (magic, versão, opcode, truncamento, sobras)
 //!   produz erro explícito, nunca mensagem parcial silenciosa;
-//! - endianness little-endian em todos os inteiros e nos bits do f64.
+//! - endianness little-endian em todos os inteiros e nos bits do f64;
+//! - **aditivo e negociado (v1.1):** o wire default é bit a bit v1.0; recursos
+//!   novos (timestamp §5, compressão §4.8, batch §4.7) só trafegam após `CAPS`
+//!   (a negociação em si é do transporte/`peer`, o codec é stateless).
 
 /// Magic do header: `"FXP"`.
 pub const MAGIC: [u8; 3] = *b"FXP";
@@ -21,18 +25,38 @@ pub const MAX_PAYLOAD: usize = 8192;
 pub const MAX_NAME: usize = 255;
 /// Limite de strings de valor/grandeza/unidade/motivo.
 pub const MAX_STRING: usize = 1024;
+/// Limite de itens de um `READ_BATCH` (§4.7: 1..=64).
+pub const MAX_BATCH: usize = 64;
+/// Bytes do nonce do handshake de autenticação (§4.6).
+pub const AUTH_NONCE_LEN: usize = 32;
+/// Único scheme de autenticação da v1.1: PSK + HMAC-SHA256 (§4.6).
+pub const AUTH_SCHEME_PSK_HMAC_SHA256: u16 = 1;
 
-/// Opcodes do v1 (docs/FXP-SCHEMA-v1.md §4).
+/// Opcodes (docs/FXP-SCHEMA-v1.md §4; v1.1 acrescenta 0x06–0x09 e acks 0x86+).
 pub mod op {
     pub const READ: u8 = 0x01;
     pub const ACT: u8 = 0x02;
     pub const HEARTBEAT: u8 = 0x03;
     pub const HELLO: u8 = 0x04;
     pub const BYE: u8 = 0x05;
+    /// Negociação de capacidades (v1.1 §4.5).
+    pub const CAPS: u8 = 0x06;
+    /// Batching de leituras (v1.1 §4.7).
+    pub const READ_BATCH: u8 = 0x07;
+    /// Desafio de autenticação PSK (v1.1 §4.6).
+    pub const AUTH_CHALLENGE: u8 = 0x08;
+    /// Resposta de autenticação PSK (v1.1 §4.6).
+    pub const AUTH_RESPONSE: u8 = 0x09;
     pub const READ_OK: u8 = 0x81;
     pub const READ_ERR: u8 = 0x82;
     pub const HEARTBEAT_ACK: u8 = 0x83;
     pub const ACT_ACK: u8 = 0x84;
+    /// Concessão de capacidades = interseção (v1.1 §4.5).
+    pub const CAPS_OK: u8 = 0x86;
+    /// Resposta do lote de leituras (v1.1 §4.7).
+    pub const READ_BATCH_OK: u8 = 0x87;
+    /// Handshake de autenticação aceito (v1.1 §4.6).
+    pub const AUTH_OK: u8 = 0x8A;
 
     /// Nome canônico do opcode (diagnósticos e Caderno).
     pub fn name(opcode: u8) -> Option<&'static str> {
@@ -42,10 +66,17 @@ pub mod op {
             HEARTBEAT => "HEARTBEAT",
             HELLO => "HELLO",
             BYE => "BYE",
+            CAPS => "CAPS",
+            READ_BATCH => "READ_BATCH",
+            AUTH_CHALLENGE => "AUTH_CHALLENGE",
+            AUTH_RESPONSE => "AUTH_RESPONSE",
             READ_OK => "READ_OK",
             READ_ERR => "READ_ERR",
             HEARTBEAT_ACK => "HEARTBEAT_ACK",
             ACT_ACK => "ACT_ACK",
+            CAPS_OK => "CAPS_OK",
+            READ_BATCH_OK => "READ_BATCH_OK",
+            AUTH_OK => "AUTH_OK",
             _ => return None,
         })
     }
@@ -61,8 +92,36 @@ pub mod flag {
     pub const FALLBACK: u8 = 1 << 2;
     /// Dado de origem simulada (`measurement_status` — FORMAL §4.7).
     pub const SYNTHETIC: u8 = 1 << 3;
+    /// Payload carrega `u64 LE` µs desde o epoch UNIX (v1.1 §5 — anotação de
+    /// laboratório; o Caderno permanece no relógio virtual). Derivado no
+    /// encode do campo `Message::timestamp_us`.
+    pub const TIMESTAMP: u8 = 1 << 5;
+    /// Região nome+corpo comprimida em LZ4 block (v1.1 §4.8). Somente com
+    /// negociação `CAPS` bit 0; nunca setado à mão no `Message`.
+    pub const COMPRESSED: u8 = 1 << 6;
+    /// Bits reservados (4 e 7): `0` no encode; ignorados no decode.
+    pub const RESERVED: u8 = 0b1001_0000;
+}
+
+/// Bits de capacidades negociadas (`CAPS`/`CAPS_OK`, v1.1 §4.5).
+pub mod caps {
+    /// Frames comprimidos em LZ4 block (§4.8).
+    pub const LZ4: u16 = 1 << 0;
+    /// Opcodes `READ_BATCH`/`READ_BATCH_OK` (§4.7).
+    pub const BATCH: u16 = 1 << 1;
+    /// Frames com `FLAG_TIMESTAMP` (§5).
+    pub const TIMESTAMP: u16 = 1 << 2;
     /// Bits reservados: `0` no encode; ignorados no decode.
-    pub const RESERVED: u8 = 0b1111_0000;
+    pub const RESERVED: u16 = !0b0111;
+}
+
+/// Algoritmos e política de compressão do corpo (v1.1 §4.8).
+pub mod compress {
+    pub const ALGO_NONE: u8 = 0;
+    /// LZ4 block — único algoritmo da v1.1 (via `lz4_flex`).
+    pub const ALGO_LZ4: u8 = 1;
+    /// Só comprime quando a região plana excede este tamanho (bytes).
+    pub const THRESHOLD: usize = 512;
 }
 
 /// Razões canônicas de `READ_ERR` (FORMAL §4.7).
@@ -100,6 +159,17 @@ pub enum SchemaError {
     NonFiniteValue,
     /// UTF-8 inválido em campo de texto.
     InvalidUtf8,
+    /// Lote de leitura fora de `1..=MAX_BATCH` (v1.1 §4.7).
+    BatchTooLarge,
+    /// `AUTH_CHALLENGE.scheme` desconhecido (v1.1 §4.6).
+    UnknownAuthScheme { received: u16 },
+    /// Algoritmo de compressão no byte reservado ≠ id conhecido (v1.1 §4.8).
+    UnknownCompression { received: u8 },
+    /// Blob LZ4 corrupto ou região descomprimida acima do teto — bomba de
+    /// descompressão (v1.1 §4.8).
+    DecompressionFailed,
+    /// Bits reservados de capacidades ≠ 0 (v1.1 §4.5).
+    ReservedCaps,
 }
 
 impl std::fmt::Display for SchemaError {
@@ -131,6 +201,26 @@ impl std::fmt::Display for SchemaError {
                 write!(f, "valor NaN/infinito não é leitura física válida (FORMAL §4.7)")
             }
             SchemaError::InvalidUtf8 => write!(f, "campo de texto com UTF-8 inválido"),
+            SchemaError::BatchTooLarge => {
+                write!(f, "lote de leitura fora de 1..={MAX_BATCH} itens (§4.7)")
+            }
+            SchemaError::UnknownAuthScheme { received } => {
+                write!(f, "scheme de autenticação desconhecido: {received} (v1.1: {AUTH_SCHEME_PSK_HMAC_SHA256})")
+            }
+            SchemaError::UnknownCompression { received } => {
+                write!(
+                    f,
+                    "algoritmo de compressão desconhecido: {received} (v1.1: LZ4={})",
+                    compress::ALGO_LZ4
+                )
+            }
+            SchemaError::DecompressionFailed => write!(
+                f,
+                "blob LZ4 corrupto ou região descomprimida acima de {MAX_PAYLOAD} bytes (bomba)"
+            ),
+            SchemaError::ReservedCaps => {
+                write!(f, "bits reservados de capacidades devem ser 0 (v1.1: 0..=2)")
+            }
         }
     }
 }
@@ -178,6 +268,14 @@ pub enum DeviceDesc {
     },
 }
 
+/// Resultado por item de `READ_BATCH_OK` (v1.1 §4.7): erro espelha as razões
+/// de `READ_ERR` — item com falha **nunca** vira valor (FORMAL §4.7).
+#[derive(Debug, Clone, PartialEq)]
+pub enum BatchResult {
+    Ok { value: f64, canonical: String },
+    Err { reason: u8 },
+}
+
 impl DeviceDesc {
     pub fn name(&self) -> &str {
         match self {
@@ -196,9 +294,20 @@ pub enum Body {
     ActAck { status: AckAct },
     HeartbeatAck { ok: bool },
     Hello { devices: Vec<DeviceDesc> },
+    /// Capacidades pedidas (`CAPS`) ou concedidas (`CAPS_OK`) — v1.1 §4.5.
+    Caps { capabilities: u16 },
+    /// Lote de leituras — v1.1 §4.7.
+    ReadBatch { names: Vec<String> },
+    /// Resposta do lote — v1.1 §4.7.
+    ReadBatchOk { results: Vec<BatchResult> },
+    /// Desafio PSK — v1.1 §4.6.
+    AuthChallenge { scheme: u16, nonce: [u8; AUTH_NONCE_LEN] },
+    /// Resposta PSK — v1.1 §4.6.
+    AuthResponse { nonce: [u8; AUTH_NONCE_LEN], mac: [u8; AUTH_NONCE_LEN] },
+    // `AUTH_OK` usa `Body::Empty` — o opcode distingue.
 }
 
-/// Mensagem FXP v1 (header + nome + corpo).
+/// Mensagem FXP v1.1 (header + nome + corpo).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Message {
     pub opcode: u8,
@@ -206,6 +315,10 @@ pub struct Message {
     pub seq: u32,
     /// Nome simbólico (sensor/ator); vazio quando a op não tem nome.
     pub name: String,
+    /// Timestamp físico no fio (µs desde o epoch UNIX, v1.1 §5) — anotação de
+    /// laboratório; `Some` deriva `FLAG_TIMESTAMP` no encode. O Caderno segue
+    /// no relógio virtual do runtime.
+    pub timestamp_us: Option<u64>,
     pub body: Body,
 }
 
@@ -217,6 +330,7 @@ impl Message {
             flags: if ack { flag::ACK } else { 0 },
             seq,
             name: sensor.into(),
+            timestamp_us: None,
             body: Body::Empty,
         }
     }
@@ -228,6 +342,7 @@ impl Message {
             flags: (if synthetic { flag::SYNTHETIC } else { 0 }) | flag::ACK,
             seq,
             name: String::new(),
+            timestamp_us: None,
             body: Body::ReadOk { value, canonical: canonical.into() },
         }
     }
@@ -239,6 +354,7 @@ impl Message {
             flags: flag::ERROR | flag::ACK,
             seq,
             name: String::new(),
+            timestamp_us: None,
             body: Body::ReadErr { reason },
         }
     }
@@ -250,6 +366,7 @@ impl Message {
             flags: if ack { flag::ACK } else { 0 },
             seq,
             name: actor.into(),
+            timestamp_us: None,
             body: Body::Act { value },
         }
     }
@@ -261,6 +378,7 @@ impl Message {
             flags: flag::ACK | if fallback { flag::FALLBACK } else { 0 },
             seq,
             name: String::new(),
+            timestamp_us: None,
             body: Body::ActAck { status },
         }
     }
@@ -272,6 +390,7 @@ impl Message {
             flags: flag::ACK,
             seq,
             name: name.into(),
+            timestamp_us: None,
             body: Body::Empty,
         }
     }
@@ -283,6 +402,7 @@ impl Message {
             flags: flag::ACK | if ok { 0 } else { flag::ERROR },
             seq,
             name: String::new(),
+            timestamp_us: None,
             body: Body::HeartbeatAck { ok },
         }
     }
@@ -294,13 +414,116 @@ impl Message {
             flags: 0,
             seq,
             name: String::new(),
+            timestamp_us: None,
             body: Body::Hello { devices },
         }
     }
 
     /// `BYE` — encerramento limpo.
     pub fn bye(seq: u32) -> Self {
-        Self { opcode: op::BYE, flags: 0, seq, name: String::new(), body: Body::Empty }
+        Self {
+            opcode: op::BYE,
+            flags: 0,
+            seq,
+            name: String::new(),
+            timestamp_us: None,
+            body: Body::Empty,
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // v1.1 (docs/FXP-SCHEMA-v1.md §4.5–§4.7)
+    // ------------------------------------------------------------------
+
+    /// `CAPS` — capacidades pedidas pelo consumidor (§4.5).
+    pub fn caps(capabilities: u16, seq: u32) -> Self {
+        Self {
+            opcode: op::CAPS,
+            flags: flag::ACK,
+            seq,
+            name: String::new(),
+            timestamp_us: None,
+            body: Body::Caps { capabilities },
+        }
+    }
+
+    /// `CAPS_OK` — interseção pedidos × suportados (§4.5).
+    pub fn caps_ok(capabilities: u16, seq: u32) -> Self {
+        Self {
+            opcode: op::CAPS_OK,
+            flags: flag::ACK,
+            seq,
+            name: String::new(),
+            timestamp_us: None,
+            body: Body::Caps { capabilities },
+        }
+    }
+
+    /// `READ_BATCH` — lote de leituras (§4.7); `1..=64` nomes.
+    pub fn read_batch(names: Vec<String>, seq: u32) -> Self {
+        Self {
+            opcode: op::READ_BATCH,
+            flags: flag::ACK,
+            seq,
+            name: String::new(),
+            timestamp_us: None,
+            body: Body::ReadBatch { names },
+        }
+    }
+
+    /// `READ_BATCH_OK` — resultado por item, erro honesto (§4.7).
+    pub fn read_batch_ok(results: Vec<BatchResult>, seq: u32) -> Self {
+        Self {
+            opcode: op::READ_BATCH_OK,
+            flags: flag::ACK,
+            seq,
+            name: String::new(),
+            timestamp_us: None,
+            body: Body::ReadBatchOk { results },
+        }
+    }
+
+    /// `AUTH_CHALLENGE` — scheme + nonce do servidor (§4.6).
+    pub fn auth_challenge(scheme: u16, nonce: [u8; AUTH_NONCE_LEN], seq: u32) -> Self {
+        Self {
+            opcode: op::AUTH_CHALLENGE,
+            flags: 0,
+            seq,
+            name: String::new(),
+            timestamp_us: None,
+            body: Body::AuthChallenge { scheme, nonce },
+        }
+    }
+
+    /// `AUTH_RESPONSE` — nonce do consumidor + HMAC (§4.6).
+    pub fn auth_response(nonce: [u8; AUTH_NONCE_LEN], mac: [u8; AUTH_NONCE_LEN], seq: u32) -> Self {
+        Self {
+            opcode: op::AUTH_RESPONSE,
+            flags: flag::ACK,
+            seq,
+            name: String::new(),
+            timestamp_us: None,
+            body: Body::AuthResponse { nonce, mac },
+        }
+    }
+
+    /// `AUTH_OK` — handshake aceito (§4.6).
+    pub fn auth_ok(seq: u32) -> Self {
+        Self {
+            opcode: op::AUTH_OK,
+            flags: flag::ACK,
+            seq,
+            name: String::new(),
+            timestamp_us: None,
+            body: Body::Empty,
+        }
+    }
+
+    /// Carimba o instante físico (µs desde o epoch UNIX) — deriva
+    /// `FLAG_TIMESTAMP` no encode (§5). Anotação de laboratório.
+    pub fn with_timestamp(mut self, us: u64) -> Self {
+        self.timestamp_us = Some(us);
+        self
     }
 }
 
@@ -312,6 +535,10 @@ fn put_u16(out: &mut Vec<u8>, v: u16) {
 }
 
 fn put_u32(out: &mut Vec<u8>, v: u32) {
+    out.extend_from_slice(&v.to_le_bytes());
+}
+
+fn put_u64(out: &mut Vec<u8>, v: u64) {
     out.extend_from_slice(&v.to_le_bytes());
 }
 
@@ -358,11 +585,17 @@ fn push_opts(buf: &mut Vec<u8>, flags: &mut u8, pares: &[(u8, Option<f64>)]) -> 
 // Encode
 // ---------------------------------------------------------------------------
 /// Serializa a mensagem como frame completo (length-prefix + payload) em `out`.
+///
+/// O wire produzido é **plano** (sem compressão — para isso o transporte usa
+/// [`encode_with_compression`]); `FLAG_TIMESTAMP` é **derivado** do campo
+/// `timestamp_us` e bits de recurso setados à mão são rejeitados (fonte única
+/// da verdade — nunca contradição header × campo).
 pub fn encode(msg: &Message, out: &mut Vec<u8>) -> Result<(), SchemaError> {
     if op::name(msg.opcode).is_none() {
         return Err(SchemaError::UnknownOpcode { received: msg.opcode });
     }
-    if msg.flags & flag::RESERVED != 0 {
+    // Bits de recurso derivados não podem vir setados no Message.
+    if msg.flags & (flag::TIMESTAMP | flag::COMPRESSED) != 0 || msg.flags & flag::RESERVED != 0 {
         return Err(SchemaError::ReservedFlag);
     }
     if msg.name.len() > MAX_NAME {
@@ -442,12 +675,63 @@ pub fn encode(msg: &Message, out: &mut Vec<u8>) -> Result<(), SchemaError> {
                 }
             }
         }
+        Body::Caps { capabilities } => {
+            if capabilities & caps::RESERVED != 0 {
+                return Err(SchemaError::ReservedCaps);
+            }
+            put_u16(&mut body, *capabilities);
+        }
+        Body::ReadBatch { names } => {
+            if names.is_empty() || names.len() > MAX_BATCH {
+                return Err(SchemaError::BatchTooLarge);
+            }
+            put_u16(&mut body, names.len() as u16);
+            for n in names {
+                put_len_string(&mut body, 1, MAX_NAME, n)?;
+            }
+        }
+        Body::ReadBatchOk { results } => {
+            if results.is_empty() || results.len() > MAX_BATCH {
+                return Err(SchemaError::BatchTooLarge);
+            }
+            put_u16(&mut body, results.len() as u16);
+            for r in results {
+                match r {
+                    BatchResult::Ok { value, canonical } => {
+                        body.push(0);
+                        put_f64(&mut body, *value)?;
+                        put_len_string(&mut body, 1, MAX_NAME, canonical)?;
+                    }
+                    BatchResult::Err { reason } => {
+                        // Razão 0 (nao_registrado) viaja como tag 4: o byte 0
+                        // do item é o status "ok" (§4.7) — nunca colidir.
+                        body.push(match *reason {
+                            reason::NOT_REGISTERED => 4,
+                            r @ reason::INACCESSIBLE..=reason::BUSY => r,
+                            _ => return Err(SchemaError::MissingField),
+                        });
+                    }
+                }
+            }
+        }
+        Body::AuthChallenge { scheme, nonce } => {
+            if *scheme != AUTH_SCHEME_PSK_HMAC_SHA256 {
+                return Err(SchemaError::UnknownAuthScheme { received: *scheme });
+            }
+            put_u16(&mut body, *scheme);
+            body.extend_from_slice(nonce);
+        }
+        Body::AuthResponse { nonce, mac } => {
+            body.extend_from_slice(nonce);
+            body.extend_from_slice(mac);
+        }
     }
 
-    if body.len() > MAX_PAYLOAD {
-        return Err(SchemaError::FrameExceeded { length: body.len() });
-    }
-    let length = HEADER_LEN + msg.name.len() + body.len();
+    // FLAG_TIMESTAMP é derivado do campo (fonte única — §5).
+    let effective_flags =
+        msg.flags | if msg.timestamp_us.is_some() { flag::TIMESTAMP } else { 0 };
+    let ts_len = if msg.timestamp_us.is_some() { 8 } else { 0 };
+    let length = HEADER_LEN + ts_len + msg.name.len() + body.len();
     if length > MAX_PAYLOAD {
         return Err(SchemaError::FrameExceeded { length });
     }
@@ -456,10 +740,13 @@ pub fn encode(msg: &Message, out: &mut Vec<u8>) -> Result<(), SchemaError> {
     out.extend_from_slice(&MAGIC);
     out.push(VERSION);
     out.push(msg.opcode);
-    out.push(msg.flags);
-    out.push(0); // reservado
+    out.push(effective_flags);
+    out.push(0); // reservado (compressão só via encode_with_compression, §4.8)
     out.push(msg.name.len() as u8);
     put_u32(out, msg.seq);
+    if let Some(ts) = msg.timestamp_us {
+        put_u64(out, ts);
+    }
     out.extend_from_slice(msg.name.as_bytes());
     out.extend_from_slice(&body);
     Ok(())
@@ -470,6 +757,39 @@ pub fn encode_to_vec(msg: &Message) -> Result<Vec<u8>, SchemaError> {
     let mut out = Vec::with_capacity(HEADER_LEN + msg.name.len() + 64);
     encode(msg, &mut out)?;
     Ok(out)
+}
+
+/// Encode com compressão LZ4 do corpo **quando compensa** (§4.8): só quando a
+/// região nome+corpo excede [`compress::THRESHOLD`] e o blob fica menor que a
+/// região plana (compressão que infla não viaja). Marca `FLAG_COMPRESSED` +
+/// id do algoritmo no byte reservado. A negociação de capacidade (`CAPS` bit 0)
+/// é responsabilidade do transporte/`peer` — codec é stateless.
+pub fn encode_with_compression(msg: &Message, out: &mut Vec<u8>) -> Result<(), SchemaError> {
+    let mut plain = Vec::with_capacity(HEADER_LEN + msg.name.len() + 64);
+    encode(msg, &mut plain)?;
+    let ts_len = usize::from(msg.timestamp_us.is_some());
+    let prefix = HEADER_LEN + 8 * ts_len;
+    let region = &plain[4 + prefix..];
+    if region.len() <= compress::THRESHOLD {
+        out.extend_from_slice(&plain);
+        return Ok(());
+    }
+    let blob = lz4_flex::block::compress(region);
+    if blob.len() >= region.len() {
+        out.extend_from_slice(&plain);
+        return Ok(());
+    }
+    let length = prefix + blob.len();
+    if length > MAX_PAYLOAD {
+        return Err(SchemaError::FrameExceeded { length });
+    }
+    out.extend_from_slice(&plain[..4 + prefix]);
+    // Patch do frame já copiado: novo `length`, flag e id do algoritmo.
+    out[0..4].copy_from_slice(&(length as u32).to_le_bytes());
+    out[4 + 5] |= flag::COMPRESSED;
+    out[4 + 6] = compress::ALGO_LZ4;
+    out.extend_from_slice(&blob);
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -571,13 +891,43 @@ pub fn decode(buf: &[u8]) -> Result<(Message, usize), SchemaError> {
     }
     let opcode = payload[4];
     let flags = payload[5];
+    let reservado = payload[6];
     let name_len = payload[7] as usize;
     let seq = u32::from_le_bytes([payload[8], payload[9], payload[10], payload[11]]);
     if op::name(opcode).is_none() {
         return Err(SchemaError::UnknownOpcode { received: opcode });
     }
 
-    let mut r = Reader::new(&payload[HEADER_LEN..]);
+    // Região nome+corpo: plana ou comprimida (§4.8). O timestamp (§5), quando
+    // presente, viaja plano logo após o header.
+    let mut region_owned;
+    let mut rest: &[u8] = &payload[HEADER_LEN..];
+    let mut timestamp_us: Option<u64> = None;
+    if flags & flag::TIMESTAMP != 0 {
+        if rest.len() < 8 {
+            return Err(SchemaError::MissingField);
+        }
+        timestamp_us = Some(u64::from_le_bytes([
+            rest[0], rest[1], rest[2], rest[3], rest[4], rest[5], rest[6], rest[7],
+        ]));
+        rest = &rest[8..];
+    }
+    if flags & flag::COMPRESSED != 0 {
+        // §4.8: algoritmo único LZ4 no byte reservado; guarda de bomba = teto
+        // da região descomprimida (blob corrupto/grande demais ⇒ erro).
+        if reservado != compress::ALGO_LZ4 {
+            return Err(SchemaError::UnknownCompression { received: reservado });
+        }
+        // Buffer-teto = guarda de bomba: blob que exceder 8192 descomprimido
+        // falha; o que sobra de capacidade é truncado após o fato.
+        region_owned = vec![0u8; MAX_PAYLOAD];
+        let n = lz4_flex::block::decompress_into(rest, &mut region_owned)
+            .map_err(|_| SchemaError::DecompressionFailed)?;
+        region_owned.truncate(n);
+        rest = &region_owned;
+    }
+
+    let mut r = Reader::new(rest);
     // O nome no fio não tem prefixo próprio: seu tamanho é o `name_len` do header.
     let name_bytes = r.take(name_len)?;
     let name = String::from_utf8(name_bytes.to_vec()).map_err(|_| SchemaError::InvalidUtf8)?;
@@ -660,8 +1010,65 @@ pub fn decode(buf: &[u8]) -> Result<(Message, usize), SchemaError> {
             r.end()?;
             Body::Hello { devices }
         }
-        // Corpos vazios por último (READ exige nome; HEARTBEAT/BYE não).
-        op::READ | op::HEARTBEAT | op::BYE => {
+        op::CAPS | op::CAPS_OK => {
+            let capabilities = r.u16()?;
+            r.end()?;
+            // Bits reservados de capacidades são ignorados no decode (§4.5).
+            Body::Caps { capabilities }
+        }
+        op::READ_BATCH => {
+            let count = r.u16()? as usize;
+            if count == 0 || count > MAX_BATCH {
+                return Err(SchemaError::BatchTooLarge);
+            }
+            let mut names = Vec::with_capacity(count);
+            for _ in 0..count {
+                names.push(r.len_string(1, MAX_NAME)?);
+            }
+            r.end()?;
+            Body::ReadBatch { names }
+        }
+        op::READ_BATCH_OK => {
+            let count = r.u16()? as usize;
+            if count == 0 || count > MAX_BATCH {
+                return Err(SchemaError::BatchTooLarge);
+            }
+            let mut results = Vec::with_capacity(count);
+            for _ in 0..count {
+                results.push(match r.u8()? {
+                    0 => BatchResult::Ok {
+                        value: r.f64()?,
+                        canonical: r.len_string(1, MAX_NAME)?,
+                    },
+                    s @ 1..=3 => BatchResult::Err { reason: s },
+                    // 4 = nao_registrado (§4.1 valor 0; o byte 0 pertence a Ok).
+                    4 => BatchResult::Err { reason: reason::NOT_REGISTERED },
+                    _ => return Err(SchemaError::MissingField),
+                });
+            }
+            r.end()?;
+            Body::ReadBatchOk { results }
+        }
+        op::AUTH_CHALLENGE => {
+            let scheme = r.u16()?;
+            if scheme != AUTH_SCHEME_PSK_HMAC_SHA256 {
+                return Err(SchemaError::UnknownAuthScheme { received: scheme });
+            }
+            let mut nonce = [0u8; AUTH_NONCE_LEN];
+            nonce.copy_from_slice(r.take(AUTH_NONCE_LEN)?);
+            r.end()?;
+            Body::AuthChallenge { scheme, nonce }
+        }
+        op::AUTH_RESPONSE => {
+            let mut nonce = [0u8; AUTH_NONCE_LEN];
+            nonce.copy_from_slice(r.take(AUTH_NONCE_LEN)?);
+            let mut mac = [0u8; AUTH_NONCE_LEN];
+            mac.copy_from_slice(r.take(AUTH_NONCE_LEN)?);
+            r.end()?;
+            Body::AuthResponse { nonce, mac }
+        }
+        // Corpos vazios por último (READ exige nome; HEARTBEAT/BYE/AUTH_OK não).
+        op::READ | op::HEARTBEAT | op::BYE | op::AUTH_OK => {
             if matches!(opcode, op::READ) && name.is_empty() {
                 return Err(SchemaError::InvalidName);
             }
@@ -671,5 +1078,9 @@ pub fn decode(buf: &[u8]) -> Result<(Message, usize), SchemaError> {
         _ => unreachable!("opcode validado acima"),
     };
 
-    Ok((Message { opcode, flags, seq, name, body }, total))
+    // Bits de recurso (TIMESTAMP/COMPRESSED) são derivados no encode — a
+    // mensagem decodificada carrega a semântica (`timestamp_us`), não a flag;
+    // assim `decode(encode(m)) == m` vale também para frames carimbados.
+    let semantic_flags = flags & !(flag::TIMESTAMP | flag::COMPRESSED);
+    Ok((Message { opcode, flags: semantic_flags, seq, name, timestamp_us, body }, total))
 }

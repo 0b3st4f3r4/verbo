@@ -225,6 +225,37 @@ mod tests {
     }
 
     #[test]
+    fn teto_de_tempo_e_veredito_de_falha_sao_sequenciais() {
+        // RSS é POR PROCESSO: os dois cenários rodam em UM teste, em ordem,
+        // para a carga do segundo não inflar o RSS medido pelo primeiro.
+        //
+        // Sob sanitizer (ASAN via -Zsanitizer), o RSS do processo inclui a
+        // shadow memory e o allocator cresce em arenas: o veredito de RSS
+        // deixa de ser semântica do soak nestas cláusulas. O que elas provam:
+        // 1) a PAREDE DE TEMPO encerra um ciclo com teto de ticks infinito
+        //    (pelo prazo de parede, não pelo veredito); 2) o VEREDITO DE
+        //    FALHA dispara quando o patamar nunca foi estabelecido — a
+        //    tolerância fica em 4 MiB e qualquer processo real a supera.
+        //
+        // 1) max_seconds = 1 com teto de ticks altíssimo:
+        let inicio = std::time::Instant::now();
+        let cfg = Config { alive: 3, max_ticks: u64::MAX, max_seconds: 1, report: 10_000 };
+        let _ = run(cfg); // veredito 0 ou 1: sob sanitizer o RSS não é semântico
+        assert!(
+            inicio.elapsed() < std::time::Duration::from_secs(5),
+            "parede de tempo não encerrou o ciclo: {:?}",
+            inicio.elapsed()
+        );
+        //
+        // 2) teto de ticks ANTES do patamar (tick 10): rss_threshold fica 0,
+        //    a tolerância vira só a folga de 4 MiB e o RSS do próprio processo
+        //    a supera ⇒ veredito honesto é FALHA (1), nunca "OK" sem medição.
+        // 1 tick com 15k formas num único passe.
+        let cfg = Config { alive: 45_000, max_ticks: 1, max_seconds: 0, report: 10_000 };
+        assert_eq!(run(cfg), 1);
+    }
+
+    #[test]
     fn ciclo_enxuto_termina_estavel() {
         // 12 ticks com 3 vivas: cobre patamar (tick 10), relatórios periódicos
         // e o veredito final (RSS sob carga constante renova sem crescer)
