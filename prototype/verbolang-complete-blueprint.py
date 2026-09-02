@@ -24,7 +24,7 @@ Alinhamentos da Etapa 1 (suíte em tests/ — cf. docs/reports/STAGE-1-REPORT.md
 - Fins de forma tipificados no Caderno (FORMAL §6): dissolve_rule,
   dissolve_horizon, collapse_maintenance, dissolve_subvert; além de
   review_short_circuit, review_after_dissolution, actor_rejected_value,
-  persistencia, transicao, keep_forma_inexistente, reclassify_sem_deadline.
+  persistence, transicao, keep_forma_inexistente, reclassify_sem_deadline.
 - Persistência `.vl` canônica com SHA-256 na reclassificação (FORMAL §4.1).
 - Horizon ABSOLUTO preservado nas reclassificações (FORMAL §4.1).
 - Manutenção implícita enquanto houver regra de revisão ativa (FORMAL §4.1).
@@ -283,7 +283,7 @@ class Caderno:
         """Registro genérico com kind explícito (kinds canônicos da FORMAL §6:
         dissolve_rule, dissolve_horizon, collapse_maintenance, dissolve_subvert,
         review_short_circuit, review_after_dissolution, actor_rejected_value,
-        persistencia, transicao, ...)."""
+        persistence, transicao, ...)."""
         entry = cls._record(kind, msg, **extra)
         print(f"{WHITE}[CADERNO - {kind}]{RESET} {msg}")
         return entry

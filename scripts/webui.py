@@ -57,7 +57,7 @@ _KIND_PT_EN = {
     "AVALIACAO": "ASSESSMENT",
     "COLAPSO": "COLLAPSE",
     "transicao": "transition",
-    "persistencia": "persistence",
+    "persistence": "persistence",
     "subvert_aplicado": "subvert_applied",
     "keep_forma_inexistente": "keep_unknown_form",
     "keep_ignorado": "keep_ignored",

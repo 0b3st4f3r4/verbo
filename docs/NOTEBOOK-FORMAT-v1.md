@@ -7,7 +7,7 @@
 > `VAZAMENTO→LEAK`, `LEITURA→SENSOR_READ`, `ALERTA→ALERT`,
 > `SUBVERSAO→SUBVERSION`, `ATUACAO→ACTUATION`, `AVALIACAO→ASSESSMENT`,
 > `COLAPSO→COLLAPSE`; eventos `transicao→transition`,
-> `persistencia→persistence`, `subvert_aplicado→subvert_applied`,
+> `persistence→persistence`, `subvert_aplicado→subvert_applied`,
 > `keep_forma_inexistente→keep_unknown_form`, `keep_ignorado→keep_ignored`,
 > `reclassify_sem_deadline→reclassify_no_deadline`,
 > `ator_inexistente→actor_unknown`, `ator_indisponivel→actor_unavailable`,

@@ -39,9 +39,9 @@
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use vbl_runtime::json::Json;
 use vbl_runtime::ledger::Ledger;
 use vbl_runtime::production_ledger::{jsonl_from_binary, verify, ProductionLedger};
-use vbl_runtime::json::Json;
 use vbl_runtime::{load, validate, ChainLedger, Engine, FxpSimulator, MainInterpreter};
 
 mod args;
@@ -49,7 +49,9 @@ mod script;
 
 use args::{parse_args, Command};
 use script::Script;
-use vbl_fxp::registry::{DeviceKind, DeviceRegistry, Endpoint, FxpConfig, OperationMode, RemoteAddr};
+use vbl_fxp::registry::{
+    DeviceKind, DeviceRegistry, Endpoint, FxpConfig, OperationMode, RemoteAddr,
+};
 use vbl_fxp::{BusConfig, FxpBus};
 
 const MINIMUM_REGISTRY: &str = "\
@@ -59,7 +61,10 @@ registro mínimo do FXP (FORMAL §6):
 ";
 
 fn main() {
-    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
     let code = rt.block_on(dispatch(std::env::args().skip(1)));
     std::process::exit(code);
 }
@@ -78,29 +83,62 @@ where
         }
     };
     match cmd {
-        Command::Check { arquivo, with_registry } => check(&arquivo, with_registry),
+        Command::Check {
+            arquivo,
+            with_registry,
+        } => check(&arquivo, with_registry),
         Command::Run {
-            arquivo, ticks, real_ms, persist_dir, ledger, script, allow_unregistered,
-            fxp_mode, fxp_config,
+            arquivo,
+            ticks,
+            real_ms,
+            persist_dir,
+            ledger,
+            script,
+            allow_unregistered,
+            fxp_mode,
+            fxp_config,
         } => match build_fxp(&fxp_config, &fxp_mode) {
             Ok(Some((registry, config_bus))) => {
                 // Barramento FXP real/híbrido/simulado configurado.
                 let sim = script.build_simulator();
                 let bus = FxpBus::build(registry, config_bus, sim);
-                run(&arquivo, ticks, real_ms, persist_dir, ledger, script, allow_unregistered, bus).await
+                run(
+                    &arquivo,
+                    ticks,
+                    real_ms,
+                    persist_dir,
+                    ledger,
+                    script,
+                    allow_unregistered,
+                    bus,
+                )
+                .await
             }
             Ok(None) => {
                 // Sem `--fxp-config`/`--fxp-mode`: simulador em processo,
                 // paridade exata com a Etapa 2 (bit a bit).
                 let sim = script.build_simulator();
-                run(&arquivo, ticks, real_ms, persist_dir, ledger, script, allow_unregistered, sim).await
+                run(
+                    &arquivo,
+                    ticks,
+                    real_ms,
+                    persist_dir,
+                    ledger,
+                    script,
+                    allow_unregistered,
+                    sim,
+                )
+                .await
             }
             Err((code, msg)) => {
                 eprintln!("{msg}");
                 code
             }
         },
-        Command::FxpProbe { fxp_mode, fxp_config } => fxp_probe(&fxp_config, &fxp_mode),
+        Command::FxpProbe {
+            fxp_mode,
+            fxp_config,
+        } => fxp_probe(&fxp_config, &fxp_mode),
         Command::LedgerVerify { arquivo } => ledger_verify(&arquivo),
     }
 }
@@ -121,22 +159,33 @@ fn build_fxp(
     let mut cfg_fxp = None;
     if let Some(path) = fxp_config {
         let text = std::fs::read_to_string(path).map_err(|e| {
-            (2, format!("vbl: não foi possível ler '{}': {e}", path.display()))
+            (
+                2,
+                format!("vbl: não foi possível ler '{}': {e}", path.display()),
+            )
         })?;
         let cfg = FxpConfig::parse(&text).map_err(|e| {
-            (1, format!("vbl: config FXP inválida em '{}': {e}", path.display()))
+            (
+                1,
+                format!("vbl: config FXP inválida em '{}': {e}", path.display()),
+            )
         })?;
-        cfg.apply(&mut registry).map_err(|e| {
-            (1, format!("vbl: registro FXP inválido: {e}"))
-        })?;
+        cfg.apply(&mut registry)
+            .map_err(|e| (1, format!("vbl: registro FXP inválido: {e}")))?;
         cfg_fxp = Some(cfg);
     }
     // Modo: flag > arquivo de config > simulado (default).
     let mode = match fxp_mode.as_deref() {
         Some(m) => OperationMode::parse(m).map_err(|e| (2, format!("vbl: {e}")))?,
-        None => cfg_fxp.as_ref().and_then(|c| c.mode).unwrap_or(OperationMode::Simulated),
+        None => cfg_fxp
+            .as_ref()
+            .and_then(|c| c.mode)
+            .unwrap_or(OperationMode::Simulated),
     };
-    let mut config = BusConfig { mode, ..Default::default() };
+    let mut config = BusConfig {
+        mode,
+        ..Default::default()
+    };
     if let Some(c) = &cfg_fxp {
         if let Some(ms) = c.cache_ttl_ms {
             config.cache_ttl = Duration::from_millis(ms);
@@ -180,7 +229,11 @@ fn check(arquivo: &str, with_registry: bool) -> i32 {
         let (program, _) = vbl_lang::parse(&source);
         let fxp = FxpSimulator::new();
         for d in validate(fxp.registry(), &program) {
-            diagnosticos.push(vbl_lang::Diagnostic::error(&d.code, vbl_lang::Span::default(), d.message));
+            diagnosticos.push(vbl_lang::Diagnostic::error(
+                &d.code,
+                vbl_lang::Span::default(),
+                d.message,
+            ));
         }
     }
     diagnosticos.sort_by_key(|d| (d.span.line, d.span.col));
@@ -223,7 +276,10 @@ async fn run<F: vbl_runtime::fxp::Fxp>(
         for d in &diags.items {
             println!("{d}");
         }
-        eprintln!("vbl: {} erro(s) de compilação — programa não carregado", errors.len());
+        eprintln!(
+            "vbl: {} erro(s) de compilação — programa não carregado",
+            errors.len()
+        );
         return 1;
     }
 
@@ -256,23 +312,36 @@ async fn run<F: vbl_runtime::fxp::Fxp>(
                     return 2;
                 }
             };
-            println!("  Caderno de produção: {} (assíncrono; JSONL em {})",
+            println!(
+                "  Caderno de produção: {} (assíncrono; JSONL em {})",
                 binary.display(),
-                jsonl_path(&binary).display());
+                jsonl_path(&binary).display()
+            );
             let mut engine = Engine::with_ledger(fxp, 1.0, &persist_dir, production);
             reload(&mut engine);
             let mut interp = load(&mut engine, &program);
             println!("  {} forma(s) carregada(s)", engine.active_names().len());
             let interval = real_ms.map(|ms| tokio::time::interval(Duration::from_millis(ms)));
             let start = Instant::now();
-            let executed = run_loop(&mut engine, &mut interp, ticks.unwrap_or(u64::MAX), interval, &script).await;
+            let executed = run_loop(
+                &mut engine,
+                &mut interp,
+                ticks.unwrap_or(u64::MAX),
+                interval,
+                &script,
+            )
+            .await;
             let duration = start.elapsed();
             let ativos: Vec<(String, String, String)> = engine
                 .active_names()
                 .iter()
                 .filter_map(|n| {
                     engine.form(n).map(|f| {
-                        (n.to_string(), format!("{}", f.value), f.conjugation.name().to_string())
+                        (
+                            n.to_string(),
+                            format!("{}", f.value),
+                            f.conjugation.name().to_string(),
+                        )
                     })
                 })
                 .collect();
@@ -294,14 +363,25 @@ async fn run<F: vbl_runtime::fxp::Fxp>(
             println!("  {} forma(s) carregada(s)", engine.active_names().len());
             let interval = real_ms.map(|ms| tokio::time::interval(Duration::from_millis(ms)));
             let start = Instant::now();
-            let executed = run_loop(&mut engine, &mut interp, ticks.unwrap_or(u64::MAX), interval, &script).await;
+            let executed = run_loop(
+                &mut engine,
+                &mut interp,
+                ticks.unwrap_or(u64::MAX),
+                interval,
+                &script,
+            )
+            .await;
             let duration = start.elapsed();
             let ativos: Vec<(String, String, String)> = engine
                 .active_names()
                 .iter()
                 .filter_map(|n| {
                     engine.form(n).map(|f| {
-                        (n.to_string(), format!("{}", f.value), f.conjugation.name().to_string())
+                        (
+                            n.to_string(),
+                            format!("{}", f.value),
+                            f.conjugation.name().to_string(),
+                        )
                     })
                 })
                 .collect();
@@ -412,10 +492,16 @@ fn run_summary(
         rel.actuations,
         rel.alerts
     );
-    println!("  cabeça da cadeia: {}…", &rel.chain_head[..16.min(rel.chain_head.len())]);
+    println!(
+        "  cabeça da cadeia: {}…",
+        &rel.chain_head[..16.min(rel.chain_head.len())]
+    );
     let jsonl = jsonl_path(binary);
     match jsonl_from_binary(binary, &jsonl) {
-        Ok(n) => println!("  log JSONL exportado para {} ({n} eventos)", jsonl.display()),
+        Ok(n) => println!(
+            "  log JSONL exportado para {} ({n} eventos)",
+            jsonl.display()
+        ),
         Err(e) => eprintln!("vbl: conversão JSONL falhou: {e}"),
     }
     if !rel.chain_ok {
@@ -455,12 +541,22 @@ fn ledger_verify(arquivo: &str) -> i32 {
         if rel.chain_ok {
             "ÍNTEGRA".to_string()
         } else {
-            format!("CORROMPIDA (primeiro evento inválido: {:?})", rel.first_broken)
+            format!(
+                "CORROMPIDA (primeiro evento inválido: {:?})",
+                rel.first_broken
+            )
         }
     );
-    println!("  eventos: {}; cabeça: {}…", rel.events, &rel.chain_head[..16.min(rel.chain_head.len())]);
+    println!(
+        "  eventos: {}; cabeça: {}…",
+        rel.events,
+        &rel.chain_head[..16.min(rel.chain_head.len())]
+    );
     println!("  energia: {:.2} J acumulados", rel.total_joules);
-    println!("  atuações: {}/{} com sucesso; divergências (alertas): {}", rel.atuacoes_ok, rel.actuations, rel.alerts);
+    println!(
+        "  atuações: {}/{} com sucesso; divergências (alertas): {}",
+        rel.atuacoes_ok, rel.actuations, rel.alerts
+    );
     let mut counts: Vec<_> = rel.counts.iter().collect();
     counts.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
     for (kind, n) in &counts {
@@ -499,14 +595,27 @@ fn fxp_probe(fxp_config: &Option<PathBuf>, fxp_mode: &Option<String>) -> i32 {
         .devices()
         .map(|d| (d.name.clone(), d.kind.clone(), d.endpoint.clone()))
         .collect();
-    println!("FXP — modo {mode_name} — {} dispositivo(s) no registro", devices.len());
-    println!("{:<16} {:<26} {:<9} {:<34} disponibilidade", "dispositivo", "tipo", "unidade", "rota");
+    println!(
+        "FXP — modo {mode_name} — {} dispositivo(s) no registro",
+        devices.len()
+    );
+    println!(
+        "{:<16} {:<26} {:<9} {:<34} disponibilidade",
+        "dispositivo", "tipo", "unidade", "rota"
+    );
     let mut sensor_ok = 0usize;
     let mut sensores = 0usize;
     for (name, kind, endpoint) in &devices {
         let (kind_label, unit) = match kind {
-            DeviceKind::Sensor { quantity, unit, precision_pct, .. } =>
-                (format!("sensor {quantity} (±{precision_pct}%)"), unit.clone()),
+            DeviceKind::Sensor {
+                quantity,
+                unit,
+                precision_pct,
+                ..
+            } => (
+                format!("sensor {quantity} (±{precision_pct}%)"),
+                unit.clone(),
+            ),
             DeviceKind::Actor { limits } => {
                 let mut t = "ator".to_string();
                 if let (Some(min), Some(max)) = (limits.min, limits.max) {
@@ -518,7 +627,10 @@ fn fxp_probe(fxp_config: &Option<PathBuf>, fxp_mode: &Option<String>) -> i32 {
                 (t, "—".to_string())
             }
         };
-        let route = bus.route_of(name).map(|r| r.description()).unwrap_or_else(|| "—".into());
+        let route = bus
+            .route_of(name)
+            .map(|r| r.description())
+            .unwrap_or_else(|| "—".into());
         let availability = match kind {
             DeviceKind::Sensor { .. } => {
                 sensores += 1;
@@ -528,14 +640,20 @@ fn fxp_probe(fxp_config: &Option<PathBuf>, fxp_mode: &Option<String>) -> i32 {
                         sensor_ok += 1;
                         format!("✓ {:.3} ({:?})", v, t0.elapsed())
                     }
-                    Err(vbl_runtime::fxp::SensorFailure::Inaccessible) =>
-                        "✗ inacessível (condição não avaliada — §4.7)".to_string(),
-                    Err(vbl_runtime::fxp::SensorFailure::NotRegistered) => "✗ não registrado".to_string(),
+                    Err(vbl_runtime::fxp::SensorFailure::Inaccessible) => {
+                        "✗ inacessível (condição não avaliada — §4.7)".to_string()
+                    }
+                    Err(vbl_runtime::fxp::SensorFailure::NotRegistered) => {
+                        "✗ não registrado".to_string()
+                    }
                 }
             }
             DeviceKind::Actor { .. } => actor_availability(endpoint),
         };
-        println!("{:<16} {:<26} {:<9} {:<34} {}", name, kind_label, unit, route, availability);
+        println!(
+            "{:<16} {:<26} {:<9} {:<34} {}",
+            name, kind_label, unit, route, availability
+        );
     }
     println!(
         "sensores: {sensor_ok}/{sensores} acessíveis; alertas registrados no Caderno desta sonda: {}",
@@ -545,8 +663,12 @@ fn fxp_probe(fxp_config: &Option<PathBuf>, fxp_mode: &Option<String>) -> i32 {
     // Cobertura dos dispositivos obrigatórios (FORMAL §6) — falha de CI se
     // faltar algo no denominador canônico.
     let mandatory = [
-        ("cpu_temp", "sensor"), ("cpu_power", "sensor"), ("attention", "sensor"),
-        ("CpuPowerCap", "ator"), ("Fan", "ator"), ("StatusLed", "ator"),
+        ("cpu_temp", "sensor"),
+        ("cpu_power", "sensor"),
+        ("attention", "sensor"),
+        ("CpuPowerCap", "ator"),
+        ("Fan", "ator"),
+        ("StatusLed", "ator"),
     ];
     let missing: Vec<String> = mandatory
         .iter()
@@ -554,12 +676,19 @@ fn fxp_probe(fxp_config: &Option<PathBuf>, fxp_mode: &Option<String>) -> i32 {
         .map(|(n, k)| format!("{n} ({k})"))
         .collect();
     if missing.is_empty() {
-        println!("cobertura obrigatória (§6): {}/{} ✓", mandatory.len(), mandatory.len());
+        println!(
+            "cobertura obrigatória (§6): {}/{} ✓",
+            mandatory.len(),
+            mandatory.len()
+        );
         0
     } else {
-        println!("cobertura obrigatória (§6): {}/{} — faltando: {}",
-            mandatory.len() - missing.len(), mandatory.len(),
-            missing.join(", "));
+        println!(
+            "cobertura obrigatória (§6): {}/{} — faltando: {}",
+            mandatory.len() - missing.len(),
+            mandatory.len(),
+            missing.join(", ")
+        );
         eprintln!("vbl: registro sem dispositivos obrigatórios (FORMAL §6)");
         1
     }
@@ -575,18 +704,35 @@ fn actor_availability(endpoint: &Endpoint) -> String {
         Endpoint::ThermalZone { dir }
         | Endpoint::RaplEnergy { dir }
         | Endpoint::LedClass { dir } => {
-            if dir.exists() { "✓ endpoint presente".into() } else { "✗ endpoint ausente".into() }
+            if dir.exists() {
+                "✓ endpoint presente".into()
+            } else {
+                "✗ endpoint ausente".into()
+            }
         }
-        Endpoint::RaplConstraint { file } | Endpoint::HwmonPwm { file } | Endpoint::HwmonTemp { file } => {
-            if file.exists() { "✓ endpoint presente".into() } else { "✗ endpoint ausente".into() }
+        Endpoint::RaplConstraint { file }
+        | Endpoint::HwmonPwm { file }
+        | Endpoint::HwmonTemp { file } => {
+            if file.exists() {
+                "✓ endpoint presente".into()
+            } else {
+                "✗ endpoint ausente".into()
+            }
         }
         Endpoint::Remote { addr } => match addr {
             RemoteAddr::Unix(p) => {
-                if p.exists() { "✓ socket presente".into() } else { "✗ socket ausente".into() }
+                if p.exists() {
+                    "✓ socket presente".into()
+                } else {
+                    "✗ socket ausente".into()
+                }
             }
             RemoteAddr::Tcp { host, port } => {
                 match format!("{host}:{port}").parse::<std::net::SocketAddr>() {
-                    Ok(alvo) => match std::net::TcpStream::connect_timeout(&alvo, Duration::from_millis(500)) {
+                    Ok(alvo) => match std::net::TcpStream::connect_timeout(
+                        &alvo,
+                        Duration::from_millis(500),
+                    ) {
                         Ok(_) => "✓ peer alcançável".into(),
                         Err(e) => format!("✗ conexão falhou ({e})"),
                     },
@@ -646,7 +792,10 @@ event Vigia {
     // ── jsonl_path ────────────────────────────────────────────────────────
     #[test]
     fn jsonl_path_acrescenta_sufixo() {
-        assert_eq!(jsonl_path(Path::new("logs/a.vcad")), PathBuf::from("logs/a.vcad.jsonl"));
+        assert_eq!(
+            jsonl_path(Path::new("logs/a.vcad")),
+            PathBuf::from("logs/a.vcad.jsonl")
+        );
     }
 
     // ── build_fxp: as quatro resoluções de backend ────────────────────────
@@ -666,7 +815,10 @@ event Vigia {
     #[test]
     fn build_fxp_config_aplica_tempos_e_modo() {
         let dir = tmp_dir("config-ok");
-        let cfg = grava(&dir, "fxp.cfg", "\
+        let cfg = grava(
+            &dir,
+            "fxp.cfg",
+            "\
 mode = hibrido
 cache_ttl_ms = 100
 read_timeout_ms = 20
@@ -674,7 +826,8 @@ act_timeout_local_ms = 40
 act_timeout_remote_ms = 400
 queue_timeout_ms = 2500
 retries = 3
-");
+",
+        );
         let (registry, config) = build_fxp(&Some(cfg), &None).unwrap().unwrap();
         assert!(registry.contains("cpu_temp")); // mínimo preservado
         assert_eq!(config.mode, OperationMode::Hybrid); // modo veio da config
@@ -690,7 +843,9 @@ retries = 3
     fn build_fxp_flag_sobrepoe_config_e_arredonda_prazo_da_fila() {
         let dir = tmp_dir("config-misto");
         let cfg = grava(&dir, "fxp.cfg", "mode = hibrido\nqueue_timeout_ms = 1\n");
-        let (_, config) = build_fxp(&Some(cfg), &Some("real".into())).unwrap().unwrap();
+        let (_, config) = build_fxp(&Some(cfg), &Some("real".into()))
+            .unwrap()
+            .unwrap();
         assert_eq!(config.mode, OperationMode::Real); // flag > config
         assert_eq!(config.queue_timeout_ticks, 1); // mínimo 1 tick
     }
@@ -701,7 +856,10 @@ retries = 3
         let (code, msg) = build_fxp(&None, &Some("voador".into())).unwrap_err();
         assert_eq!(
             (code, msg.as_str()),
-            (2, "vbl: config inválida: modo desconhecido: 'voador' (use real | simulado | hibrido)")
+            (
+                2,
+                "vbl: config inválida: modo desconhecido: 'voador' (use real | simulado | hibrido)"
+            )
         );
         // config ilegível → I/O (2)
         let (code, msg) =
@@ -717,7 +875,11 @@ retries = 3
         // config válida que rejeita o registro → registro (1)
         let dir = tmp_dir("config-alias-quebrado");
         // alias_de é a chave real do parse; alvo inexistente falha no apply
-        let cfg = grava(&dir, "fxp.cfg", "cpu_temp.alias_de = dispositivo_nem_existe\n");
+        let cfg = grava(
+            &dir,
+            "fxp.cfg",
+            "cpu_temp.alias_de = dispositivo_nem_existe\n",
+        );
         let (code, msg) = build_fxp(&Some(cfg), &None).unwrap_err();
         assert_eq!(code, 1);
         assert!(msg.contains("registro FXP inválido"));
@@ -746,7 +908,10 @@ retries = 3
         let dir = tmp_dir("check-quebrado");
         let arq = grava(&dir, "quebrado.vl", PROGRAMA_QUEBRADO);
         assert_eq!(roda(&["check", arq.to_str().unwrap()]), 1);
-        assert_eq!(roda(&["check", dir.join("nem-existe.vl").to_str().unwrap()]), 2);
+        assert_eq!(
+            roda(&["check", dir.join("nem-existe.vl").to_str().unwrap()]),
+            2
+        );
     }
 
     // ── run ───────────────────────────────────────────────────────────────
@@ -754,11 +919,18 @@ retries = 3
     async fn run_sem_ledger_executa_e_soma_cadeia() {
         let dir = tmp_dir("run-memoria");
         let arq = grava(&dir, "ok.vl", PROGRAMA_OK);
-        let persist = dir.join("persistencia");
+        let persist = dir.join("persistence");
         let code = run(
-            arq.to_str().unwrap(), Some(2), None, persist,
-            None, Script::default(), false, FxpSimulator::new(),
-        ).await;
+            arq.to_str().unwrap(),
+            Some(2),
+            None,
+            persist,
+            None,
+            Script::default(),
+            false,
+            FxpSimulator::new(),
+        )
+        .await;
         assert_eq!(code, 0);
     }
 
@@ -768,13 +940,20 @@ retries = 3
         let arq = grava(&dir, "ok.vl", PROGRAMA_OK);
         let ledger = dir.join("caderno.vcad");
         let code = run(
-            arq.to_str().unwrap(), Some(3), None, dir.join("persistencia"),
-            Some(ledger.clone()), Script::default(), false, FxpSimulator::new(),
-        ).await;
+            arq.to_str().unwrap(),
+            Some(3),
+            None,
+            dir.join("persistence"),
+            Some(ledger.clone()),
+            Script::default(),
+            false,
+            FxpSimulator::new(),
+        )
+        .await;
         assert_eq!(code, 0);
         assert!(ledger.is_file());
         assert!(jsonl_path(&ledger).is_file()); // export automático no sumário
-        // o arquivo gravado passa na verificação EXTERNA
+                                                // o arquivo gravado passa na verificação EXTERNA
         assert!(verify(&ledger).unwrap().chain_ok);
     }
 
@@ -784,21 +963,21 @@ retries = 3
         let arq = grava(&dir, "vigia.vl", PROGRAMA_SENSOR_AUSENTE);
         let comuns = [
             arq.to_str().unwrap().to_string(),
-            "--ticks".to_string(), "2".to_string(),
-            "--persist-dir".to_string(), dir.join("p").to_str().unwrap().to_string(),
+            "--ticks".to_string(),
+            "2".to_string(),
+            "--persist-dir".to_string(),
+            dir.join("p").to_str().unwrap().to_string(),
         ];
         // sem flag: recusa (FORMAL §3/§6)
-        let code = dispatch(
-            std::iter::once("run".to_string())
-                .chain(comuns.iter().cloned()),
-        ).await;
+        let code = dispatch(std::iter::once("run".to_string()).chain(comuns.iter().cloned())).await;
         assert_eq!(code, 1);
         // com --allow-unregistered: executa com alertas (§4.7)
         let code = dispatch(
             std::iter::once("run".to_string())
                 .chain(comuns.iter().cloned())
                 .chain(std::iter::once("--allow-unregistered".to_string())),
-        ).await;
+        )
+        .await;
         assert_eq!(code, 0);
     }
 
@@ -807,14 +986,28 @@ retries = 3
         let dir = tmp_dir("run-erros");
         let quebrado = grava(&dir, "quebrado.vl", PROGRAMA_QUEBRADO);
         let code = run(
-            quebrado.to_str().unwrap(), Some(1), None, dir.join("p"),
-            None, Script::default(), false, FxpSimulator::new(),
-        ).await;
+            quebrado.to_str().unwrap(),
+            Some(1),
+            None,
+            dir.join("p"),
+            None,
+            Script::default(),
+            false,
+            FxpSimulator::new(),
+        )
+        .await;
         assert_eq!(code, 1);
         let code = run(
-            dir.join("nem-existe.vl").to_str().unwrap(), None, None, dir.join("p"),
-            None, Script::default(), false, FxpSimulator::new(),
-        ).await;
+            dir.join("nem-existe.vl").to_str().unwrap(),
+            None,
+            None,
+            dir.join("p"),
+            None,
+            Script::default(),
+            false,
+            FxpSimulator::new(),
+        )
+        .await;
         assert_eq!(code, 2);
     }
 
@@ -847,7 +1040,7 @@ retries = 3
         };
         let code = run_summary(&[], 2, Duration::ZERO, Some(summary), Some(&ledger));
         assert_eq!(code, 1); // auditoria externa reprova
-        // e o caminho sem Caderno (memória) é sempre ok:
+                             // e o caminho sem Caderno (memória) é sempre ok:
         assert_eq!(run_summary(&[], 2, Duration::ZERO, None, None), 0);
     }
 
@@ -857,9 +1050,19 @@ retries = 3
         let dir = tmp_dir("verify");
         let arq = grava(&dir, "ok.vl", PROGRAMA_OK);
         let ledger = dir.join("caderno.vcad");
-        assert_eq!(roda(&["run", arq.to_str().unwrap(), "--ticks", "2",
-                          "--persist-dir", dir.join("p").to_str().unwrap(),
-                          "--ledger", ledger.to_str().unwrap()]), 0);
+        assert_eq!(
+            roda(&[
+                "run",
+                arq.to_str().unwrap(),
+                "--ticks",
+                "2",
+                "--persist-dir",
+                dir.join("p").to_str().unwrap(),
+                "--ledger",
+                ledger.to_str().unwrap()
+            ]),
+            0
+        );
 
         // íntegro: 0
         assert_eq!(roda(&["ledger-verify", ledger.to_str().unwrap()]), 0);
@@ -879,7 +1082,13 @@ retries = 3
         assert_eq!(roda(&["ledger-verify", podre.to_str().unwrap()]), 1);
 
         // arquivo ausente: 2
-        assert_eq!(roda(&["ledger-verify", dir.join("nem-existe.vcad").to_str().unwrap()]), 2);
+        assert_eq!(
+            roda(&[
+                "ledger-verify",
+                dir.join("nem-existe.vcad").to_str().unwrap()
+            ]),
+            2
+        );
     }
 
     // ── fxp-probe ─────────────────────────────────────────────────────────
@@ -892,7 +1101,10 @@ retries = 3
     fn fxp_probe_com_config_e_com_erro_de_config() {
         let dir = tmp_dir("probe");
         let cfg = grava(&dir, "fxp.cfg", "mode = simulado\ncache_ttl_ms = 50\n");
-        assert_eq!(roda(&["fxp-probe", "--fxp-config", cfg.to_str().unwrap()]), 0);
+        assert_eq!(
+            roda(&["fxp-probe", "--fxp-config", cfg.to_str().unwrap()]),
+            0
+        );
         // config ilegível → código 2 propagado pelo dispatch
         assert_eq!(roda(&["fxp-probe", "--fxp-config", "/nem-existe/v.cfg"]), 2);
     }
@@ -922,11 +1134,15 @@ retries = 3
         let dir_ok = dir.join("thermal");
         std::fs::create_dir_all(&dir_ok).unwrap();
         assert_eq!(
-            actor_availability(&Endpoint::ThermalZone { dir: dir_ok.clone() }),
+            actor_availability(&Endpoint::ThermalZone {
+                dir: dir_ok.clone()
+            }),
             "✓ endpoint presente"
         );
         assert_eq!(
-            actor_availability(&Endpoint::LedClass { dir: dir.join("led") }),
+            actor_availability(&Endpoint::LedClass {
+                dir: dir.join("led")
+            }),
             "✗ endpoint ausente"
         );
         // endpoint de arquivo presente × ausente
@@ -936,7 +1152,9 @@ retries = 3
             "✓ endpoint presente"
         );
         assert_eq!(
-            actor_availability(&Endpoint::HwmonPwm { file: dir.join("nem-existe") }),
+            actor_availability(&Endpoint::HwmonPwm {
+                file: dir.join("nem-existe")
+            }),
             "✗ endpoint ausente"
         );
         // socket unix ausente
@@ -946,12 +1164,18 @@ retries = 3
         assert_eq!(actor_availability(&unix), "✗ socket ausente");
         // TCP com endereço inválido (host não-IP não parseia como SocketAddr)
         let tcp_ruim = Endpoint::Remote {
-            addr: RemoteAddr::Tcp { host: "host_invalido".to_string(), port: 1 },
+            addr: RemoteAddr::Tcp {
+                host: "host_invalido".to_string(),
+                port: 1,
+            },
         };
         assert!(actor_availability(&tcp_ruim).starts_with("✗ endereço inválido"));
         // TCP inalcançável: porta de descarte em endereço de loopback válido
         let tcp_morto = Endpoint::Remote {
-            addr: RemoteAddr::Tcp { host: "127.0.0.1".to_string(), port: 1 },
+            addr: RemoteAddr::Tcp {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+            },
         };
         assert!(actor_availability(&tcp_morto).starts_with("✗ conexão falhou"));
     }

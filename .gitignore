@@ -11,10 +11,10 @@ htmlcov/
 site/src/
 site/book/
 _pages/
-persistencia/
+persistence/
 core/target/
 core/.cargo-home/
-persistencia*/
+persistence*/
 caderno*.jsonl
 tmp-logs/
 core/tmp-e2e/

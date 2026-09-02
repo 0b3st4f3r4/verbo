@@ -6,10 +6,10 @@
 //! (`<name>.json` com `creation_time`). Sem sidecar, assume-se criação em
 //! t=0 (época do programa). A recarga é auditada no Caderno (`recarga`).
 
-use crate::ledger::{sha256_hex, Ledger};
 use crate::engine::Engine;
 use crate::fxp::Fxp;
 use crate::json::Json;
+use crate::ledger::{sha256_hex, Ledger};
 use std::path::Path;
 use vbl_lang::Conjugation;
 
@@ -38,7 +38,7 @@ pub fn reload_equilibrium<F: Fxp, C: Ledger>(engine: &mut Engine<F, C>) -> usize
                     diags.errors().count()
                 ),
                 Json::obj([
-                    ("motivo", Json::str("persistencia_invalida")),
+                    ("motivo", Json::str("persistence_invalida")),
                     ("caminho", Json::str(path.display().to_string())),
                 ]),
             );
@@ -102,4 +102,3 @@ pub fn write_sidecar(dir: &Path, name: &str, creation_time: f64) -> std::io::Res
     let content = &format!("{{ \"creation_time\": {creation_time} }}\n");
     std::fs::write(dir.join(format!("{name}.json")), content)
 }
-

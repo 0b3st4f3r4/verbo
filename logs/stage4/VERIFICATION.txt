@@ -13,7 +13,7 @@ Caderno: logs/stage4/attention-fatigue.vcad (binário .vcad)
     ALERTA: 3
     AVALIACAO: 2
     INFO: 2
-    persistencia: 1
+    persistence: 1
     transicao: 1
 
 =======================================================================

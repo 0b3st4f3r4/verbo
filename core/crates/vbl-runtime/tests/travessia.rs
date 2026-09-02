@@ -25,17 +25,29 @@ fn simulador_builder_default_e_mutadores() {
     // Default == new (registro mínimo + valores plausíveis)
     let mut por_default = FxpSimulator::default();
     let mut direto = FxpSimulator::new();
-    assert_eq!(por_default.read_sensor("cpu_temp", &mut ChainLedger::new()),
-               direto.read_sensor("cpu_temp", &mut ChainLedger::new()));
+    assert_eq!(
+        por_default.read_sensor("cpu_temp", &mut ChainLedger::new()),
+        direto.read_sensor("cpu_temp", &mut ChainLedger::new())
+    );
 
     // builder: sensor novo com valor, ator novo com limites, override de valor
     let mut sim = vbl_runtime::sim::SimulatorBuilder::new()
         .with_sensor(
             "luz",
-            SensorInfo { quantity: "iluminancia".into(), unit: "lux".into() },
+            SensorInfo {
+                quantity: "iluminancia".into(),
+                unit: "lux".into(),
+            },
             7.0,
         )
-        .with_actor("ReserveFan", ActorLimits { min: Some(0.0), max: Some(10.0), safety_limit: None })
+        .with_actor(
+            "ReserveFan",
+            ActorLimits {
+                min: Some(0.0),
+                max: Some(10.0),
+                safety_limit: None,
+            },
+        )
         .with_value("cpu_temp", 20.0)
         .build();
     let mut ledger = ChainLedger::new();
@@ -46,16 +58,28 @@ fn simulador_builder_default_e_mutadores() {
 
     // falha e recuperação de sensor
     sim.fail_sensor("cpu_temp");
-    assert_eq!(sim.read_sensor("cpu_temp", &mut ledger), Err(SensorFailure::Inaccessible));
+    assert_eq!(
+        sim.read_sensor("cpu_temp", &mut ledger),
+        Err(SensorFailure::Inaccessible)
+    );
     sim.recover_sensor("cpu_temp");
     assert_eq!(sim.read_sensor("cpu_temp", &mut ledger), Ok(20.0));
 
     // sensor removido do registro → NotRegistered
     sim.unregister_sensor("luz");
-    assert_eq!(sim.read_sensor("luz", &mut ledger), Err(SensorFailure::NotRegistered));
+    assert_eq!(
+        sim.read_sensor("luz", &mut ledger),
+        Err(SensorFailure::NotRegistered)
+    );
 
     // registro de sensor e ator NOVOS pós-build (sincronização do barramento)
-    sim.register_sensor("ruido", SensorInfo { quantity: "ruido".into(), unit: "dB".into() });
+    sim.register_sensor(
+        "ruido",
+        SensorInfo {
+            quantity: "ruido".into(),
+            unit: "dB".into(),
+        },
+    );
     assert_eq!(sim.read_sensor("ruido", &mut ledger), Ok(0.0)); // 0.0 até roteirizar
     sim.register_actor("Extra", ActorLimits::default());
     assert!(matches!(
@@ -92,7 +116,14 @@ fn cadeia_de_fallback_com_todos_os_desvios() {
     use vbl_runtime::fxp::ActOutcome;
     let mut sim = FxpSimulator::new();
     sim.register_actor("Fan2", ActorLimits::default());
-    sim.register_actor("Fan3", ActorLimits { min: Some(0.0), max: Some(10.0), safety_limit: None });
+    sim.register_actor(
+        "Fan3",
+        ActorLimits {
+            min: Some(0.0),
+            max: Some(10.0),
+            safety_limit: None,
+        },
+    );
     sim.register_actor("Fan4", ActorLimits::default());
     // cadeia: inexistente → indisponível → limite → ok
     sim.set_fallback("Fan", &["ReserveFan", "Fan2", "Fan3", "Fan4"]);
@@ -100,10 +131,12 @@ fn cadeia_de_fallback_com_todos_os_desvios() {
 
     sim.fail_actor("Fan");
     sim.fail_actor("Fan2"); // segundo da cadeia indisponível
-    // valor 50 passa por Fan3? não: max 10 → rejeitado por limite; Fan4 entrega
+                            // valor 50 passa por Fan3? não: max 10 → rejeitado por limite; Fan4 entrega
     assert_eq!(
         sim.act("Fan", Value::Num(50.0), &mut ledger),
-        ActOutcome::FallbackExecuted { alternativo: "Fan4".into() }
+        ActOutcome::FallbackExecuted {
+            alternativo: "Fan4".into()
+        }
     );
     // desvios registrados: fallback rejeitado por limite (Fan3)…
     assert!(!ledger.search("ALERT", &[]).is_empty());
@@ -167,11 +200,17 @@ fn exchange_mode_nao_canonico_alerta_e_accessors() {
     let mut forma = forma_evento("Torcida", 0.0);
     forma.conjugation = Conjugation::Nonequilibrium;
     forma.declared_maintenance_deadline = Some(10.0);
-    forma.maintenance = Some(vbl_runtime::Maintenance { deadline_s: 10.0, last: 0.0 });
+    forma.maintenance = Some(vbl_runtime::Maintenance {
+        deadline_s: 10.0,
+        last: 0.0,
+    });
     forma.exchange_mode = Some("permuta".into()); // não canônico
     engine.register_form(forma);
     // (o alerta está no Caderno interno do engine — indireto: forma registrada)
-    assert!(engine.active_names().iter().any(|n| n.as_ref() == "Torcida"));
+    assert!(engine
+        .active_names()
+        .iter()
+        .any(|n| n.as_ref() == "Torcida"));
     assert!(engine.form("Torcida").is_some());
     assert!(engine.form_mut("Torcida").is_some());
     assert_eq!(engine.active_forms().len(), 1);
@@ -192,11 +231,14 @@ review B { when cpu_temp > 10 -> reclassify_as_equilibrium }
     let _interp = load(&mut engine, &program);
     engine.tick();
     // sem efeito auditado; a forma permanece equilibrium
-    assert_eq!(engine.form("B").unwrap().conjugation, Conjugation::Equilibrium);
+    assert_eq!(
+        engine.form("B").unwrap().conjugation,
+        Conjugation::Equilibrium
+    );
 }
 
 #[test]
-fn persistencia_que_falha_alerta_sem_derrubar_o_runtime() {
+fn persistence_que_falha_alerta_sem_derrubar_o_runtime() {
     // persistence_dir aponta para um ARQUIVO → toda escrita falha
     let dir = tmpdir("persist-fail");
     let arquivo = dir.join("nao-diretorio");
@@ -213,7 +255,10 @@ review C { when cpu_temp > 10 -> reclassify_as_equilibrium }
     let _interp = load(&mut engine, &program);
     engine.tick();
     // a transição foi auditada com falha de persistência…
-    assert_eq!(engine.form("C").unwrap().conjugation, Conjugation::Equilibrium);
+    assert_eq!(
+        engine.form("C").unwrap().conjugation,
+        Conjugation::Equilibrium
+    );
 }
 
 #[test]
@@ -254,7 +299,10 @@ fn diags_de(programa: &str) -> Vec<String> {
     let (program, pd) = vbl_lang::parse(programa);
     assert!(!pd.has_errors(), "{programa}: {pd}");
     let registro = Registry::minimum();
-    validate(&registro, &program).into_iter().map(|d| d.code).collect()
+    validate(&registro, &program)
+        .into_iter()
+        .map(|d| d.code)
+        .collect()
 }
 
 #[test]
@@ -276,9 +324,8 @@ fn validate_matriz_de_registro() {
     assert!(d.iter().any(|c| c == "unidade_incompativel"), "{d:?}");
 
     // 4. threshold sem unidade com grandeza que a exige
-    let d = diags_de(
-        "event A { value: 1, horizon: 5s }\nreview A { when cpu_temp > 30 -> dissolve }",
-    );
+    let d =
+        diags_de("event A { value: 1, horizon: 5s }\nreview A { when cpu_temp > 30 -> dissolve }");
     assert!(d.iter().any(|c| c == "unidade_ausente"), "{d:?}");
 
     // 5. ator de regra fora do registro

@@ -53,7 +53,7 @@ opt-level 3): `make rust-bench`.
 | Cenário (origem) | Validação |
 |---|---|
 | Subversão térmica (BDD Caso 2) | `SUBVERSAO` + `dissolve_subvert` no **mesmo tick** da condição; `act(CpuPowerCap, 50)` → `ATUACAO` `valor=aplicado=50`, `sucesso=true` |
-| Fadiga de atenção (BDD Caso 1) | `transicao` → `equilibrium` no tick da fadiga; `persistencia` com SHA-256; `.vl` canônico reparseável (`vbl check`); forma segue ativa, sem colapso |
+| Fadiga de atenção (BDD Caso 1) | `transicao` → `equilibrium` no tick da fadiga; `persistence` com SHA-256; `.vl` canônico reparseável (`vbl check`); forma segue ativa, sem colapso |
 | Falha de ator (BDD Caso 3) | `ator_indisponivel` + `fallback_executado` (política do REGISTRO, §4.3); atuação efetiva no `ReserveFan` com `aplicado=200`; tentativa primária falha registrada |
 | Sensor ausente (§4.7) | `sensor_nao_registrado` por tick; **zero falso disparo** (ausente ≠ 0.0); divergências contadas no relatório externo |
 | Bloco `main` (FORMAL §5 ex. 5) | `keep` a cada 4s mantém a forma viva (sem `collapse_maintenance`); `act(StatusLed,"green")` no tick 10 com `aplicado="green"` |

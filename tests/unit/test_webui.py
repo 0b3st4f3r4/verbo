@@ -108,7 +108,7 @@ def test_normaliza_eventos_lower_pt_para_en():
     # vocabulários e produz estatísticas idênticas — a ponte espelha isso.
     pares = {
         "transicao": "transition",
-        "persistencia": "persistence",
+        "persistence": "persistence",
         "subvert_aplicado": "subvert_applied",
         "keep_forma_inexistente": "keep_unknown_form",
         "keep_ignorado": "keep_ignored",

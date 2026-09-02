@@ -178,7 +178,7 @@ def test_eval_condition(op, valor, esperado):
 
 # ── 5. ações do runtime: cláusulas de erro e transições ───────────────────
 def _engine_com_forma(**kwargs):
-    eng = bp.VerboLangEngine(persistence_dir="persistencia_teste")
+    eng = bp.VerboLangEngine(persistence_dir="persistence_teste")
     forma = bp.NonequilibriumForm(
         name="Demo", value="v", horizon=60.0, source_path="cpu_temp",
         maintenance_deadline=5.0, exchange_mode="cooperation",
@@ -229,15 +229,15 @@ def test_reclassify_as_equilibrium_persiste_com_sha256(tmp_path, monkeypatch):
     # horizon ABSOLUTO: creation_time original preservado
     assert eng.forms["Demo"].creation_time == 0.0
     eventos = bp.Caderno._events
-    persistencia = next(e for e in eventos if e["kind"] == "persistence")
-    assert Path(persistencia["caminho"]).is_file()
-    assert len(persistencia["sha256"]) == 64
+    persistence = next(e for e in eventos if e["kind"] == "persistence")
+    assert Path(persistence["caminho"]).is_file()
+    assert len(persistence["sha256"]) == 64
     # cost_bytes ausente passa a valer o tamanho real gravado
-    assert eng.forms["Demo"].cost_bytes == persistencia["bytes"]
+    assert eng.forms["Demo"].cost_bytes == persistence["bytes"]
 
 
 def test_reclassify_as_nonequilibrium_com_e_sem_deadline():
-    eng = bp.VerboLangEngine(persistence_dir="persistencia_teste")
+    eng = bp.VerboLangEngine(persistence_dir="persistence_teste")
     forma = bp.EventForm("Demo", "v", 60.0, "cpu_temp", 0.0)
     eng.register_form(forma)
     # sem deadline declarado: recusado e registrado — a forma permanece event

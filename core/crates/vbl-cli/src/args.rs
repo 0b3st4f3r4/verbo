@@ -1,7 +1,7 @@
 //! Argumentos de linha de comando do `vbl` (sem dependências externas).
 
-use std::path::PathBuf;
 use crate::script::Script;
+use std::path::PathBuf;
 
 // Variante `Run` carrega as opções de execução; o enum vive poucos ciclos no
 // início do processo — a clareza dos campos nomeados vale mais que o boxing.
@@ -33,9 +33,7 @@ pub enum Command {
     /// `vbl ledger-verify ARQUIVO` — verificação externa do log do Caderno
     /// (binário `.vcad` ou JSONL): recomputa a cadeia SHA-256 e emite o
     /// relatório (Etapa 4 — AGENTS §1.4: agente externo).
-    LedgerVerify {
-        arquivo: String,
-    },
+    LedgerVerify { arquivo: String },
 }
 
 pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, String> {
@@ -60,7 +58,7 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
             let mut arquivo = None;
             let mut ticks = None;
             let mut real_ms = None;
-            let mut persist_dir = PathBuf::from("persistencia");
+            let mut persist_dir = PathBuf::from("persistence");
             let mut ledger = None;
             let mut script = Script::default();
             let mut allow_unregistered = false;
@@ -69,10 +67,20 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
             while let Some(a) = args.next() {
                 match a.as_str() {
                     "--ticks" => {
-                        ticks = Some(args.next().ok_or("--ticks exige N")?.parse().map_err(|_| "--ticks exige inteiro")?)
+                        ticks = Some(
+                            args.next()
+                                .ok_or("--ticks exige N")?
+                                .parse()
+                                .map_err(|_| "--ticks exige inteiro")?,
+                        )
                     }
                     "--real-ms" => {
-                        real_ms = Some(args.next().ok_or("--real-ms exige MS")?.parse().map_err(|_| "--real-ms exige inteiro")?)
+                        real_ms = Some(
+                            args.next()
+                                .ok_or("--real-ms exige MS")?
+                                .parse()
+                                .map_err(|_| "--real-ms exige inteiro")?,
+                        )
                     }
                     "--persist-dir" => {
                         persist_dir = PathBuf::from(args.next().ok_or("--persist-dir exige DIR")?)
@@ -82,17 +90,28 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                     }
                     "--set" => {
                         let kv = args.next().ok_or("--set exige SENSOR=VALOR")?;
-                        let (sensor, value) = kv.split_once('=').ok_or("--set espera SENSOR=VALOR")?;
-                        script.set(sensor, value.parse().map_err(|_| "valor do sensor deve ser número")?);
+                        let (sensor, value) =
+                            kv.split_once('=').ok_or("--set espera SENSOR=VALOR")?;
+                        script.set(
+                            sensor,
+                            value
+                                .parse()
+                                .map_err(|_| "valor do sensor deve ser número")?,
+                        );
                     }
                     "--at" => {
                         let kv = args.next().ok_or("--at exige TICK:SENSOR=VALOR")?;
-                        let (tick, rest) = kv.split_once(':').ok_or("--at espera TICK:SENSOR=VALOR")?;
-                        let (sensor, value) = rest.split_once('=').ok_or("--at espera TICK:SENSOR=VALOR")?;
+                        let (tick, rest) =
+                            kv.split_once(':').ok_or("--at espera TICK:SENSOR=VALOR")?;
+                        let (sensor, value) = rest
+                            .split_once('=')
+                            .ok_or("--at espera TICK:SENSOR=VALOR")?;
                         script.at(
                             tick.parse().map_err(|_| "tick deve ser inteiro")?,
                             sensor,
-                            value.parse().map_err(|_| "valor do sensor deve ser número")?,
+                            value
+                                .parse()
+                                .map_err(|_| "valor do sensor deve ser número")?,
                         );
                     }
                     "--allow-unregistered" => allow_unregistered = true,
@@ -101,18 +120,24 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                     }
                     "--fallback" => {
                         let kv = args.next().ok_or("--fallback exige PRIMARIO=ALTERNATIVO")?;
-                        let (prim, alt) =
-                            kv.split_once('=').ok_or("--fallback espera PRIMARIO=ALTERNATIVO")?;
+                        let (prim, alt) = kv
+                            .split_once('=')
+                            .ok_or("--fallback espera PRIMARIO=ALTERNATIVO")?;
                         script.fallback(prim, alt);
                     }
                     "--register-actor" => {
                         script.register_actor(&args.next().ok_or("--register-actor exige NOME")?)
                     }
                     "--fxp-mode" => {
-                        fxp_mode = Some(args.next().ok_or("--fxp-mode exige simulado|real|hibrido")?)
+                        fxp_mode = Some(
+                            args.next()
+                                .ok_or("--fxp-mode exige simulado|real|hibrido")?,
+                        )
                     }
                     "--fxp-config" => {
-                        fxp_config = Some(PathBuf::from(args.next().ok_or("--fxp-config exige ARQUIVO")?))
+                        fxp_config = Some(PathBuf::from(
+                            args.next().ok_or("--fxp-config exige ARQUIVO")?,
+                        ))
                     }
                     _ if arquivo.is_none() => arquivo = Some(a),
                     _ => return Err(format!("argumento inesperado: {a}\n{USAGE}")),
@@ -136,15 +161,23 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
             while let Some(a) = args.next() {
                 match a.as_str() {
                     "--fxp-mode" => {
-                        fxp_mode = Some(args.next().ok_or("--fxp-mode exige simulado|real|hibrido")?)
+                        fxp_mode = Some(
+                            args.next()
+                                .ok_or("--fxp-mode exige simulado|real|hibrido")?,
+                        )
                     }
                     "--fxp-config" => {
-                        fxp_config = Some(PathBuf::from(args.next().ok_or("--fxp-config exige ARQUIVO")?))
+                        fxp_config = Some(PathBuf::from(
+                            args.next().ok_or("--fxp-config exige ARQUIVO")?,
+                        ))
                     }
                     _ => return Err(format!("argumento inesperado: {a}\n{USAGE}")),
                 }
             }
-            Ok(Command::FxpProbe { fxp_mode, fxp_config })
+            Ok(Command::FxpProbe {
+                fxp_mode,
+                fxp_config,
+            })
         }
         "ledger-verify" => {
             let mut arquivo = None;
@@ -174,7 +207,7 @@ uso:
 opções de run:
   --ticks N                        número de ticks virtuais (padrão: até esvaziar o mundo)
   --real-ms MS                     modo tempo real: 1 tick a cada MS milissegundos
-  --persist-dir DIR                diretório de persistência `.vl` (padrão: persistencia/)
+  --persist-dir DIR                diretório de persistência `.vl` (padrão: persistence/)
   --ledger ARQUIVO                 Caderno de PRODUÇÃO (Etapa 4): gravação assíncrona;
                                    binário .vcad em ARQUIVO + JSONL em ARQUIVO.jsonl
   --set SENSOR=VALOR               valor inicial de sensor no FXP simulado
@@ -197,7 +230,10 @@ mod tests {
     use super::*;
 
     fn args(list: &[&str]) -> std::vec::IntoIter<String> {
-        list.iter().map(|s| s.to_string()).collect::<Vec<_>>().into_iter()
+        list.iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     #[test]
@@ -207,14 +243,22 @@ mod tests {
 
     #[test]
     fn check_flags() {
-        let Command::Check { arquivo, with_registry } =
-            parse_args(args(&["check", "a.vl"])).unwrap()
-        else { panic!("esperado Check") };
+        let Command::Check {
+            arquivo,
+            with_registry,
+        } = parse_args(args(&["check", "a.vl"])).unwrap()
+        else {
+            panic!("esperado Check")
+        };
         assert_eq!(arquivo, "a.vl");
         assert!(with_registry); // padrão: valida contra o registro
-        let Command::Check { arquivo, with_registry } =
-            parse_args(args(&["check", "--no-registry", "b.vl"])).unwrap()
-        else { panic!("esperado Check") };
+        let Command::Check {
+            arquivo,
+            with_registry,
+        } = parse_args(args(&["check", "--no-registry", "b.vl"])).unwrap()
+        else {
+            panic!("esperado Check")
+        };
         assert_eq!(arquivo, "b.vl");
         assert!(!with_registry);
         // dois arquivos → argumento inesperado
@@ -225,19 +269,47 @@ mod tests {
 
     #[test]
     fn run_flags_completos() {
-        let Command::Run { arquivo, ticks, real_ms, persist_dir, ledger, script,
-                           allow_unregistered, fxp_mode, fxp_config } =
-            parse_args(args(&[
-                "run", "p.vl",
-                "--ticks", "7", "--real-ms", "100",
-                "--persist-dir", "/tmp/pp", "--ledger", "log.vcad",
-                "--set", "cpu_temp=90", "--at", "3:attention=15",
-                "--fail-actor", "Fan", "--fallback", "Fan=ReserveFan",
-                "--register-actor", "ReserveFan",
-                "--allow-unregistered",
-                "--fxp-mode", "hibrido", "--fxp-config", "fxp.cfg",
-            ])).unwrap()
-        else { panic!("esperado Run") };
+        let Command::Run {
+            arquivo,
+            ticks,
+            real_ms,
+            persist_dir,
+            ledger,
+            script,
+            allow_unregistered,
+            fxp_mode,
+            fxp_config,
+        } = parse_args(args(&[
+            "run",
+            "p.vl",
+            "--ticks",
+            "7",
+            "--real-ms",
+            "100",
+            "--persist-dir",
+            "/tmp/pp",
+            "--ledger",
+            "log.vcad",
+            "--set",
+            "cpu_temp=90",
+            "--at",
+            "3:attention=15",
+            "--fail-actor",
+            "Fan",
+            "--fallback",
+            "Fan=ReserveFan",
+            "--register-actor",
+            "ReserveFan",
+            "--allow-unregistered",
+            "--fxp-mode",
+            "hibrido",
+            "--fxp-config",
+            "fxp.cfg",
+        ]))
+        .unwrap()
+        else {
+            panic!("esperado Run")
+        };
         assert_eq!(arquivo, "p.vl");
         assert_eq!(ticks, Some(7));
         assert_eq!(real_ms, Some(100));
@@ -279,14 +351,27 @@ mod tests {
 
     #[test]
     fn fxp_probe_e_ledger_verify() {
-        let Command::FxpProbe { fxp_mode, fxp_config } =
-            parse_args(args(&["fxp-probe", "--fxp-mode", "real", "--fxp-config", "c.cfg"])).unwrap()
-        else { panic!("esperado FxpProbe") };
+        let Command::FxpProbe {
+            fxp_mode,
+            fxp_config,
+        } = parse_args(args(&[
+            "fxp-probe",
+            "--fxp-mode",
+            "real",
+            "--fxp-config",
+            "c.cfg",
+        ]))
+        .unwrap()
+        else {
+            panic!("esperado FxpProbe")
+        };
         assert_eq!(fxp_mode.as_deref(), Some("real"));
         assert_eq!(fxp_config, Some(PathBuf::from("c.cfg")));
         let Command::LedgerVerify { arquivo } =
             parse_args(args(&["ledger-verify", "log.vcad"])).unwrap()
-        else { panic!("esperado LedgerVerify") };
+        else {
+            panic!("esperado LedgerVerify")
+        };
         assert_eq!(arquivo, "log.vcad");
         assert!(parse_args(args(&["ledger-verify"])).is_err());
     }

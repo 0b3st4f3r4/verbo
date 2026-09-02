@@ -15,9 +15,9 @@
 //! seguintes da própria regra, `reclassify_as_nonequilibrium` sem deadline
 //! declarado = erro de runtime registrado, `notify_shutdown` não dissolve.
 
-use crate::ledger::{kinds, Ledger, ChainLedger};
 use crate::form::{ActionRt, Form, Maintenance, Retention, CANONICAL_POETIC_VALUE};
-use crate::fxp::{Fxp, SensorFailure, PRIORITY_NORMAL, PRIORITY_SUBVERT, Value};
+use crate::fxp::{Fxp, SensorFailure, Value, PRIORITY_NORMAL, PRIORITY_SUBVERT};
+use crate::ledger::{kinds, ChainLedger, Ledger};
 use crate::scheduler::{Deadline, Scheduler};
 use std::collections::BTreeMap;
 use vbl_lang::Conjugation;
@@ -97,7 +97,10 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
     }
 
     pub fn active_forms(&self) -> Vec<&Form> {
-        self.order.iter().filter_map(|n| self.forms.get(n.as_ref())).collect()
+        self.order
+            .iter()
+            .filter_map(|n| self.forms.get(n.as_ref()))
+            .collect()
     }
 
     pub fn active_names(&self) -> &[std::rc::Rc<str>] {
@@ -111,7 +114,10 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
         form.horizon_version += 1;
         if form.conjugation == Conjugation::Nonequilibrium {
             form.maintenance_version += 1;
-            let mode = form.exchange_mode.clone().unwrap_or_else(|| "cooperation".into());
+            let mode = form
+                .exchange_mode
+                .clone()
+                .unwrap_or_else(|| "cooperation".into());
             let canonical = mode == "cooperation" || mode == "extraction";
             if !canonical {
                 self.ledger.alert(
@@ -172,9 +178,11 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
             self.retention.labor.remove(&name);
         }
         self.forms.insert(name.clone(), form);
-        self.scheduler.schedule(&name, Deadline::Horizon, at_horizon, h_version);
+        self.scheduler
+            .schedule(&name, Deadline::Horizon, at_horizon, h_version);
         if let Some(em) = mentry {
-            self.scheduler.schedule(&name, Deadline::Maintenance, em, m_version);
+            self.scheduler
+                .schedule(&name, Deadline::Maintenance, em, m_version);
         }
     }
 
@@ -351,7 +359,8 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
                     // Etapa 5: forma DISSOLVIDA não re-agenda — nada de lixo
                     // de prazos órfãos no heap do escalonador)
                     for (deadline, version) in &due_forms {
-                        self.scheduler.schedule(name, *deadline, now + self.tick_seconds, *version);
+                        self.scheduler
+                            .schedule(name, *deadline, now + self.tick_seconds, *version);
                     }
                     // reclassificação (ordem intacta): próxima forma
                     i += 1;
@@ -391,12 +400,17 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
                         f.maintenance_version += 1;
                         (
                             f.maintenance_version,
-                            f.maintenance.as_ref().map(|m| m.last + m.deadline_s).unwrap_or(now),
+                            f.maintenance
+                                .as_ref()
+                                .map(|m| m.last + m.deadline_s)
+                                .unwrap_or(now),
                         )
                     };
-                    self.scheduler.schedule(name, Deadline::Maintenance, deadline, version);
+                    self.scheduler
+                        .schedule(name, Deadline::Maintenance, deadline, version);
                 } else {
-                    let deadline_expired = due_forms.iter().any(|(p, _)| *p == Deadline::Maintenance);
+                    let deadline_expired =
+                        due_forms.iter().any(|(p, _)| *p == Deadline::Maintenance);
                     let due_now = self
                         .forms
                         .get(name)
@@ -422,8 +436,12 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
                         // limite exato ainda sustenta: reagenda o prazo atual
                         for (deadline, version) in &due_forms {
                             if *deadline == Deadline::Maintenance && *version == m_alive {
-                                self.scheduler
-                                    .schedule(name, *deadline, now + self.tick_seconds, *version);
+                                self.scheduler.schedule(
+                                    name,
+                                    *deadline,
+                                    now + self.tick_seconds,
+                                    *version,
+                                );
                             }
                         }
                     }
@@ -449,8 +467,12 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
                     // borda de arredondamento: reagenda para o próximo tick
                     for (deadline, version) in &due_forms {
                         if *deadline == Deadline::Horizon && *version == h_alive {
-                            self.scheduler
-                                .schedule(name, *deadline, now + self.tick_seconds, *version);
+                            self.scheduler.schedule(
+                                name,
+                                *deadline,
+                                now + self.tick_seconds,
+                                *version,
+                            );
                         }
                     }
                 }
@@ -474,7 +496,9 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
             // ignorada, com registro (FORMAL §4.1)
             self.ledger.record(
                 kinds::REVIEW_AFTER_DISSOLUTION,
-                &format!("Ação de revisão sobre '{name}' ignorada: forma já dissolvida neste tick."),
+                &format!(
+                    "Ação de revisão sobre '{name}' ignorada: forma já dissolvida neste tick."
+                ),
                 Json::obj([("forma", Json::str(name))]),
             );
             return true;
@@ -513,10 +537,17 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
                 ActionRt::Act { actor, value } => {
                     // Etapa 3 (FORMAL §4.5): act na mesma regra após subvert
                     // entra na fila do FXP com prioridade máxima.
-                    let priority = if doomed { PRIORITY_SUBVERT } else { PRIORITY_NORMAL };
-                    let outcome = self
-                        .fxp
-                        .act_with_priority(actor, value.clone(), priority, &mut self.ledger);
+                    let priority = if doomed {
+                        PRIORITY_SUBVERT
+                    } else {
+                        PRIORITY_NORMAL
+                    };
+                    let outcome = self.fxp.act_with_priority(
+                        actor,
+                        value.clone(),
+                        priority,
+                        &mut self.ledger,
+                    );
                     if !outcome.ok() {
                         self.ledger.alert(
                             &format!("Falha na atuação do ator '{actor}' para a forma '{name}'."),
@@ -579,7 +610,7 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
                 &format!("Falha ao persistir '{name}': {e}"),
                 Json::obj([
                     ("forma", Json::str(name)),
-                    ("motivo", Json::str("persistencia_falhou")),
+                    ("motivo", Json::str("persistence_falhou")),
                 ]),
             );
         }
@@ -603,7 +634,10 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
             );
             return true; // a conjugação "tentou mudar" → short circuit da review
         };
-        let mode = form.exchange_mode.clone().unwrap_or_else(|| "cooperation".into());
+        let mode = form
+            .exchange_mode
+            .clone()
+            .unwrap_or_else(|| "cooperation".into());
         let mut new = form.clone();
         new.conjugation = Conjugation::Nonequilibrium;
         new.currency = Conjugation::Nonequilibrium.default_currency().into();
@@ -659,11 +693,8 @@ impl<F: Fxp, C: Ledger> Engine<F, C> {
             }
         }
         // sidecar: creation_time para recarregar com horizon absoluto íntegro
-        let _ = crate::persist::write_sidecar(
-            &self.persistence_dir,
-            &form.name,
-            form.creation_time,
-        );
+        let _ =
+            crate::persist::write_sidecar(&self.persistence_dir, &form.name, form.creation_time);
         self.fxp.add_disk_bytes(1024); // escrita simulada no suporte estável
         Ok((path.display().to_string(), sha256))
     }
@@ -690,7 +721,10 @@ pub fn form_to_ast(form: &Form) -> vbl_lang::FormDecl {
         Value::Ident(s) => vbl_lang::Expression::ident(s.clone(), span),
     };
     let horizon = ast_duration(form.horizon_s, span);
-    let maintenance_deadline = form.maintenance.as_ref().map(|m| ast_duration(m.deadline_s, span));
+    let maintenance_deadline = form
+        .maintenance
+        .as_ref()
+        .map(|m| ast_duration(m.deadline_s, span));
     let attrs = FormAttrs {
         source_path: form.source_path.clone(),
         maintenance_deadline: if form.conjugation == Conjugation::Nonequilibrium {
@@ -699,7 +733,11 @@ pub fn form_to_ast(form: &Form) -> vbl_lang::FormDecl {
             None
         },
         exchange_mode: if form.conjugation == Conjugation::Nonequilibrium {
-            Some(form.exchange_mode.clone().unwrap_or_else(|| "cooperation".into()))
+            Some(
+                form.exchange_mode
+                    .clone()
+                    .unwrap_or_else(|| "cooperation".into()),
+            )
         } else {
             None
         },

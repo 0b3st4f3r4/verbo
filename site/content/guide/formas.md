@@ -119,7 +119,7 @@ review Cuidado {
 
 Ao reclassificar qualquer forma para `equilibrium` — ou ao criar uma — ela é
 gravada como `.vl` canônico **reparseável** no diretório de persistência do
-runtime (`--persist-dir`, padrão `persistencia/`). O Caderno registra o
+runtime (`--persist-dir`, padrão `persistence/`). O Caderno registra o
 caminho e o SHA-256 do conteúdo; `cost_bytes` ausente passa a valer o
 tamanho real gravado. Na inicialização, o runtime recarrega as
 `equilibrium` persistidas cujo `horizon` não venceu. Persistir não é gratuito
