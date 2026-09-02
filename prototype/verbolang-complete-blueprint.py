@@ -1013,7 +1013,7 @@ async def main():
     # Condição adicional: usa o mesmo sensor, mas poderia usar outro.
     pensar_livre = NonequilibriumForm(
         name="FreeThinking",
-        value="consciencia_anteneoliberal_ativa",
+        value="consciencia_antineoliberal_ativa",
         horizon=60.0,
         source_path="attention",
         maintenance_deadline=3.0,

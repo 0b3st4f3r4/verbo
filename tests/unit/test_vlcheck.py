@@ -14,7 +14,7 @@ import vlcheck
 # Exemplos canônicos — docs/FORMAL.md §5
 EXAMPLE_1 = '''
 nonequilibrium FreeThinking {
-    value: "consciencia_anteneoliberal_ativa",
+    value: "consciencia_antineoliberal_ativa",
     horizon: 60s,
     source_path: "attention",
     maintenance_deadline: 3s,

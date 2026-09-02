@@ -7,14 +7,12 @@
 //! da Etapa 2 (`vbl-lang`) — o caminho de produção completo:
 //! texto → AST → loader → engine.
 
-use vbl_runtime::ledger::kinds;
-use vbl_runtime::form::{RETENTION_BUDGET, CANONICAL_POETIC_VALUE};
-use vbl_runtime::json::Json;
-use vbl_runtime::scheduler::Deadline;
-use vbl_runtime::{
-    load, ActorLimits, Engine, FxpSimulator, MainInterpreter,
-};
 use vbl_lang::parse;
+use vbl_runtime::form::{CANONICAL_POETIC_VALUE, RETENTION_BUDGET};
+use vbl_runtime::json::Json;
+use vbl_runtime::ledger::kinds;
+use vbl_runtime::scheduler::Deadline;
+use vbl_runtime::{load, ActorLimits, Engine, FxpSimulator, MainInterpreter};
 
 type Eng = Engine<FxpSimulator>;
 
@@ -31,10 +29,17 @@ fn default_sim() -> FxpSimulator {
 /// Parse + carga no engine. `persist` = diretório de persistência.
 fn build_with(fxp: FxpSimulator, source: &str, persist: &std::path::Path) -> Bank {
     let (program, diags) = parse(source);
-    assert!(!diags.has_errors(), "programa de teste inválido:\n{diags}\n{source}");
+    assert!(
+        !diags.has_errors(),
+        "programa de teste inválido:\n{diags}\n{source}"
+    );
     let mut engine = Engine::new(fxp, 1.0, persist);
     let interp = load(&mut engine, &program);
-    let interp = if program.main.is_some() { Some(interp) } else { None };
+    let interp = if program.main.is_some() {
+        Some(interp)
+    } else {
+        None
+    };
     Bank { engine, interp }
 }
 
@@ -51,7 +56,10 @@ fn assemble(fxp: FxpSimulator, source: &str) -> Bank {
     let dir = std::env::temp_dir().join(format!(
         "vbl-test-{}-{}",
         std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     build_at(fxp, source, &dir)
 }
@@ -83,7 +91,12 @@ impl Bank {
     }
 
     fn count(&self, kind: &str) -> usize {
-        self.engine.ledger.kinds().iter().filter(|k| **k == kind).count()
+        self.engine
+            .ledger
+            .kinds()
+            .iter()
+            .filter(|k| **k == kind)
+            .count()
     }
 
     fn living_form(&self, name: &str) -> bool {
@@ -102,7 +115,10 @@ impl Drop for Bank {
 // ======================================================================
 #[test]
 fn event_expires_at_horizon_with_typed_end() {
-    let mut b = assemble(default_sim(), "event Piscada { value: \"impulso_curto\", horizon: 3s }");
+    let mut b = assemble(
+        default_sim(),
+        "event Piscada { value: \"impulso_curto\", horizon: 3s }",
+    );
     b.tick(); // t=1
     b.tick(); // t=2 — ainda ativa
     assert!(b.living_form("Piscada"));
@@ -122,7 +138,10 @@ fn horizon_is_absolute_reclassification_does_not_renew() {
     b.tick(); // t=1: reclassifica (persistida)
     assert!(b.count_with(
         kinds::TRANSITION,
-        &[("forma", Json::str("Pensar")), ("para", Json::str("equilibrium"))]
+        &[
+            ("forma", Json::str("Pensar")),
+            ("para", Json::str("equilibrium"))
+        ]
     ));
     assert_eq!(b.engine.form("Pensar").unwrap().creation_time, 0.0); // não renovado
     assert!(b.has(kinds::PERSISTENCE)); // gravação `.vl` canônico
@@ -136,7 +155,10 @@ fn horizon_is_absolute_reclassification_does_not_renew() {
 
 #[test]
 fn equilibrium_also_expires_by_horizon() {
-    let mut b = assemble(default_sim(), "equilibrium Registro { value: \"doc\", horizon: 2s }");
+    let mut b = assemble(
+        default_sim(),
+        "equilibrium Registro { value: \"doc\", horizon: 2s }",
+    );
     b.tick();
     assert!(b.living_form("Registro")); // t=1: 1>=2? não
     b.tick(); // t=2: limite exato expira
@@ -250,11 +272,19 @@ fn review_short_circuit_after_dissolution() {
     b.tick();
     assert!(b.count_with(
         kinds::REVIEW_SHORT_CIRCUIT,
-        &[("forma", Json::str("Curto")), ("regras_restantes", Json::num(1.0))]
+        &[
+            ("forma", Json::str("Curto")),
+            ("regras_restantes", Json::num(1.0))
+        ]
     ));
     assert!(b.has(kinds::DISSOLVE_RULE));
     assert!(b.engine.fxp.delivered.iter().any(|m| m.actor == "Fan"));
-    assert!(!b.engine.fxp.delivered.iter().any(|m| m.actor == "StatusLed"));
+    assert!(!b
+        .engine
+        .fxp
+        .delivered
+        .iter()
+        .any(|m| m.actor == "StatusLed"));
 }
 
 #[test]
@@ -370,7 +400,13 @@ fn jsonl_export_reproduces_chain() {
         assert!(line.contains("\"hash\":\""), "linha {i} sem hash");
     }
     // kinds na ordem
-    let first_kind = lines[0].split("\"kind\":\"").nth(1).unwrap().split('"').next().unwrap();
+    let first_kind = lines[0]
+        .split("\"kind\":\"")
+        .nth(1)
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap();
     assert_eq!(first_kind, "INFO"); // "Forma X conjugada..."
 }
 
@@ -401,10 +437,17 @@ fn act_is_serialized_and_delivered_to_correct_actor() {
         .delivered
         .iter()
         .any(|m| m.actor == "Fan" && m.value == vbl_runtime::Value::Num(200.0)));
-    assert_eq!(b.engine.fxp.current_actor("Fan"), Some(&vbl_runtime::Value::Num(200.0)));
+    assert_eq!(
+        b.engine.fxp.current_actor("Fan"),
+        Some(&vbl_runtime::Value::Num(200.0))
+    );
     assert!(b.count_with(
         "ACTUATION",
-        &[("ator", Json::str("Fan")), ("valor", Json::num(200.0)), ("sucesso", Json::boolean(true))]
+        &[
+            ("ator", Json::str("Fan")),
+            ("valor", Json::num(200.0)),
+            ("sucesso", Json::boolean(true))
+        ]
     ));
 }
 
@@ -418,8 +461,19 @@ fn nonexistent_actor_rejected_with_registry() {
     b.set_sensor("cpu_temp", 30.0);
     b.tick();
     assert!(b.count_with(kinds::ACTOR_UNKNOWN, &[("ator", Json::str("AtorFantasma"))]));
-    assert!(b.count_with("ACTUATION", &[("ator", Json::str("AtorFantasma")), ("sucesso", Json::boolean(false))]));
-    assert!(!b.engine.fxp.delivered.iter().any(|m| m.actor == "AtorFantasma"));
+    assert!(b.count_with(
+        "ACTUATION",
+        &[
+            ("ator", Json::str("AtorFantasma")),
+            ("sucesso", Json::boolean(false))
+        ]
+    ));
+    assert!(!b
+        .engine
+        .fxp
+        .delivered
+        .iter()
+        .any(|m| m.actor == "AtorFantasma"));
 }
 
 #[test]
@@ -443,7 +497,12 @@ fn value_below_minimum_rejected_without_send() {
         }
         _ => panic!("extra ausente"),
     }
-    assert!(!b.engine.fxp.delivered.iter().any(|m| m.actor == "CpuPowerCap"));
+    assert!(!b
+        .engine
+        .fxp
+        .delivered
+        .iter()
+        .any(|m| m.actor == "CpuPowerCap"));
 }
 
 #[test]
@@ -455,10 +514,10 @@ fn value_above_safety_limit_rejected() {
     );
     b.set_sensor("cpu_temp", 30.0);
     b.tick();
-    let events = b.engine.ledger.search(
-        kinds::ACTOR_REJECTED_VALUE,
-        &[("ator", Json::str("Fan"))],
-    );
+    let events = b
+        .engine
+        .ledger
+        .search(kinds::ACTOR_REJECTED_VALUE, &[("ator", Json::str("Fan"))]);
     assert_eq!(events.len(), 1);
     match &events[0].extra {
         Json::Obj(c) => {
@@ -479,8 +538,14 @@ fn limits_are_inclusive() {
     );
     b.set_sensor("cpu_temp", 30.0);
     b.tick();
-    assert_eq!(b.engine.fxp.current_actor("Fan"), Some(&vbl_runtime::Value::Num(200.0)));
-    assert_eq!(b.engine.fxp.current_actor("CpuPowerCap"), Some(&vbl_runtime::Value::Num(10.0)));
+    assert_eq!(
+        b.engine.fxp.current_actor("Fan"),
+        Some(&vbl_runtime::Value::Num(200.0))
+    );
+    assert_eq!(
+        b.engine.fxp.current_actor("CpuPowerCap"),
+        Some(&vbl_runtime::Value::Num(10.0))
+    );
     assert!(!b.has(kinds::ACTOR_REJECTED_VALUE));
 }
 
@@ -515,7 +580,14 @@ fn act_with_textual_value_without_numeric_limits() {
 #[test]
 fn registry_fallback_triggers_when_primary_fails() {
     let mut fxp = FxpSimulator::new();
-    fxp.register_actor("ReserveFan", ActorLimits { min: Some(0.0), max: Some(255.0), safety_limit: Some(200.0) });
+    fxp.register_actor(
+        "ReserveFan",
+        ActorLimits {
+            min: Some(0.0),
+            max: Some(255.0),
+            safety_limit: Some(200.0),
+        },
+    );
     fxp.set_fallback("Fan", &["ReserveFan"]);
     fxp.fail_actor("Fan");
     let mut b = assemble(
@@ -526,11 +598,20 @@ fn registry_fallback_triggers_when_primary_fails() {
     b.set_sensor("cpu_temp", 75.0);
     b.tick();
     // tentativa primária registrada, falha registrada, fallback executado
-    assert!(b.count_with("ACTUATION", &[("ator", Json::str("Fan")), ("sucesso", Json::boolean(false))]));
+    assert!(b.count_with(
+        "ACTUATION",
+        &[
+            ("ator", Json::str("Fan")),
+            ("sucesso", Json::boolean(false))
+        ]
+    ));
     assert!(b.count_with(kinds::ACTOR_UNAVAILABLE, &[("ator", Json::str("Fan"))]));
     assert!(b.count_with(
         kinds::FALLBACK_EXECUTED,
-        &[("primario", Json::str("Fan")), ("alternativo", Json::str("ReserveFan"))]
+        &[
+            ("primario", Json::str("Fan")),
+            ("alternativo", Json::str("ReserveFan"))
+        ]
     ));
     assert_eq!(
         b.engine.fxp.current_actor("ReserveFan"),
@@ -558,7 +639,10 @@ fn zero_read_is_valid_and_fires_rules() {
     b.tick();
     assert!(b.count_with(
         kinds::TRANSITION,
-        &[("forma", Json::str("Sentinela")), ("para", Json::str("equilibrium"))]
+        &[
+            ("forma", Json::str("Sentinela")),
+            ("para", Json::str("equilibrium"))
+        ]
     ));
     // zero NÃO é falha de I/O: nenhum alerta de sensor
     assert!(!b.count_with("ALERT", &[("motivo", Json::str("sensor_not_registered"))]));
@@ -581,7 +665,10 @@ fn missing_sensor_evaluates_no_condition_nor_fires() {
     assert!(!b.has(kinds::TRANSITION));
     assert!(b.count_with(
         "ALERT",
-        &[("motivo", Json::str("sensor_not_registered")), ("sensor", Json::str("sensor_inexistente"))]
+        &[
+            ("motivo", Json::str("sensor_not_registered")),
+            ("sensor", Json::str("sensor_inexistente"))
+        ]
     ));
 }
 
@@ -605,7 +692,10 @@ fn registered_inaccessible_sensor_follows_same_rule() {
     assert!(!b.has(kinds::TRANSITION));
     assert!(b.count_with(
         "ALERT",
-        &[("motivo", Json::str("sensor_inaccessible")), ("sensor", Json::str("attention"))]
+        &[
+            ("motivo", Json::str("sensor_inaccessible")),
+            ("sensor", Json::str("attention"))
+        ]
     ));
     // recupera a acessibilidade e a regra volta a avaliar
     b.engine.fxp.recover_sensor("attention");
@@ -613,13 +703,19 @@ fn registered_inaccessible_sensor_follows_same_rule() {
     b.tick();
     assert!(b.count_with(
         kinds::TRANSITION,
-        &[("forma", Json::str("Sentinela")), ("para", Json::str("equilibrium"))]
+        &[
+            ("forma", Json::str("Sentinela")),
+            ("para", Json::str("equilibrium"))
+        ]
     ));
 }
 
 #[test]
 fn form_without_source_path_generates_no_read_nor_failure() {
-    let mut b = assemble(default_sim(), "event Piscada { value: \"impulso_curto\", horizon: 2s }");
+    let mut b = assemble(
+        default_sim(),
+        "event Piscada { value: \"impulso_curto\", horizon: 2s }",
+    );
     b.tick();
     assert!(b.living_form("Piscada")); // sem crash, sem leitura
     assert!(!b.count_with("ALERT", &[("motivo", Json::str("sensor_not_registered"))]));
@@ -659,7 +755,10 @@ fn reclassify_nonequilibrium_preserves_declared_deadline() {
     b.tick(); // EQ -> NEQ (deadline 3s declarado preservado)
     assert!(b.count_with(
         kinds::TRANSITION,
-        &[("forma", Json::str("P")), ("para", Json::str("nonequilibrium"))]
+        &[
+            ("forma", Json::str("P")),
+            ("para", Json::str("nonequilibrium"))
+        ]
     ));
     let form = b.engine.form("P").unwrap();
     assert_eq!(form.conjugation, vbl_lang::Conjugation::Nonequilibrium);
@@ -674,7 +773,10 @@ fn reclassify_persists_reparseable_canonical_vl_with_sha256() {
     let dir = std::env::temp_dir().join(format!(
         "vbl-persist-{}-{}",
         std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     let sha;
     let persisted_text;
@@ -708,7 +810,10 @@ fn reclassify_persists_reparseable_canonical_vl_with_sha256() {
     // o arquivo gravado é reparseável e reproduz o SHA registrado
     let text = persisted_text;
     let (_, diags) = vbl_lang::parse(&text);
-    assert!(!diags.has_errors(), "persistido não reparseou: {diags}\n{text}");
+    assert!(
+        !diags.has_errors(),
+        "persistido não reparseou: {diags}\n{text}"
+    );
     assert_eq!(vbl_runtime::ledger::sha256_hex(text.as_bytes()), sha);
     // a forma persistida é a pós-transição: equilibrium (FORMAL §4.1),
     // com source_path preservado e horizon absoluto (60s, não renovado)
@@ -723,7 +828,10 @@ fn init_reloads_equilibrium_with_unexpired_horizon() {
     let dir = std::env::temp_dir().join(format!(
         "vbl-recarga-{}-{}",
         std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     std::fs::create_dir_all(&dir).unwrap();
     // simula uma persistência anterior (horizon não vencido)
@@ -748,7 +856,9 @@ fn init_reloads_equilibrium_with_unexpired_horizon() {
     assert!(engine.form("Doc").is_some());
     assert!(engine.form("Velho").is_none());
     assert_eq!(engine.form("Doc").unwrap().cost_bytes, Some(64));
-    assert!(engine.ledger.count_with("INFO", &[("motivo", Json::str("recarga"))]));
+    assert!(engine
+        .ledger
+        .count_with("INFO", &[("motivo", Json::str("recarga"))]));
     assert!(engine.ledger.verify_chain());
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -782,7 +892,11 @@ fn heap_does_not_grow_when_renewing_maintenance() {
     );
     b.ticks(50);
     assert!(b.living_form("V"));
-    assert!(b.engine.scheduler.len() <= 8, "heap cresceu: {}", b.engine.scheduler.len());
+    assert!(
+        b.engine.scheduler.len() <= 8,
+        "heap cresceu: {}",
+        b.engine.scheduler.len()
+    );
 }
 
 // ======================================================================
@@ -793,12 +907,15 @@ fn case1_attention_fatigue_end_to_end() {
     let dir = std::env::temp_dir().join(format!(
         "vbl-caso1-{}-{}",
         std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     {
         let mut b = build_at(
             default_sim(),
-            "nonequilibrium FreeThinking { value: \"consciencia_anteneoliberal_ativa\", horizon: 60s, source_path: \"attention\", maintenance_deadline: 3s, exchange_mode: \"cooperation\" }\n\
+            "nonequilibrium FreeThinking { value: \"consciencia_antineoliberal_ativa\", horizon: 60s, source_path: \"attention\", maintenance_deadline: 3s, exchange_mode: \"cooperation\" }\n\
              review FreeThinking { when attention < 30% -> reclassify_as_equilibrium }",
             &dir,
         );
@@ -807,7 +924,10 @@ fn case1_attention_fatigue_end_to_end() {
         // transição gravada + persistência com SHA-256 + manutenção cessada
         assert!(b.count_with(
             kinds::TRANSITION,
-            &[("forma", Json::str("FreeThinking")), ("para", Json::str("equilibrium"))]
+            &[
+                ("forma", Json::str("FreeThinking")),
+                ("para", Json::str("equilibrium"))
+            ]
         ));
         assert!(b.has(kinds::PERSISTENCE));
         assert_eq!(b.engine.form("FreeThinking").unwrap().maintenance, None);
@@ -834,7 +954,10 @@ fn rules_stay_active_in_equilibrium_ad_decision() {
     b.tick(); // regra dispara: NEQ → EQ (persistida)
     assert!(b.count_with(
         kinds::TRANSITION,
-        &[("forma", Json::str("Sentinela")), ("para", Json::str("equilibrium"))]
+        &[
+            ("forma", Json::str("Sentinela")),
+            ("para", Json::str("equilibrium"))
+        ]
     ));
     assert_eq!(
         b.engine.form("Sentinela").unwrap().conjugation,
@@ -851,7 +974,10 @@ fn rules_stay_active_in_equilibrium_ad_decision() {
     );
     assert!(b.count_with(
         "ASSESSMENT",
-        &[("forma", Json::str("Sentinela")), ("de", Json::str("equilibrium"))]
+        &[
+            ("forma", Json::str("Sentinela")),
+            ("de", Json::str("equilibrium"))
+        ]
     ));
 
     // a manutenção implícita cessa: sem prazo de manutenção e sem trabalho

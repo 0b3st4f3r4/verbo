@@ -27,7 +27,7 @@ use vbl_lang::parser::Parser;
 
 let source = r#"
 nonequilibrium FreeThinking {
-    value: "consciencia_anteneoliberal_ativa",
+    value: "consciencia_antineoliberal_ativa",
     horizon: 60s,
     source_path: "attention",
     maintenance_deadline: 3s,

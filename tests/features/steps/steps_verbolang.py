@@ -24,7 +24,7 @@ POETRY = "poesia_gerada_pelo_calor_do_silicio_e_resfriamento_da_mente"
 @given('the laborative form "{name}" is active with a deadline of {deadline:d}s')
 def step_laborative_form(context, name, deadline):
     program = ir.program(
-        ir.form(name, "nonequilibrium", "consciencia_anteneoliberal_ativa",
+        ir.form(name, "nonequilibrium", "consciencia_antineoliberal_ativa",
                 "60s", source_path="attention",
                 maintenance_deadline=f"{deadline}s",
                 exchange_mode="cooperation"),
@@ -57,7 +57,7 @@ def step_persisted_canonical(context):
     # canônico = reparseável: o validador de superfície não aponta erros
     errors = vlcheck.validate(content)
     assert not errors, f".vl persistido não é canônico: {errors}"
-    assert 'value: "consciencia_anteneoliberal_ativa"' in content
+    assert 'value: "consciencia_antineoliberal_ativa"' in content
     context.persisted_path = path
 
 

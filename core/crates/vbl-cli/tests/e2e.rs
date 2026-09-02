@@ -94,18 +94,36 @@ fn e2e_thermal_subversion_acts_on_actor_and_audits() {
     );
     let (out, text) = run(
         &dir,
-        &args_run(&dir, &program, "caderno.vcad", &["--ticks", "5", "--at", "3:cpu_temp=86.5"]),
+        &args_run(
+            &dir,
+            &program,
+            "caderno.vcad",
+            &["--ticks", "5", "--at", "3:cpu_temp=86.5"],
+        ),
     );
-    assert!(out.status.success(), "vbl run falhou:\n{text}\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "vbl run falhou:\n{text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(text.contains("ÍNTEGRA"), "cadeia não íntegra:\n{text}");
-    assert!(text.contains("atuações 1/1 ok"), "atuação não confirmada:\n{text}");
+    assert!(
+        text.contains("atuações 1/1 ok"),
+        "atuação não confirmada:\n{text}"
+    );
 
     let report = verify_external(&dir, "caderno.vcad");
-    assert!(report.contains("ACTUATION: 1"), "atuação não registrada:\n{report}");
+    assert!(
+        report.contains("ACTUATION: 1"),
+        "atuação não registrada:\n{report}"
+    );
 
     // atuação auditada: solicitado = aplicado = 50, no tick da condição
     let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
-    let actuation = jsonl.lines().find(|l| l.contains("\"kind\":\"ACTUATION\"")).expect("ATUACAO no log");
+    let actuation = jsonl
+        .lines()
+        .find(|l| l.contains("\"kind\":\"ACTUATION\""))
+        .expect("ATUACAO no log");
     for expected in [
         "\"ator\":\"CpuPowerCap\"",
         "\"valor\":50",
@@ -114,7 +132,10 @@ fn e2e_thermal_subversion_acts_on_actor_and_audits() {
         "\"tick\":3",
         "\"t\":3",
     ] {
-        assert!(actuation.contains(expected), "ATUACAO sem {expected}: {actuation}");
+        assert!(
+            actuation.contains(expected),
+            "ATUACAO sem {expected}: {actuation}"
+        );
     }
     // no modo SIMULADO a fronteira é em processo: sem latência física ⇒ sem
     // custo estimado (honestidade §4.7); o custo (W × latência) é auditado
@@ -124,9 +145,14 @@ fn e2e_thermal_subversion_acts_on_actor_and_audits() {
         "custo sem latência medida seria invenção: {actuation}"
     );
     // subversão dissolve no MESMO tick (≤ 1 tick virtual — FORMAL §4.5)
-    let dissolution =
-        jsonl.lines().find(|l| l.contains("\"kind\":\"dissolve_subvert\"")).expect("dissolve_subvert");
-    assert!(dissolution.contains("\"tick\":3"), "dissolução fora do tick da condição: {dissolution}");
+    let dissolution = jsonl
+        .lines()
+        .find(|l| l.contains("\"kind\":\"dissolve_subvert\""))
+        .expect("dissolve_subvert");
+    assert!(
+        dissolution.contains("\"tick\":3"),
+        "dissolução fora do tick da condição: {dissolution}"
+    );
     clear(&dir);
 }
 
@@ -141,7 +167,7 @@ fn e2e_attention_fatigue_reclassifies_and_persists() {
         &dir,
         "pensar.vl",
         "nonequilibrium FreeThinking {\n\
-         \x20 value: \"consciencia_anteneoliberal_ativa\",\n\
+         \x20 value: \"consciencia_antineoliberal_ativa\",\n\
          \x20 horizon: 60s,\n\
          \x20 source_path: \"attention\",\n\
          \x20 maintenance_deadline: 3s,\n\
@@ -153,23 +179,45 @@ fn e2e_attention_fatigue_reclassifies_and_persists() {
     );
     let (out, text) = run(
         &dir,
-        &args_run(&dir, &program, "caderno.vcad", &["--ticks", "4", "--at", "2:attention=15"]),
+        &args_run(
+            &dir,
+            &program,
+            "caderno.vcad",
+            &["--ticks", "4", "--at", "2:attention=15"],
+        ),
     );
     assert!(out.status.success(), "vbl run falhou:\n{text}");
     assert!(text.contains("ÍNTEGRA"), "{text}");
 
     // persistência como `.vl` canônico com SHA-256 registrado (FORMAL §4.1)
     let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
-    let transition = jsonl.lines().find(|l| l.contains("\"kind\":\"transition\"")).expect("transition");
-    assert!(transition.contains("\"para\":\"equilibrium\""), "{transition}");
-    assert!(transition.contains("\"tick\":2"), "transição fora do tick da fadiga: {transition}");
-    let persistence =
-        jsonl.lines().find(|l| l.contains("\"kind\":\"persistence\"")).expect("persistence");
-    assert!(persistence.contains("\"sha256\":\""), "SHA-256 não registrado: {persistence}");
+    let transition = jsonl
+        .lines()
+        .find(|l| l.contains("\"kind\":\"transition\""))
+        .expect("transition");
+    assert!(
+        transition.contains("\"para\":\"equilibrium\""),
+        "{transition}"
+    );
+    assert!(
+        transition.contains("\"tick\":2"),
+        "transição fora do tick da fadiga: {transition}"
+    );
+    let persistence = jsonl
+        .lines()
+        .find(|l| l.contains("\"kind\":\"persistence\""))
+        .expect("persistence");
+    assert!(
+        persistence.contains("\"sha256\":\""),
+        "SHA-256 não registrado: {persistence}"
+    );
     // o arquivo canônico existe e é reparseável
     let persisted = dir.join("persistence").join("FreeThinking.vl");
     assert!(persisted.exists(), "`.vl` canônico não gravado");
-    let check = vbl(&dir, &["check", persisted.to_str().unwrap(), "--no-registry"]);
+    let check = vbl(
+        &dir,
+        &["check", persisted.to_str().unwrap(), "--no-registry"],
+    );
     assert!(check.status.success(), "`.vl` persistido não reparseia");
 
     // após a reclassificação: a forma SEGUE ativa (equilibrium) mas deixa de
@@ -180,7 +228,10 @@ fn e2e_attention_fatigue_reclassifies_and_persists() {
         "forma colapsou após a reclassificação (não deveria)"
     );
     assert_eq!(
-        jsonl.lines().filter(|l| l.contains("\"kind\":\"transition\"")).count(),
+        jsonl
+            .lines()
+            .filter(|l| l.contains("\"kind\":\"transition\""))
+            .count(),
         1,
         "reclassificação em loop"
     );
@@ -239,14 +290,19 @@ fn e2e_actor_failure_triggers_registry_fallback() {
     let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
     // tentativa primária, falha e fallback executado — os três no Caderno
     assert!(
-        jsonl.lines().any(|l| l.contains("\"kind\":\"actor_unavailable\"")),
+        jsonl
+            .lines()
+            .any(|l| l.contains("\"kind\":\"actor_unavailable\"")),
         "falha do primário não registrada"
     );
     let fallback = jsonl
         .lines()
         .find(|l| l.contains("\"kind\":\"fallback_executed\""))
         .expect("fallback_executado no log");
-    assert!(fallback.contains("\"alternativo\":\"ReserveFan\""), "{fallback}");
+    assert!(
+        fallback.contains("\"alternativo\":\"ReserveFan\""),
+        "{fallback}"
+    );
     // a atuação efetiva foi no ALTERNATIVO, com valor aplicado — além do
     // registro da tentativa primária FALHA (a trilha completa fica no log)
     let actuation = jsonl
@@ -287,21 +343,39 @@ fn e2e_missing_sensor_does_not_fire_rule_and_alerts() {
          \x20 when fantasma > 0°C -> dissolve\n\
          }",
     );
-    let (out, text) =
-        run(&dir, &args_run(&dir, &program, "caderno.vcad", &["--ticks", "3", "--allow-unregistered"]));
+    let (out, text) = run(
+        &dir,
+        &args_run(
+            &dir,
+            &program,
+            "caderno.vcad",
+            &["--ticks", "3", "--allow-unregistered"],
+        ),
+    );
     assert!(out.status.success(), "vbl run falhou:\n{text}");
 
     let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
     // alerta de falha de I/O (source_path + regra) por tick
-    let alerts = jsonl.lines().filter(|l| l.contains("sensor_not_registered")).count();
-    assert!(alerts >= 3, "alerta de §4.7 ausente: {alerts} ocorrência(s)");
+    let alerts = jsonl
+        .lines()
+        .filter(|l| l.contains("sensor_not_registered"))
+        .count();
+    assert!(
+        alerts >= 3,
+        "alerta de §4.7 ausente: {alerts} ocorrência(s)"
+    );
     // sensor ausente nunca é 0.0: a regra NÃO pode disparar
     assert!(
-        !jsonl.lines().any(|l| l.contains("\"kind\":\"dissolve_rule\"")),
+        !jsonl
+            .lines()
+            .any(|l| l.contains("\"kind\":\"dissolve_rule\"")),
         "falso disparo com sensor ausente!"
     );
     let report = verify_external(&dir, "caderno.vcad");
-    assert!(!report.contains("dissolve_rule"), "dissolução indevida registrada:\n{report}");
+    assert!(
+        !report.contains("dissolve_rule"),
+        "dissolução indevida registrada:\n{report}"
+    );
     clear(&dir);
 }
 
@@ -327,10 +401,16 @@ fn e2e_main_with_keep_and_periodic_actuation_audits_all_commands() {
          \x20 every 10s { act(StatusLed, \"green\") }\n\
          }",
     );
-    let (out, text) = run(&dir, &args_run(&dir, &program, "caderno.vcad", &["--ticks", "12"]));
+    let (out, text) = run(
+        &dir,
+        &args_run(&dir, &program, "caderno.vcad", &["--ticks", "12"]),
+    );
     assert!(out.status.success(), "vbl run falhou:\n{text}");
     assert!(text.contains("ÍNTEGRA"), "{text}");
-    assert!(text.contains("ImportantTask"), "forma deve seguir ativa:\n{text}");
+    assert!(
+        text.contains("ImportantTask"),
+        "forma deve seguir ativa:\n{text}"
+    );
 
     let jsonl = std::fs::read_to_string(dir.join("caderno.vcad.jsonl")).unwrap();
     // atuação textual aplicada no ator correto (tick 10 — every 10s)
@@ -339,7 +419,10 @@ fn e2e_main_with_keep_and_periodic_actuation_audits_all_commands() {
         .find(|l| l.contains("\"kind\":\"ACTUATION\"") && l.contains("StatusLed"))
         .expect("ATUACAO do StatusLed no log");
     assert!(actuation.contains("\"aplicado\":\"green\""), "{actuation}");
-    assert!(actuation.contains("\"tick\":10"), "atuação fora do every 10s: {actuation}");
+    assert!(
+        actuation.contains("\"tick\":10"),
+        "atuação fora do every 10s: {actuation}"
+    );
     // a forma sobreviveu 12 ticks graças ao keep (sem colapso)
     assert!(
         !jsonl.lines().any(|l| l.contains("collapse_maintenance")),
@@ -373,12 +456,20 @@ fn e2e_persisted_equilibrium_reload() {
          }",
     );
     let persist = dir.join("persistence").display().to_string();
-    let mut args1 = args_run(&dir, &program, "caderno1.vcad", &["--ticks", "3", "--at", "1:attention=10"]);
+    let mut args1 = args_run(
+        &dir,
+        &program,
+        "caderno1.vcad",
+        &["--ticks", "3", "--at", "1:attention=10"],
+    );
     let pos = args1.iter().position(|a| a == "--persist-dir").unwrap();
     args1[pos + 1] = persist.clone();
     let (out1, text1) = run(&dir, &args1);
     assert!(out1.status.success(), "{text1}");
-    assert!(dir.join("persistence").join("NotaViva.vl").exists(), "`.vl` canônico não gravado");
+    assert!(
+        dir.join("persistence").join("NotaViva.vl").exists(),
+        "`.vl` canônico não gravado"
+    );
 
     // 2ª execução: recarrega a equilibrium persistida (horizon não venceu)
     let mut args2 = args_run(&dir, &program, "caderno2.vcad", &["--ticks", "2"]);
@@ -392,7 +483,9 @@ fn e2e_persisted_equilibrium_reload() {
     );
     let jsonl2 = std::fs::read_to_string(dir.join("caderno2.vcad.jsonl")).unwrap();
     assert!(
-        jsonl2.lines().any(|l| l.contains("recarga") && l.contains("\"sha256\":\"")),
+        jsonl2
+            .lines()
+            .any(|l| l.contains("recarga") && l.contains("\"sha256\":\"")),
         "recarga não auditada com SHA-256"
     );
     verify_external(&dir, "caderno2.vcad");
@@ -407,8 +500,15 @@ fn e2e_persisted_equilibrium_reload() {
 #[test]
 fn e2e_corrupted_ledger_fails_the_verifier() {
     let dir = scenario("corrupcao");
-    let program = write(&dir, "mini.vl", "event Piscada { value: \"impulso\", horizon: 2s }");
-    let (out, text) = run(&dir, &args_run(&dir, &program, "caderno.vcad", &["--ticks", "2"]));
+    let program = write(
+        &dir,
+        "mini.vl",
+        "event Piscada { value: \"impulso\", horizon: 2s }",
+    );
+    let (out, text) = run(
+        &dir,
+        &args_run(&dir, &program, "caderno.vcad", &["--ticks", "2"]),
+    );
     assert!(out.status.success(), "{text}");
 
     // adulteração retroativa no export JSONL: troca os Joules de um LEAK
@@ -418,12 +518,14 @@ fn e2e_corrupted_ledger_fails_the_verifier() {
     let tail = &text[pos..];
     let j = tail.find("\"joules\":").expect("joules no LEAK");
     let start = pos + j + "\"joules\":".len();
-    let end = start
-        + tail[j + "\"joules\":".len()..].find(',').unwrap_or(3);
+    let end = start + tail[j + "\"joules\":".len()..].find(',').unwrap_or(3);
     text.replace_range(start..end, "999");
     std::fs::write(dir.join("forjado.jsonl"), &text).unwrap();
 
-    let verify = vbl(&dir, &["ledger-verify", dir.join("forjado.jsonl").to_str().unwrap()]);
+    let verify = vbl(
+        &dir,
+        &["ledger-verify", dir.join("forjado.jsonl").to_str().unwrap()],
+    );
     assert_eq!(
         verify.status.code(),
         Some(1),
