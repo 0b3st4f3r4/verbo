@@ -20,20 +20,20 @@ pub enum TokenKind {
     DegC,
     /// `%` — porcentagem
     Percent,
-    Colon,    // :
-    Comma,    // ,
-    Semi,     // ;
-    LBrace,   // {
-    RBrace,   // }
-    LParen,   // (
-    RParen,   // )
-    Arrow,    // ->
-    Lt,       // <
-    Gt,       // >
-    Le,       // <=
-    Ge,       // >=
-    EqEq,     // ==
-    NotEq,    // !=
+    Colon,  // :
+    Comma,  // ,
+    Semi,   // ;
+    LBrace, // {
+    RBrace, // }
+    LParen, // (
+    RParen, // )
+    Arrow,  // ->
+    Lt,     // <
+    Gt,     // >
+    Le,     // <=
+    Ge,     // >=
+    EqEq,   // ==
+    NotEq,  // !=
 }
 
 #[derive(Debug, Clone, PartialEq)]

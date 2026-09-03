@@ -716,7 +716,14 @@ fn e2e_fxpd_auth_psk_abre_com_chave_certa_e_fecha_com_errada() {
     let (filho, endpoint, _stdout_vivo) = spawn_fxpd(
         &dir,
         &[("E2E_PSK", "segredo-do-lab")],
-        &["--serve", "tcp:0", "--fxp-config", &cfg_peer, "--auth", "psk:E2E_PSK"],
+        &[
+            "--serve",
+            "tcp:0",
+            "--fxp-config",
+            &cfg_peer,
+            "--auth",
+            "psk:E2E_PSK",
+        ],
     );
     let porta = porta_de(&endpoint);
 
@@ -737,7 +744,14 @@ fn e2e_fxpd_auth_psk_abre_com_chave_certa_e_fecha_com_errada() {
             &dir,
             &programa,
             "certo.vcad",
-            &["--ticks", "2", "--fxp-config", &cfg_ok, "--fxp-psk-env", "E2E_PSK"],
+            &[
+                "--ticks",
+                "2",
+                "--fxp-config",
+                &cfg_ok,
+                "--fxp-psk-env",
+                "E2E_PSK",
+            ],
         ),
         &[("E2E_PSK", "segredo-do-lab")],
     );
@@ -761,7 +775,14 @@ fn e2e_fxpd_auth_psk_abre_com_chave_certa_e_fecha_com_errada() {
             &dir,
             &programa,
             "errado.vcad",
-            &["--ticks", "2", "--fxp-config", &cfg_errada, "--fxp-psk-env", "E2E_PSK"],
+            &[
+                "--ticks",
+                "2",
+                "--fxp-config",
+                &cfg_errada,
+                "--fxp-psk-env",
+                "E2E_PSK",
+            ],
         ),
         &[("E2E_PSK", "chave-errada")],
     );
@@ -905,4 +926,148 @@ fn e2e_fxpd_tls_pin_certo_conecta_e_errado_falha_fechada() {
 
     matar_fxpd(filho);
     clear(&dir);
+}
+
+/// v1.3 §7 — TOFU (trust on first use) com a flag `--tofu-store` do run:
+/// a PRIMEIRA conexão grava a impressão digital vista (contra daemon TLS
+/// com cert A); a SEGUNDA contra um daemon DIFERENTE na MESMA porta
+/// (cert B) diverge do store ⇒ falha fechada, motivo TOFU no Caderno.
+/// O pin da v1.2 continua disponível (`@sha256:`); `@tofu` é opt-in.
+#[test]
+fn e2e_fxpd_tofu_primeira_uso_grava_divergencia_falha_fechada() {
+    use std::net::TcpListener;
+
+    let _guardia = FXPD_SERIAL.lock().expect("lock fxpd");
+    let dir = scenario("fxpd-tofu");
+    let cfg_peer = write(&dir, "peer.cfg", "mode = simulado\n");
+    let (cert_a, key_a, _pin_a) = cert_do_cenario(&dir, "legitimo");
+    let (cert_b, key_b, _pin_b) = cert_do_cenario(&dir, "intruso");
+    let store = dir.join("tofu.json");
+    assert!(!store.exists(), "store TOFU nasce vazio no cenário");
+
+    // Porta FIXA: a divergência TOFU é por host:porta — precisa do MESMO
+    // endereço com dois certificados diferentes.
+    let porta_livre = {
+        let l = TcpListener::bind("127.0.0.1:0").expect("porta livre");
+        l.local_addr().expect("addr").port().to_string()
+    };
+    let endpoint = format!("tcp:{porta_livre}");
+
+    // 1ª rodada: daemon legítimo; cliente @tofu + --tofu-store ⇒ conecta,
+    // lê e GRAVA a primeira confiança no store.
+    let (filho, ep, _stdout_vivo) = spawn_fxpd(
+        &dir,
+        &[],
+        &[
+            "--serve",
+            &endpoint,
+            "--fxp-config",
+            &cfg_peer,
+            "--tls-cert",
+            &cert_a,
+            "--tls-key",
+            &key_a,
+        ],
+    );
+    assert!(ep.starts_with("tcps:"), "endpoint TLS: {ep}");
+    let cfg_ok = write(
+        &dir,
+        "cliente-ok.cfg",
+        &format!(
+            "mode = real\ncache_ttl_ms = 0\nread_timeout_ms = 2000\n\
+             cpu_temp.mode = real\n\
+             cpu_temp.endpoint = tcps:127.0.0.1:{porta_livre}@tofu\n"
+        ),
+    );
+    let (out, text) = run(
+        &dir,
+        &args_run(
+            &dir,
+            &write(&dir, "monitora.vl", PROGRAMA_MONITOR),
+            "ok.vcad",
+            &[
+                "--ticks",
+                "2",
+                "--fxp-config",
+                &cfg_ok,
+                "--tofu-store",
+                &store.display().to_string(),
+            ],
+        ),
+    );
+    assert!(
+        out.status.success(),
+        "run TOFU 1ª vez falhou contra daemon sadio:\n{text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let jsonl = std::fs::read_to_string(dir.join("ok.vcad.jsonl")).unwrap();
+    assert!(
+        !jsonl.contains("sensor_inaccessible"),
+        "falha de leitura na 1ª conexão TOFU:\n{jsonl}"
+    );
+    let store_txt = std::fs::read_to_string(&store).expect("store gravado na 1ª use");
+    assert!(
+        store_txt.contains(&format!("127.0.0.1:{porta_livre}")) && store_txt.contains("sha256:"),
+        "store TOFU sem a entrada host:porta → sha256:\n{store_txt}"
+    );
+    matar_fxpd(filho);
+
+    // 2ª rodada: MESMA porta, cert DIFERENTE ⇒ divergência TOFU ⇒ falha
+    // fechada (sem valor), evento honesto com motivo no Caderno.
+    let (filho2, _ep2, _stdout_vivo2) = spawn_fxpd(
+        &dir,
+        &[],
+        &[
+            "--serve",
+            &endpoint,
+            "--fxp-config",
+            &cfg_peer,
+            "--tls-cert",
+            &cert_b,
+            "--tls-key",
+            &key_b,
+        ],
+    );
+    let cfg_ruim = write(
+        &dir,
+        "cliente-ruim.cfg",
+        &format!(
+            "mode = real\ncache_ttl_ms = 0\nread_timeout_ms = 2000\n\
+             cpu_temp.mode = real\n\
+             cpu_temp.endpoint = tcps:127.0.0.1:{porta_livre}@tofu\n"
+        ),
+    );
+    let (out2, _text2) = run(
+        &dir,
+        &args_run(
+            &dir,
+            &write(&dir, "monitora2.vl", PROGRAMA_MONITOR),
+            "ruim.vcad",
+            &[
+                "--ticks",
+                "2",
+                "--fxp-config",
+                &cfg_ruim,
+                "--tofu-store",
+                &store.display().to_string(),
+            ],
+        ),
+    );
+    assert!(
+        out2.status.success(),
+        "run com divergência TOFU deve ser honesto, não crashar:\n{}\n{}",
+        _text2,
+        String::from_utf8_lossy(&out2.stderr)
+    );
+    let jsonl2 = std::fs::read_to_string(dir.join("ruim.vcad.jsonl")).unwrap();
+    assert!(
+        jsonl2.contains("sensor_inaccessible"),
+        "divergência TOFU não virou evento honesto:\n{jsonl2}"
+    );
+    assert!(
+        jsonl2.to_lowercase().contains("tofu"),
+        "motivo TOFU não está no Caderno:\n{jsonl2}"
+    );
+
+    matar_fxpd(filho2);
 }

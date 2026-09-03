@@ -45,11 +45,21 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     pub fn error(code: &str, span: Span, message: impl Into<String>) -> Self {
-        Self { code: code.to_owned(), message: message.into(), span, severity: Severity::Error }
+        Self {
+            code: code.to_owned(),
+            message: message.into(),
+            span,
+            severity: Severity::Error,
+        }
     }
 
     pub fn warning(code: &str, span: Span, message: impl Into<String>) -> Self {
-        Self { code: code.to_owned(), message: message.into(), span, severity: Severity::Warning }
+        Self {
+            code: code.to_owned(),
+            message: message.into(),
+            span,
+            severity: Severity::Warning,
+        }
     }
 
     pub fn is_error(&self) -> bool {
@@ -63,7 +73,11 @@ impl std::fmt::Display for Diagnostic {
             Severity::Error => "erro",
             Severity::Warning => "aviso",
         };
-        write!(f, "{} [{}] {}: {}", self.span, severity, self.code, self.message)
+        write!(
+            f,
+            "{} [{}] {}: {}",
+            self.span, severity, self.code, self.message
+        )
     }
 }
 

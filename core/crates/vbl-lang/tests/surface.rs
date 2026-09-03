@@ -5,12 +5,11 @@
 //! `Token::text()` para exibição em mensagens, `Display` dos diagnósticos
 //! e os acessores canônicos do AST (FORMAL §2/§3).
 
-use vbl_lang::{
-    CmpOp, Conjugation, Diagnostic, Diagnostics, Expression, ExprKind, PhysicalUnit, Span,
-    TimeUnit,
-};
 use vbl_lang::lexer::tokenize;
 use vbl_lang::token::{Token, TokenKind};
+use vbl_lang::{
+    CmpOp, Conjugation, Diagnostic, Diagnostics, ExprKind, Expression, PhysicalUnit, Span, TimeUnit,
+};
 
 fn diags_de(texto: &str) -> Vec<String> {
     let (_, d) = tokenize(texto);
@@ -43,7 +42,10 @@ fn token_text_cobre_todas_as_categorias() {
         (TokenKind::NotEq, "!="),
     ];
     for (kind, texto) in casos {
-        let t = Token { kind, span: Span::new(1, 1) };
+        let t = Token {
+            kind,
+            span: Span::new(1, 1),
+        };
         assert_eq!(t.text(), texto);
     }
 }
@@ -93,7 +95,7 @@ fn diagnostics_consultas_ordenacao_e_display() {
 
     let vazio = Diagnostics::default();
     assert!(!vazio.has_errors());
-    assert_eq!(vazio.to_string(), "");          // Display de coleção vazia
+    assert_eq!(vazio.to_string(), ""); // Display de coleção vazia
 }
 
 // ── lexer.rs — braços de erro (FORMAL §2: léxico estrito) ─────────────────
@@ -114,11 +116,17 @@ fn lexemas_invalidos_tem_codigo_estavel() {
 #[test]
 fn string_nao_terminada_nas_tres_formas() {
     // EOF sem fechar
-    assert!(diags_de("\"aberta").iter().any(|c| c == "string_nao_terminada"));
+    assert!(diags_de("\"aberta")
+        .iter()
+        .any(|c| c == "string_nao_terminada"));
     // quebra de linha dentro da string
-    assert!(diags_de("\"duas\nlinhas\"").iter().any(|c| c == "string_nao_terminada"));
+    assert!(diags_de("\"duas\nlinhas\"")
+        .iter()
+        .any(|c| c == "string_nao_terminada"));
     // string termina em escape solitário
-    assert!(diags_de("\"escape\\").iter().any(|c| c == "string_nao_terminada"));
+    assert!(diags_de("\"escape\\")
+        .iter()
+        .any(|c| c == "string_nao_terminada"));
 }
 
 #[test]
@@ -136,12 +144,16 @@ fn string_muito_longa_rejeitada() {
     let longa = format!("\"{}\"", "x".repeat(257)); // limite: 256 bytes
     assert!(diags_de(&longa).iter().any(|c| c == "string_muito_longa"));
     let no_limite = format!("\"{}\"", "x".repeat(256));
-    assert!(!diags_de(&no_limite).iter().any(|c| c == "string_muito_longa"));
+    assert!(!diags_de(&no_limite)
+        .iter()
+        .any(|c| c == "string_muito_longa"));
 }
 
 #[test]
 fn comentario_de_bloco_nao_fechado() {
-    assert!(diags_de("/* sem fim").iter().any(|c| c == "comentario_nao_fechado"));
+    assert!(diags_de("/* sem fim")
+        .iter()
+        .any(|c| c == "comentario_nao_fechado"));
     // fechado corretamente não diagnosticа
     let (_, d) = tokenize("/* ok */ event A { value: 1, horizon: 1s }");
     assert!(!d.has_errors());
@@ -170,7 +182,11 @@ fn unidades_de_tempo_fator_e_sufixo() {
         assert_eq!(unidade.factor(), fator);
         assert_eq!(unidade.suffix(), sufixo);
     }
-    let dur = vbl_lang::Duration { value: 250.0, unit: TimeUnit::Ms, span: Span::default() };
+    let dur = vbl_lang::Duration {
+        value: 250.0,
+        unit: TimeUnit::Ms,
+        span: Span::default(),
+    };
     assert_eq!(dur.seconds(), 0.25);
 }
 
@@ -212,7 +228,16 @@ fn cmpop_simbolo_e_avaliacao() {
 
 #[test]
 fn expr_kind_construtores() {
-    assert_eq!(Expression::str("poesia", Span::new(1, 2)).kind, ExprKind::Str("poesia".into()));
-    assert_eq!(Expression::num(3.5, Span::new(1, 3)).kind, ExprKind::Num(3.5));
-    assert_eq!(Expression::ident("chuva", Span::new(1, 4)).kind, ExprKind::Ident("chuva".into()));
+    assert_eq!(
+        Expression::str("poesia", Span::new(1, 2)).kind,
+        ExprKind::Str("poesia".into())
+    );
+    assert_eq!(
+        Expression::num(3.5, Span::new(1, 3)).kind,
+        ExprKind::Num(3.5)
+    );
+    assert_eq!(
+        Expression::ident("chuva", Span::new(1, 4)).kind,
+        ExprKind::Ident("chuva".into())
+    );
 }

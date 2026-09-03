@@ -164,7 +164,10 @@ pub trait Ledger {
                 a.actor, a.requested
             ),
             (Some(applied), None) => {
-                format!("Ator '{}' <- {} (aplicado: {applied}, {status})", a.actor, a.requested)
+                format!(
+                    "Ator '{}' <- {} (aplicado: {applied}, {status})",
+                    a.actor, a.requested
+                )
             }
             (None, Some(us)) => {
                 format!("Ator '{}' <- {} ({us} µs, {status})", a.actor, a.requested)
@@ -251,10 +254,16 @@ impl Default for ChainLedger {
 
 impl ChainLedger {
     /// Cabeça da cadeia inicial: 64 zeros.
-    pub const INITIAL_HEAD: &'static str = "0000000000000000000000000000000000000000000000000000000000000000";
+    pub const INITIAL_HEAD: &'static str =
+        "0000000000000000000000000000000000000000000000000000000000000000";
 
     pub fn new() -> Self {
-        Self { events: Vec::new(), chain_head: Self::INITIAL_HEAD.to_owned(), time_s: (0, 0.0), power: 0.0 }
+        Self {
+            events: Vec::new(),
+            chain_head: Self::INITIAL_HEAD.to_owned(),
+            time_s: (0, 0.0),
+            power: 0.0,
+        }
     }
 
     pub fn reset(&mut self) {
@@ -396,8 +405,13 @@ impl Ledger for ChainLedger {
     fn record(&mut self, kind: &str, msg: &str, mut extra: Json) {
         stamp_time(&mut extra, self.time_s.0, self.time_s.1);
         let seq = self.events.len();
-        let mut event =
-            LedgerEvent { seq, kind: kind.to_owned(), msg: msg.to_owned(), extra, hash: String::new() };
+        let mut event = LedgerEvent {
+            seq,
+            kind: kind.to_owned(),
+            msg: msg.to_owned(),
+            extra,
+            hash: String::new(),
+        };
         let mut line = String::with_capacity(128);
         event.write_line(&mut line);
         event.hash = sha256_double_hex(self.chain_head.as_bytes(), line.as_bytes());

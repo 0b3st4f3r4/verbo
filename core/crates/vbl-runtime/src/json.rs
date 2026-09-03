@@ -20,7 +20,12 @@ pub enum Json {
 
 impl Json {
     pub fn obj(fields: impl IntoIterator<Item = (&'static str, Json)>) -> Json {
-        Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+        Json::Obj(
+            fields
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect(),
+        )
     }
 
     pub fn str(s: impl Into<String>) -> Json {
@@ -165,7 +170,8 @@ fn parse_number(b: &[u8], pos: &mut usize) -> Option<Json> {
     if b.get(*pos) == Some(&b'-') {
         *pos += 1;
     }
-    while matches!(b.get(*pos), Some(c) if c.is_ascii_digit() || matches!(c, b'.' | b'e' | b'E' | b'+' | b'-')) {
+    while matches!(b.get(*pos), Some(c) if c.is_ascii_digit() || matches!(c, b'.' | b'e' | b'E' | b'+' | b'-'))
+    {
         *pos += 1;
     }
     let text = std::str::from_utf8(b.get(start..*pos)?).ok()?;

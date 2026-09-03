@@ -64,7 +64,11 @@ pub fn form_to_vl(f: &FormDecl) -> String {
         if let Some(dl) = &f.attrs.maintenance_deadline {
             extras.push(format!("maintenance_deadline: {}", fmt_duration(dl)));
         }
-        let mode = f.attrs.exchange_mode.clone().unwrap_or_else(|| "cooperation".into());
+        let mode = f
+            .attrs
+            .exchange_mode
+            .clone()
+            .unwrap_or_else(|| "cooperation".into());
         extras.push(format!("exchange_mode: {}", fmt_string_literal(&mode)));
     }
     if f.conjugation == Conjugation::Equilibrium {

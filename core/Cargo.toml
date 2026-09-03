@@ -22,8 +22,21 @@ repository = "https://github.com/0b3st4f3r4/verbo"
 sha2 = "0.10"
 criterion = "0.5"
 # v1.1 (docs/FXP-SCHEMA-v1.md §4.8): LZ4 block puro-Rust, sem unsafe, para a
-# compressão negociada do corpo — frames ≤ 8 KB não justificam zstd/dep C.
+# compressão negociada do corpo — a reserva v1.1 "frames ≤ 8 KB não justificam
+# zstd/dep C" vale para o LZ4 COMO ÚNICO algoritmo; a v1.3 adiciona o zstd
+# como algoritmo ADICIONAL negociado (id 3, dicionário treinado §4.8), onde o
+# custo C se paga: estatísticas treinadas entre frames e razão maior em
+# payloads com nomes novos.
 lz4_flex = "0.11"
+# v1.3 (§4.8): zstd (bind C via cc — sem cmake) com dicionário treinado
+# (`zstd::dict::from_samples`, COVER — feature `zdict_builder`, default).
+# Só trafega negociado (caps::ZSTD + caps::DICT, id 3 no byte reservado);
+# fio default continua bit a bit v1.0/v1.1/v1.2.
+zstd = "0.13"
+# v1.3 (§4.9): SSM IPv6 via `setsockopt(IPPROTO_IPV6, MCAST_JOIN_SOURCE_GROUP)`
+# (RFC 3678/4604) — nem std nem socket2 0.6 expõem assinatura de grupo por
+# fonte para v6; a chamada crua desbloqueia o item registrado na §9 da v1.2.
+libc = "0.2"
 # v1.1 (§4.6): PSK + HMAC-SHA256 para autenticação do canal remoto (a chave
 # nunca trafega; nonces por conexão) — hmac/getrandom puro-Rust, sha2 já era
 # dependência do workspace (cadeia do Caderno).

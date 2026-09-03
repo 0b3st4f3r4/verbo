@@ -24,7 +24,11 @@ const MAX_EVERY_DEPTH: usize = 8;
 /// O programa só é considerado válido se `diags.has_errors() == false`.
 pub fn parse(source: &str) -> (Program, Diagnostics) {
     let (tokens, mut diags) = tokenize(source);
-    let mut p = Parser { toks: tokens, pos: 0, diags: Diagnostics::new() };
+    let mut p = Parser {
+        toks: tokens,
+        pos: 0,
+        diags: Diagnostics::new(),
+    };
     let program = p.program();
     p.cross_clauses(&program);
     diags.extend(p.diags);
@@ -75,7 +79,8 @@ impl Parser {
             }
             None => {
                 let span = self.here();
-                self.diags.error(code, span, format!("fim inesperado: {msg}"));
+                self.diags
+                    .error(code, span, format!("fim inesperado: {msg}"));
                 None
             }
         }
@@ -188,7 +193,9 @@ impl Parser {
                     self.diags.error(
                         "topo_invalido",
                         tok.span,
-                        format!("declaração desconhecida '{other}' (esperado forma, review ou main)"),
+                        format!(
+                            "declaração desconhecida '{other}' (esperado forma, review ou main)"
+                        ),
                     );
                     self.advance();
                 }
@@ -220,7 +227,10 @@ impl Parser {
             _ => unreachable!(),
         };
         let name = match self.advance() {
-            Some(Token { kind: TokenKind::Ident(n), span }) => (n, span),
+            Some(Token {
+                kind: TokenKind::Ident(n),
+                span,
+            }) => (n, span),
             Some(t) => {
                 let found = t.text();
                 self.diags.error(
@@ -240,7 +250,12 @@ impl Parser {
             }
         };
         let (name, name_span) = name;
-        if self.expect_punct(&TokenKind::LBrace, "estrutura_forma", "'{' após o nome da forma")
+        if self
+            .expect_punct(
+                &TokenKind::LBrace,
+                "estrutura_forma",
+                "'{' após o nome da forma",
+            )
             .is_none()
         {
             self.consume_until_comma_or_close();
@@ -266,7 +281,10 @@ impl Parser {
                     );
                     return None;
                 }
-                Some(Token { kind: TokenKind::Ident(atributo), span }) => {
+                Some(Token {
+                    kind: TokenKind::Ident(atributo),
+                    span,
+                }) => {
                     let (atributo, span) = (atributo.clone(), *span);
                     self.advance();
                     self.atributo(
@@ -309,7 +327,10 @@ impl Parser {
                 format!("forma '{name}' sem 'horizon' — obrigatório em toda conjugação (Lei 1)"),
             );
         }
-        if let (Some(v), Some(h)) = (order.iter().position(|a| a == "value"), order.iter().position(|a| a == "horizon")) {
+        if let (Some(v), Some(h)) = (
+            order.iter().position(|a| a == "value"),
+            order.iter().position(|a| a == "horizon"),
+        ) {
             if v > h {
                 self.diags.error(
                     "ordem_value_horizon",
@@ -356,7 +377,14 @@ impl Parser {
             span: kw_span,
         });
 
-        Some(FormDecl { conjugation, name, value, horizon, attrs, span: name_span })
+        Some(FormDecl {
+            conjugation,
+            name,
+            value,
+            horizon,
+            attrs,
+            span: name_span,
+        })
     }
 
     // ------------------------------------------------------------------
@@ -395,7 +423,11 @@ impl Parser {
             return;
         }
         if self
-            .expect_punct(&TokenKind::Colon, "estrutura_forma", "':' após o nome do atributo")
+            .expect_punct(
+                &TokenKind::Colon,
+                "estrutura_forma",
+                "':' após o nome do atributo",
+            )
             .is_none()
         {
             self.consume_until_comma_or_close();
@@ -458,12 +490,18 @@ impl Parser {
                 order.push("exchange_mode".into());
             }
             "cost_bytes" => match self.advance() {
-                Some(Token { kind: TokenKind::Int(n), span }) => {
+                Some(Token {
+                    kind: TokenKind::Int(n),
+                    span,
+                }) => {
                     attrs.cost_bytes = Some(n);
                     order.push("cost_bytes".into());
                     let _ = span;
                 }
-                Some(Token { kind: TokenKind::Decimal(_), span }) => {
+                Some(Token {
+                    kind: TokenKind::Decimal(_),
+                    span,
+                }) => {
                     self.diags.error(
                         "cost_bytes_inteiro",
                         span,
@@ -481,8 +519,11 @@ impl Parser {
                 }
                 None => {
                     let span = self.here();
-                    self.diags
-                        .error("estrutura_forma", span, "fim inesperado: cost_bytes exige inteiro");
+                    self.diags.error(
+                        "estrutura_forma",
+                        span,
+                        "fim inesperado: cost_bytes exige inteiro",
+                    );
                 }
             },
             "currency" => {
@@ -525,10 +566,22 @@ impl Parser {
     // ------------------------------------------------------------------
     fn expression(&mut self, context: &str) -> Expression {
         match self.advance() {
-            Some(Token { kind: TokenKind::Str(s), span }) => Expression::str(s, span),
-            Some(Token { kind: TokenKind::Int(n), span }) => Expression::num(n as f64, span),
-            Some(Token { kind: TokenKind::Decimal(x), span }) => Expression::num(x, span),
-            Some(Token { kind: TokenKind::Ident(id), span }) => Expression::ident(id, span),
+            Some(Token {
+                kind: TokenKind::Str(s),
+                span,
+            }) => Expression::str(s, span),
+            Some(Token {
+                kind: TokenKind::Int(n),
+                span,
+            }) => Expression::num(n as f64, span),
+            Some(Token {
+                kind: TokenKind::Decimal(x),
+                span,
+            }) => Expression::num(x, span),
+            Some(Token {
+                kind: TokenKind::Ident(id),
+                span,
+            }) => Expression::ident(id, span),
             Some(t) => {
                 let found = t.text();
                 self.diags.error(
@@ -556,8 +609,14 @@ impl Parser {
     fn duration(&mut self) -> Duration {
         let span_num = self.peek().map(|t| t.span).unwrap_or_default();
         let value = match self.advance() {
-            Some(Token { kind: TokenKind::Int(n), .. }) => n as f64,
-            Some(Token { kind: TokenKind::Decimal(x), .. }) => x,
+            Some(Token {
+                kind: TokenKind::Int(n),
+                ..
+            }) => n as f64,
+            Some(Token {
+                kind: TokenKind::Decimal(x),
+                ..
+            }) => x,
             Some(t) => {
                 let found = t.text();
                 self.diags.error(
@@ -566,17 +625,28 @@ impl Parser {
                     format!("duração esperada: NUM[s|ms|us|ns] (encontrado {found})"),
                 );
                 self.consume_until_comma_or_close();
-                return Duration { value: 0.0, unit: TimeUnit::S, span: span_num };
+                return Duration {
+                    value: 0.0,
+                    unit: TimeUnit::S,
+                    span: span_num,
+                };
             }
             None => {
                 let span = self.here();
                 self.diags
                     .error("duracao_invalida", span, "fim inesperado: duração esperada");
-                return Duration { value: 0.0, unit: TimeUnit::S, span };
+                return Duration {
+                    value: 0.0,
+                    unit: TimeUnit::S,
+                    span,
+                };
             }
         };
         match self.advance() {
-            Some(Token { kind: TokenKind::Ident(u), span }) if kw::TIME_UNITS.contains(&u.as_str()) => {
+            Some(Token {
+                kind: TokenKind::Ident(u),
+                span,
+            }) if kw::TIME_UNITS.contains(&u.as_str()) => {
                 let unit = match u.as_str() {
                     "s" => TimeUnit::S,
                     "ms" => TimeUnit::Ms,
@@ -592,7 +662,11 @@ impl Parser {
                     t.span,
                     format!("unidade de tempo esperada: s|ms|us|ns (encontrado {found})"),
                 );
-                Duration { value, unit: TimeUnit::S, span: span_num }
+                Duration {
+                    value,
+                    unit: TimeUnit::S,
+                    span: span_num,
+                }
             }
             None => {
                 let span = self.here();
@@ -601,7 +675,11 @@ impl Parser {
                     span,
                     "fim inesperado: unidade de tempo esperada (s|ms|us|ns)",
                 );
-                Duration { value, unit: TimeUnit::S, span: span_num }
+                Duration {
+                    value,
+                    unit: TimeUnit::S,
+                    span: span_num,
+                }
             }
         }
     }
@@ -612,7 +690,10 @@ impl Parser {
     fn review(&mut self, kw_span: Span) -> Option<ReviewDecl> {
         self.advance(); // 'review'
         let name = match self.advance() {
-            Some(Token { kind: TokenKind::Ident(n), span }) => (n, span),
+            Some(Token {
+                kind: TokenKind::Ident(n),
+                span,
+            }) => (n, span),
             Some(t) => {
                 let found = t.text();
                 self.diags.error(
@@ -633,7 +714,11 @@ impl Parser {
         };
         let (name, _) = name;
         if self
-            .expect_punct(&TokenKind::LBrace, "estrutura_review", "'{' após o nome da review")
+            .expect_punct(
+                &TokenKind::LBrace,
+                "estrutura_review",
+                "'{' após o nome da review",
+            )
             .is_none()
         {
             self.consume_until_comma_or_close();
@@ -647,10 +732,17 @@ impl Parser {
             }
             match self.peek() {
                 None => {
-                    self.diags.error("bloco_nao_fechado", kw_span, format!("review '{name}' sem '}}'"));
+                    self.diags.error(
+                        "bloco_nao_fechado",
+                        kw_span,
+                        format!("review '{name}' sem '}}'"),
+                    );
                     return None;
                 }
-                Some(Token { kind: TokenKind::Ident(s), .. }) if s == "when" => {
+                Some(Token {
+                    kind: TokenKind::Ident(s),
+                    ..
+                }) if s == "when" => {
                     match self.rule() {
                         Some(r) => rules.push(r),
                         None => self.consume_until_comma_or_close(),
@@ -671,7 +763,11 @@ impl Parser {
                 }
             }
         }
-        Some(ReviewDecl { form: name, rules, span: kw_span })
+        Some(ReviewDecl {
+            form: name,
+            rules,
+            span: kw_span,
+        })
     }
 
     /// review_rule = 'when' sensor_ref comparison_op threshold '->' action_list
@@ -679,8 +775,14 @@ impl Parser {
         let when_span = self.peek().unwrap().span;
         self.advance(); // 'when'
         let sensor = match self.advance() {
-            Some(Token { kind: TokenKind::Ident(s), span }) => SensorRef { name: s, span },
-            Some(Token { kind: TokenKind::Str(s), span }) => SensorRef { name: s, span },
+            Some(Token {
+                kind: TokenKind::Ident(s),
+                span,
+            }) => SensorRef { name: s, span },
+            Some(Token {
+                kind: TokenKind::Str(s),
+                span,
+            }) => SensorRef { name: s, span },
             Some(t) => {
                 let found = t.text();
                 self.diags.error(
@@ -700,12 +802,30 @@ impl Parser {
             }
         };
         let op = match self.advance() {
-            Some(Token { kind: TokenKind::Lt, .. }) => CmpOp::Lt,
-            Some(Token { kind: TokenKind::Gt, .. }) => CmpOp::Gt,
-            Some(Token { kind: TokenKind::Le, .. }) => CmpOp::Le,
-            Some(Token { kind: TokenKind::Ge, .. }) => CmpOp::Ge,
-            Some(Token { kind: TokenKind::EqEq, .. }) => CmpOp::Eq,
-            Some(Token { kind: TokenKind::NotEq, .. }) => CmpOp::Ne,
+            Some(Token {
+                kind: TokenKind::Lt,
+                ..
+            }) => CmpOp::Lt,
+            Some(Token {
+                kind: TokenKind::Gt,
+                ..
+            }) => CmpOp::Gt,
+            Some(Token {
+                kind: TokenKind::Le,
+                ..
+            }) => CmpOp::Le,
+            Some(Token {
+                kind: TokenKind::Ge,
+                ..
+            }) => CmpOp::Ge,
+            Some(Token {
+                kind: TokenKind::EqEq,
+                ..
+            }) => CmpOp::Eq,
+            Some(Token {
+                kind: TokenKind::NotEq,
+                ..
+            }) => CmpOp::Ne,
             Some(t) => {
                 let found = t.text();
                 self.diags.error(
@@ -725,16 +845,32 @@ impl Parser {
             }
         };
         let threshold = self.threshold()?;
-        self.expect_punct(&TokenKind::Arrow, "regra_mal_formada", "'->' antes das ações")?;
+        self.expect_punct(
+            &TokenKind::Arrow,
+            "regra_mal_formada",
+            "'->' antes das ações",
+        )?;
         let actions = self.actions()?;
-        Some(Rule { sensor, op, threshold, actions, span: when_span })
+        Some(Rule {
+            sensor,
+            op,
+            threshold,
+            actions,
+            span: when_span,
+        })
     }
 
     /// threshold = number | percentage | physical_quantity
     fn threshold(&mut self) -> Option<Threshold> {
         let (value, _span) = match self.advance() {
-            Some(Token { kind: TokenKind::Int(n), span }) => (n as f64, span),
-            Some(Token { kind: TokenKind::Decimal(x), span }) => (x, span),
+            Some(Token {
+                kind: TokenKind::Int(n),
+                span,
+            }) => (n as f64, span),
+            Some(Token {
+                kind: TokenKind::Decimal(x),
+                span,
+            }) => (x, span),
             Some(t) => {
                 let found = t.text();
                 self.diags.error(
@@ -777,7 +913,10 @@ impl Parser {
         let mut actions = Vec::new();
         loop {
             let action = match self.advance() {
-                Some(Token { kind: TokenKind::Ident(s), span }) => match s.as_str() {
+                Some(Token {
+                    kind: TokenKind::Ident(s),
+                    span,
+                }) => match s.as_str() {
                     "dissolve" => Action::Dissolve,
                     "subvert" => Action::Subvert,
                     "reclassify_as_equilibrium" => Action::ReclassifyAsEquilibrium,
@@ -786,8 +925,14 @@ impl Parser {
                     "act" => {
                         self.expect_punct(&TokenKind::LParen, "regra_mal_formada", "'(' no act")?;
                         let (actor, actor_span) = match self.advance() {
-                            Some(Token { kind: TokenKind::Ident(n), span }) => (n, span),
-                            Some(Token { kind: TokenKind::Str(n), span }) => (n, span),
+                            Some(Token {
+                                kind: TokenKind::Ident(n),
+                                span,
+                            }) => (n, span),
+                            Some(Token {
+                                kind: TokenKind::Str(n),
+                                span,
+                            }) => (n, span),
                             Some(t) => {
                                 let found = t.text();
                                 self.diags.error(
@@ -808,9 +953,12 @@ impl Parser {
                         };
                         self.expect_punct(&TokenKind::Comma, "regra_mal_formada", "',' no act")?;
                         let value = self.expression("act");
-                        self
-                            .expect_punct(&TokenKind::RParen, "regra_mal_formada", "')' no act")?;
-                        Action::Act { actor, value, actor_span }
+                        self.expect_punct(&TokenKind::RParen, "regra_mal_formada", "')' no act")?;
+                        Action::Act {
+                            actor,
+                            value,
+                            actor_span,
+                        }
                     }
                     other => {
                         self.diags.error(
@@ -869,7 +1017,10 @@ impl Parser {
     // ------------------------------------------------------------------
     fn main_block(&mut self, kw_span: Span) -> Option<MainBlock> {
         self.advance(); // 'main'
-        if self.expect_punct(&TokenKind::LBrace, "estrutura_main", "'{' após 'main'").is_none() {
+        if self
+            .expect_punct(&TokenKind::LBrace, "estrutura_main", "'{' após 'main'")
+            .is_none()
+        {
             self.consume_until_comma_or_close();
             return None;
         }
@@ -881,7 +1032,8 @@ impl Parser {
             }
             match self.peek() {
                 None => {
-                    self.diags.error("bloco_nao_fechado", kw_span, "main sem '}'");
+                    self.diags
+                        .error("bloco_nao_fechado", kw_span, "main sem '}'");
                     return None;
                 }
                 Some(_) => {
@@ -893,18 +1045,27 @@ impl Parser {
                 }
             }
         }
-        Some(MainBlock { statements, span: kw_span })
+        Some(MainBlock {
+            statements,
+            span: kw_span,
+        })
     }
 
     /// statement = keep '(' identifier ')' | act '(' ator ',' expression ')'
     ///           | every duration '{' statement {',' statement} '}'
     fn statement(&mut self, depth: usize) -> Option<Statement> {
         match self.advance()? {
-            Token { kind: TokenKind::Ident(s), span } => match s.as_str() {
+            Token {
+                kind: TokenKind::Ident(s),
+                span,
+            } => match s.as_str() {
                 "keep" => {
                     self.expect_punct(&TokenKind::LParen, "estrutura_main", "'(' no keep")?;
                     let form = match self.advance() {
-                        Some(Token { kind: TokenKind::Ident(n), .. }) => n,
+                        Some(Token {
+                            kind: TokenKind::Ident(n),
+                            ..
+                        }) => n,
                         Some(t) => {
                             let found = t.text();
                             self.diags.error(
@@ -929,8 +1090,14 @@ impl Parser {
                 "act" => {
                     self.expect_punct(&TokenKind::LParen, "estrutura_main", "'(' no act")?;
                     let actor = match self.advance() {
-                        Some(Token { kind: TokenKind::Ident(n), .. })
-                        | Some(Token { kind: TokenKind::Str(n), .. }) => n,
+                        Some(Token {
+                            kind: TokenKind::Ident(n),
+                            ..
+                        })
+                        | Some(Token {
+                            kind: TokenKind::Str(n),
+                            ..
+                        }) => n,
                         Some(t) => {
                             let found = t.text();
                             self.diags.error(
@@ -964,8 +1131,7 @@ impl Parser {
                         return None;
                     }
                     let period = self.duration();
-                    self
-                        .expect_punct(&TokenKind::LBrace, "estrutura_main", "'{' no every")?;
+                    self.expect_punct(&TokenKind::LBrace, "estrutura_main", "'{' no every")?;
                     let mut body = Vec::new();
                     loop {
                         if self.is_punct(TokenKind::RBrace) {
@@ -974,11 +1140,7 @@ impl Parser {
                         }
                         match self.peek() {
                             None => {
-                                self.diags.error(
-                                    "bloco_nao_fechado",
-                                    span,
-                                    "every sem '}'",
-                                );
+                                self.diags.error("bloco_nao_fechado", span, "every sem '}'");
                                 return None;
                             }
                             Some(_) => {
@@ -1030,7 +1192,10 @@ impl Parser {
                     self.diags.error(
                         "forma_duplicada",
                         f.span,
-                        format!("forma '{}' declarada duas vezes — regras não são mescladas", f.name),
+                        format!(
+                            "forma '{}' declarada duas vezes — regras não são mescladas",
+                            f.name
+                        ),
                     );
                 }
             }
@@ -1066,7 +1231,12 @@ impl Parser {
 
         // keep de forma inexistente (cláusula de erro — AGENTS.md §2.2)
         if let Some(main) = &program.main {
-            fn pass(stmts: &[Statement], forms: &std::collections::BTreeSet<&str>, diags: &mut Diagnostics, main_span: Span) {
+            fn pass(
+                stmts: &[Statement],
+                forms: &std::collections::BTreeSet<&str>,
+                diags: &mut Diagnostics,
+                main_span: Span,
+            ) {
                 for st in stmts {
                     match st {
                         Statement::Keep(name) => {

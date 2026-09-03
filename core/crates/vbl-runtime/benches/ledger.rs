@@ -15,16 +15,19 @@
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use std::path::PathBuf;
 use vbl_lang::parse;
-use vbl_runtime::ledger::{Ledger, ChainLedger, NoopLedger};
-use vbl_runtime::production_ledger::ProductionLedger;
 use vbl_runtime::json::Json;
+use vbl_runtime::ledger::{ChainLedger, Ledger, NoopLedger};
+use vbl_runtime::production_ledger::ProductionLedger;
 use vbl_runtime::{load, Engine, FxpSimulator};
 
 fn bench_path(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
         "vbl-bench-caderno-{tag}-{}-{}",
         std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     let _ = std::fs::create_dir_all(&dir);
     dir.join("caderno.vcad")
@@ -92,7 +95,9 @@ fn bench_ledger_overhead(c: &mut Criterion) {
 
     let mut program = String::new();
     for i in 0..1000 {
-        program.push_str(&format!("event F{i} {{ value: \"v{i}\", horizon: 1000000s }}\n"));
+        program.push_str(&format!(
+            "event F{i} {{ value: \"v{i}\", horizon: 1000000s }}\n"
+        ));
     }
     let (p, d) = parse(&program);
     assert!(!d.has_errors());

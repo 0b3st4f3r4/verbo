@@ -3,15 +3,12 @@
 //! reclassificação recusada por falta de deadline, exchange_mode não
 //! canônico, modo de permuta default e vazamento sem ativas.
 
-use vbl_runtime::ledger::kinds;
-use vbl_runtime::{Engine, FxpSimulator, load};
 use vbl_lang::parse;
+use vbl_runtime::ledger::kinds;
+use vbl_runtime::{load, Engine, FxpSimulator};
 
 fn dir(nome: &str) -> std::path::PathBuf {
-    std::env::temp_dir().join(format!(
-        "vbl-engine-clauses-{nome}-{}",
-        std::process::id()
-    ))
+    std::env::temp_dir().join(format!("vbl-engine-clauses-{nome}-{}", std::process::id()))
 }
 
 type Eng = Engine<FxpSimulator>;
@@ -43,7 +40,12 @@ fn notify_shutdown_encerra_o_tick_com_registro() {
     assert!(
         tem(&engine, "ASSESSMENT", "Desligando cargas secundárias"),
         "eventos: {:?}",
-        engine.ledger.events.iter().map(|e| format!("{}|{}", e.kind, e.msg)).collect::<Vec<_>>()
+        engine
+            .ledger
+            .events
+            .iter()
+            .map(|e| format!("{}|{}", e.kind, e.msg))
+            .collect::<Vec<_>>()
     );
 }
 
@@ -57,8 +59,16 @@ fn reclassify_para_nonequilibrium_sem_deadline_e_recusado() {
          review A { when cpu_temp > 1 -> reclassify_as_nonequilibrium }",
     );
     engine.tick();
-    assert!(tem(&engine, kinds::RECLASSIFY_NO_DEADLINE, "A"),
-        "eventos: {:?}", engine.ledger.events.iter().map(|e| format!("{}|{}", e.kind, e.msg)).collect::<Vec<_>>());
+    assert!(
+        tem(&engine, kinds::RECLASSIFY_NO_DEADLINE, "A"),
+        "eventos: {:?}",
+        engine
+            .ledger
+            .events
+            .iter()
+            .map(|e| format!("{}|{}", e.kind, e.msg))
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -80,8 +90,16 @@ fn exchange_mode_nao_canonica_gera_alerta_e_default_cooperation() {
         .events
         .iter()
         .any(|e| e.msg.contains("permuta") || e.msg.contains("exchange"));
-    assert!(algum_alerta,
-        "eventos: {:?}", engine.ledger.events.iter().map(|e| format!("{}|{}", e.kind, e.msg)).collect::<Vec<_>>());
+    assert!(
+        algum_alerta,
+        "eventos: {:?}",
+        engine
+            .ledger
+            .events
+            .iter()
+            .map(|e| format!("{}|{}", e.kind, e.msg))
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]

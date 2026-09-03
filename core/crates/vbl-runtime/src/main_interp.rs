@@ -4,9 +4,9 @@
 //! tick (contrato do loader da Etapa 1); blocos `every` vencidos executam
 //! uma vez por tick (`run_due`, chamado antes do tick do engine).
 
-use crate::ledger::{kinds, Ledger};
 use crate::engine::Engine;
 use crate::fxp::{Fxp, Value};
+use crate::ledger::{kinds, Ledger};
 use vbl_lang::Conjugation;
 
 /// Statement compilado do bloco `main`.
@@ -34,8 +34,11 @@ pub struct MainInterpreter {
 impl MainInterpreter {
     /// Registra um bloco `every <periodo> { <statements> }`.
     pub fn add_every(&mut self, period_s: f64, statements: Vec<StmtRt>) {
-        self.every_blocks
-            .push(EveryBlock { period_s, next_due: period_s, statements });
+        self.every_blocks.push(EveryBlock {
+            period_s,
+            next_due: period_s,
+            statements,
+        });
     }
 
     /// Executa os blocos `every` vencidos; chamado uma vez por tick,
@@ -79,12 +82,23 @@ impl MainInterpreter {
                         .form(name)
                         .and_then(|f| f.maintenance.as_ref().map(|m| m.last + m.deadline_s))
                         .unwrap_or(engine.sim_time);
-                    engine.scheduler.schedule(name, crate::scheduler::Deadline::Maintenance, deadline, version);
+                    engine.scheduler.schedule(
+                        name,
+                        crate::scheduler::Deadline::Maintenance,
+                        deadline,
+                        version,
+                    );
                 } else {
-                    let conj = engine.form(name).map(|f| f.conjugation).unwrap_or(Conjugation::Event);
+                    let conj = engine
+                        .form(name)
+                        .map(|f| f.conjugation)
+                        .unwrap_or(Conjugation::Event);
                     engine.ledger.record(
                         kinds::KEEP_IGNORED,
-                        &format!("keep('{name}'): conjugação {} não exige manutenção.", conj.name()),
+                        &format!(
+                            "keep('{name}'): conjugação {} não exige manutenção.",
+                            conj.name()
+                        ),
                         Json::obj([("forma", Json::str(name))]),
                     );
                 }

@@ -10,8 +10,7 @@ use vbl_runtime::Engine;
 use vbl_runtime::FxpSimulator;
 
 fn tmpdir(nome: &str) -> std::path::PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("vbl-tail-{}-{nome}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("vbl-tail-{}-{nome}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -77,7 +76,10 @@ fn instante_virtual_e_acessorios_da_fila_de_prazos() {
 
 #[test]
 fn falha_de_sensor_tem_motivo_canonico() {
-    assert_eq!(SensorFailure::NotRegistered.reason(), "sensor_nao_registrado");
+    assert_eq!(
+        SensorFailure::NotRegistered.reason(),
+        "sensor_nao_registrado"
+    );
     assert_eq!(SensorFailure::Inaccessible.reason(), "sensor_inacessivel");
 }
 
@@ -89,13 +91,19 @@ fn falha_de_sensor_tem_motivo_canonico() {
 fn canon_formata_expressoes_strings_e_classificacao() {
     use vbl_lang::{canon, Expression, Span};
     let sp = Span::default();
-    assert_eq!(canon::fmt_expression(&Expression::ident("cheio", sp)), "cheio");
+    assert_eq!(
+        canon::fmt_expression(&Expression::ident("cheio", sp)),
+        "cheio"
+    );
     assert_eq!(canon::fmt_expression(&Expression::num(2.5, sp)), "2.5");
     assert_eq!(
         canon::fmt_expression(&Expression::str("a\"b\\c\nd\te", sp)),
         "\"a\\\"b\\\\c\\nd\\te\""
     );
-    assert_eq!(canon::fmt_string_literal("linha1\nlinha2"), "\"linha1\\nlinha2\"");
+    assert_eq!(
+        canon::fmt_string_literal("linha1\nlinha2"),
+        "\"linha1\\nlinha2\""
+    );
 
     // forma com classification ganha o atributo no canônico…
     let mut forma = forma_base();
@@ -139,19 +147,27 @@ fn forma_base() -> vbl_runtime::Form {
 fn caderno_reset_e_busca_com_filtro_de_campo() {
     use vbl_runtime::ledger::Ledger as _;
     let mut ledger = vbl_runtime::ChainLedger::new();
-    ledger.info("primeiro", Json::obj([("forma", Json::str("A")), ("chave", Json::str("x"))]));
-    ledger.info("segundo", Json::obj([("forma", Json::str("B")), ("chave", Json::str("y"))]));
+    ledger.info(
+        "primeiro",
+        Json::obj([("forma", Json::str("A")), ("chave", Json::str("x"))]),
+    );
+    ledger.info(
+        "segundo",
+        Json::obj([("forma", Json::str("B")), ("chave", Json::str("y"))]),
+    );
     // filtro por campo exato do extra
     assert_eq!(ledger.search("INFO", &[("forma", Json::str("A"))]).len(), 1);
-    assert_eq!(ledger.search("INFO", &[("inexistente", Json::str("A"))]).len(), 0);
+    assert_eq!(
+        ledger
+            .search("INFO", &[("inexistente", Json::str("A"))])
+            .len(),
+        0
+    );
     assert_eq!(ledger.search("INFO", &[]).len(), 2);
     // reset devolve a cabeça inicial
     ledger.reset();
     assert_eq!(ledger.events.len(), 0);
-    assert_eq!(
-        ledger.chain_head(),
-        vbl_runtime::ChainLedger::INITIAL_HEAD
-    );
+    assert_eq!(ledger.chain_head(), vbl_runtime::ChainLedger::INITIAL_HEAD);
 }
 
 // ---------------------------------------------------------------------------
@@ -184,8 +200,7 @@ fn reload_ignora_diretorio_ausente_e_suportes_invalidos() {
     // 4. caminho íntegro: equilibrium persistida recarrega (contrato da Etapa 2)
     let dir3 = tmpdir("reload-ok");
     let mut engine = Engine::new(FxpSimulator::new(), 1.0, &dir3);
-    let (program, diags) =
-        vbl_lang::parse("equilibrium E { value: 1, horizon: 300s }\n");
+    let (program, diags) = vbl_lang::parse("equilibrium E { value: 1, horizon: 300s }\n");
     assert!(!diags.has_errors());
     let _ = carregar(&mut engine, &program);
     // persistência manual do engine: reclassify grava; aqui força via runtime
@@ -203,8 +218,7 @@ fn keep_de_forma_inexistente_e_de_event_sao_auditados() {
     let mut engine = Engine::new(FxpSimulator::new(), 1.0, &dir);
     // horizon 0: a forma dissolve no primeiro tick; no segundo, o keep do
     // main encontra a forma ausente → cláusula KEEP_UNKNOWN_FORM
-    let (program, diags) =
-        vbl_lang::parse("event E { value: 1, horizon: 0s }\nmain { keep(E) }\n");
+    let (program, diags) = vbl_lang::parse("event E { value: 1, horizon: 0s }\nmain { keep(E) }\n");
     assert!(!diags.has_errors(), "{diags}");
     let mut interp = vbl_runtime::load(&mut engine, &program);
     interp.run_due(&mut engine); // tick 0: keep com a forma viva → KEEP_IGNORED

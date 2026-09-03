@@ -4,12 +4,12 @@
 
 use std::io::Write;
 use std::path::PathBuf;
-use vbl_runtime::ledger::{Actuation, Ledger, ChainLedger};
+use vbl_runtime::fxp::Value;
+use vbl_runtime::json::Json;
+use vbl_runtime::ledger::{Actuation, ChainLedger, Ledger};
 use vbl_runtime::production_ledger::{
     jsonl_from_binary, verify, verify_binary, verify_jsonl, ProductionLedger,
 };
-use vbl_runtime::fxp::Value;
-use vbl_runtime::json::Json;
 use vbl_runtime::{load, Engine, FxpSimulator};
 
 fn temp_dir(name: &str) -> PathBuf {
@@ -29,9 +29,17 @@ fn async_write_produces_intact_chain() {
     let path = dir.join("caderno.vcad");
     let mut ledger = ProductionLedger::open(&path).unwrap();
     ledger.set_time(1, 1.0);
-    ledger.record("INFO", "primeiro evento", Json::obj([("forma", Json::str("A"))]));
+    ledger.record(
+        "INFO",
+        "primeiro evento",
+        Json::obj([("forma", Json::str("A"))]),
+    );
     ledger.set_time(2, 2.0);
-    ledger.record("INFO", "segundo evento", Json::obj([("forma", Json::str("B"))]));
+    ledger.record(
+        "INFO",
+        "segundo evento",
+        Json::obj([("forma", Json::str("B"))]),
+    );
     let summary = ledger.close().unwrap();
     assert_eq!(summary.events, 2);
     assert!(summary.bytes > 5 + 4);
@@ -75,7 +83,11 @@ fn jsonl_from_binary_reproduces_chain() {
     let jsonl = dir.join("caderno.jsonl");
     let mut ledger = ProductionLedger::open(&binary).unwrap();
     ledger.set_time(3, 3.0);
-    ledger.record("INFO", "com timestamps", Json::obj([("forma", Json::str("A"))]));
+    ledger.record(
+        "INFO",
+        "com timestamps",
+        Json::obj([("forma", Json::str("A"))]),
+    );
     ledger.close().unwrap();
 
     let n = jsonl_from_binary(&binary, &jsonl).unwrap();
@@ -83,12 +95,21 @@ fn jsonl_from_binary_reproduces_chain() {
     let rel_bin = verify_binary(&binary).unwrap();
     let rel_jsonl = verify_jsonl(&jsonl).unwrap();
     assert!(rel_jsonl.chain_ok);
-    assert_eq!(rel_bin.chain_head, rel_jsonl.chain_head, "mesma cadeia nos dois formatos");
+    assert_eq!(
+        rel_bin.chain_head, rel_jsonl.chain_head,
+        "mesma cadeia nos dois formatos"
+    );
 
     // o JSONL exporta os timestamps no nível superior (AGENTS §1.4)
     let text = std::fs::read_to_string(&jsonl).unwrap();
-    assert!(text.contains("\"tick\":3"), "tick do relógio virtual no JSONL: {text}");
-    assert!(text.contains("\"t\":3"), "t (segundos virtuais) no JSONL: {text}");
+    assert!(
+        text.contains("\"tick\":3"),
+        "tick do relógio virtual no JSONL: {text}"
+    );
+    assert!(
+        text.contains("\"t\":3"),
+        "t (segundos virtuais) no JSONL: {text}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -200,8 +221,14 @@ fn actuation_records_applied_latency_and_cost() {
     jsonl_from_binary(&path, &jsonl).unwrap();
     let text = std::fs::read_to_string(&jsonl).unwrap();
     let actuation_line = text.lines().next().unwrap();
-    assert!(actuation_line.contains("\"aplicado\":50"), "{actuation_line}");
-    assert!(actuation_line.contains("\"latencia_us\":250"), "{actuation_line}");
+    assert!(
+        actuation_line.contains("\"aplicado\":50"),
+        "{actuation_line}"
+    );
+    assert!(
+        actuation_line.contains("\"latencia_us\":250"),
+        "{actuation_line}"
+    );
     assert!(
         actuation_line.contains("\"custo_estimado_joules\":0.025"),
         "custo = potência × latência: {actuation_line}"
@@ -209,7 +236,10 @@ fn actuation_records_applied_latency_and_cost() {
     // falha não tem valor aplicado nem custo (nada foi aplicado)
     let failure_line = text.lines().nth(1).unwrap();
     assert!(!failure_line.contains("\"aplicado\""), "{failure_line}");
-    assert!(!failure_line.contains("\"custo_estimado_joules\""), "{failure_line}");
+    assert!(
+        !failure_line.contains("\"custo_estimado_joules\""),
+        "{failure_line}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -265,7 +295,9 @@ fn stress_10k_forms_all_events_recorded() {
     );
     let mut source = String::new();
     for i in 0..FORMS {
-        source.push_str(&format!("event F{i} {{ value: \"v{i}\", horizon: 1000000s }}\n"));
+        source.push_str(&format!(
+            "event F{i} {{ value: \"v{i}\", horizon: 1000000s }}\n"
+        ));
     }
     let (program, diags) = vbl_lang::parse(&source);
     assert!(!diags.has_errors());
@@ -283,10 +315,7 @@ fn stress_10k_forms_all_events_recorded() {
     assert!(rel.chain_ok, "cadeia íntegra sob carga máxima");
     assert!(rel.total_joules > 0.0);
     // robustez: nenhum evento perdido na fila (AGENTS §1.4 — 99,99%+)
-    assert_eq!(
-        rel.counts.get("LEAK"),
-        Some(&((FORMS * TICKS) as u64))
-    );
+    assert_eq!(rel.counts.get("LEAK"), Some(&((FORMS * TICKS) as u64)));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -303,8 +332,14 @@ fn deterministic_json_parser_roundtrip() {
         ("valor", Json::num(200.0)),
         ("decimal", Json::num(0.5)),
         ("negativo", Json::num(-3.25)),
-        ("lista", Json::Arr(vec![Json::str("a"), Json::boolean(true), Json::Null])),
-        ("objeto", Json::obj([("chave", Json::str("valor \"escapado\""))])),
+        (
+            "lista",
+            Json::Arr(vec![Json::str("a"), Json::boolean(true), Json::Null]),
+        ),
+        (
+            "objeto",
+            Json::obj([("chave", Json::str("valor \"escapado\""))]),
+        ),
     ]);
     let text = original.serialize();
     let n_read = Json::parse(&text).expect("parser deve ler o que o serializador escreve");
@@ -346,8 +381,12 @@ fn vcad_lines(path: &std::path::Path) -> Vec<String> {
     let mut lines = Vec::new();
     while pos + 4 <= data.len() {
         let size = u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
-        let Some(line) = data.get(pos + 4..pos + 4 + size) else { break };
-        let Some(_) = data.get(pos + 4 + size..pos + 4 + size + 32) else { break };
+        let Some(line) = data.get(pos + 4..pos + 4 + size) else {
+            break;
+        };
+        let Some(_) = data.get(pos + 4 + size..pos + 4 + size + 32) else {
+            break;
+        };
         lines.push(String::from_utf8(line.to_vec()).unwrap());
         pos += 4 + size + 32;
     }
@@ -407,7 +446,10 @@ fn leak_direct_path_identical_to_general_composition() {
     let n = jsonl_from_binary(&path, &jsonl).unwrap();
     assert_eq!(n, casos.len());
     let rel_jsonl = verify_jsonl(&jsonl).unwrap();
-    assert!(rel_jsonl.chain_ok, "cadeia do JSONL exportado deve verificar");
+    assert!(
+        rel_jsonl.chain_ok,
+        "cadeia do JSONL exportado deve verificar"
+    );
     // Joules agregados batem com a soma canônica dos casos
     let expected_j: f64 = casos.iter().map(|(_, w, s, _, _)| w * s).sum();
     assert!((rel_jsonl.total_joules - expected_j).abs() < 1e-9);
@@ -443,7 +485,11 @@ fn leak_registra_vazamento_e_media_por_forma() {
     ledger.leak("FormaVazando", 7.5, 1.0); // segunda partilha, mesma forma
     let summary = ledger.close().unwrap();
     assert_eq!(summary.events, 2);
-    assert!((summary.total_joules - 15.0).abs() < 1e-9, "{}", summary.total_joules);
+    assert!(
+        (summary.total_joules - 15.0).abs() < 1e-9,
+        "{}",
+        summary.total_joules
+    );
     // joules_per_form agrega POR FORMA: 2 partilhas de 7,5 J na mesma forma
     // ⇒ média por forma com vazamento = 15 J.
     let media = summary.avg_joules_per_form();
@@ -590,7 +636,10 @@ fn verify_binary_detecta_hash_trocada_e_rodape_mentiroso() {
     bytes2.extend_from_slice(&[b'z'; 64]);
     std::fs::write(&path2, &bytes2).unwrap();
     let rel2 = verify_binary(&path2).unwrap();
-    assert!(!rel2.chain_ok || !rel2.footer_ok, "rodapé mentiroso deve falhar");
+    assert!(
+        !rel2.chain_ok || !rel2.footer_ok,
+        "rodapé mentiroso deve falhar"
+    );
 }
 
 // ── Rodapé, JSONL e conversão: cláusulas restantes da verificação ─────────
@@ -680,11 +729,7 @@ fn verify_jsonl_exige_kind_e_hash_e_toleram_sem_msg_seq() {
         linha.as_bytes(),
     );
     let ok = dir.join("ok.jsonl");
-    std::fs::write(
-        &ok,
-        format!("{{\"kind\":\"INFO\",\"hash\":\"{hash}\"}}\n"),
-    )
-    .unwrap();
+    std::fs::write(&ok, format!("{{\"kind\":\"INFO\",\"hash\":\"{hash}\"}}\n")).unwrap();
     let rel = verify_jsonl(&ok).unwrap();
     assert!(rel.chain_ok, "{rel:?}");
     assert_eq!(rel.events, 1);
@@ -714,7 +759,11 @@ fn jsonl_from_binary_converte_ledger_real_e_recusa_nao_vcad() {
     // caminho feliz: ledger com ACTUATION (stats v1.1) e um INFO.
     let mut ledger = ProductionLedger::open(dir.join("c.vcad")).unwrap();
     ledger.record("INFO", "olá", Json::obj([("forma", Json::str("A"))]));
-    ledger.record("ACTUATION", "atuou", Json::obj([("ator", Json::str("Fan"))]));
+    ledger.record(
+        "ACTUATION",
+        "atuou",
+        Json::obj([("ator", Json::str("Fan"))]),
+    );
     ledger.close().unwrap();
     let bin = dir.join("c.vcad");
     let jsonl = dir.join("c.jsonl");
@@ -764,7 +813,10 @@ fn verify_jsonl_contabiliza_actuation_e_alertas() {
     let jsonl = dir.join("d.jsonl");
     jsonl_from_binary(&dir.join("d.vcad"), &jsonl).unwrap();
     let rel = verify_jsonl(&jsonl).unwrap();
-    assert!(rel.chain_ok && rel.counts.get("ACTUATION") == Some(&1), "{rel:?}");
+    assert!(
+        rel.chain_ok && rel.counts.get("ACTUATION") == Some(&1),
+        "{rel:?}"
+    );
 }
 
 #[test]

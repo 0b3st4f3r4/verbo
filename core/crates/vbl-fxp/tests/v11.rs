@@ -14,7 +14,7 @@ use vbl_fxp::registry::{DeviceEntry, FxpConfig, OperationMode};
 use vbl_fxp::schema::caps;
 use vbl_fxp::transport::wait_ready_unix;
 use vbl_fxp::{BusConfig, DeviceRegistry, FxpBus, PeerConfig, PeerServer, RemoteAddr};
-use vbl_runtime::fxp::{ActOutcome, SensorFailure, Fxp, Value};
+use vbl_runtime::fxp::{ActOutcome, Fxp, SensorFailure, Value};
 use vbl_runtime::ledger::ChainLedger;
 use vbl_runtime::FxpSimulator;
 
@@ -50,7 +50,10 @@ fn registry_peer() -> DeviceRegistry {
 fn peer_bus(reg: DeviceRegistry) -> FxpBus {
     FxpBus::build(
         reg,
-        BusConfig { mode: OperationMode::Hybrid, ..Default::default() },
+        BusConfig {
+            mode: OperationMode::Hybrid,
+            ..Default::default()
+        },
         FxpSimulator::new(),
     )
 }
@@ -61,14 +64,20 @@ fn registry_cliente(sock: &std::path::Path, nomes: &[&str]) -> DeviceRegistry {
     let mut cfg = "mode = hibrido\ncache_ttl_ms = 0\n".to_string();
     for n in nomes {
         cfg.push_str(&format!("{n}.grandeza = temperatura\n{n}.unidade = C\n"));
-        cfg.push_str(&format!("{n}.mode = real\n{n}.endpoint = unix:{}\n", sock.display()));
+        cfg.push_str(&format!(
+            "{n}.mode = real\n{n}.endpoint = unix:{}\n",
+            sock.display()
+        ));
     }
     FxpConfig::parse(&cfg).unwrap().apply(&mut r).unwrap();
     r
 }
 
 fn bus_cliente(reg: DeviceRegistry, extra: impl FnOnce(&mut BusConfig)) -> FxpBus {
-    let mut cfg = BusConfig { mode: OperationMode::Hybrid, ..Default::default() };
+    let mut cfg = BusConfig {
+        mode: OperationMode::Hybrid,
+        ..Default::default()
+    };
     extra(&mut cfg);
     FxpBus::build(reg, cfg, FxpSimulator::new())
 }
@@ -83,7 +92,11 @@ fn e2e_caps_batch_timestamp_compression_negociados() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::LZ4 | caps::BATCH | caps::TIMESTAMP, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: caps::LZ4 | caps::BATCH | caps::TIMESTAMP,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -110,14 +123,24 @@ fn e2e_caps_batch_timestamp_compression_negociados() {
     // Timestamp físico do fio (§5): anotação de laboratório, Some quando o
     // peer carimba — o relógio VIRTUAL dos eventos continua sendo do runtime.
     let ts = bus.wire_timestamp_of("temp_a");
-    assert!(ts.is_some(), "peer anunciou TIMESTAMP; leitura deve vir carimbada");
-    assert!(ts.unwrap() > 1_700_000_000_000_000, "µs desde o epoch plausível");
+    assert!(
+        ts.is_some(),
+        "peer anunciou TIMESTAMP; leitura deve vir carimbada"
+    );
+    assert!(
+        ts.unwrap() > 1_700_000_000_000_000,
+        "µs desde o epoch plausível"
+    );
 
     // Prefetch (§4.7): temp_a miss ⇒ lote com os 3 vencidos ⇒ b/c pré-no cache.
     assert_eq!(contar(&ledger, kinds::FXP_BATCH), 1, "um lote, um evento");
     let v2 = bus.read_sensor("temp_b", &mut ledger).unwrap();
     assert!(v2.is_finite());
-    assert_eq!(contar(&ledger, kinds::FXP_BATCH), 1, "temp_b veio do prefetch: sem novo lote");
+    assert_eq!(
+        contar(&ledger, kinds::FXP_BATCH),
+        1,
+        "temp_b veio do prefetch: sem novo lote"
+    );
 
     // Compressão (§4.8): negociada e em uso — nada quebra no roundtrip
     // (frames grandes comprimidos; pequenos viajam planos, decisão do codec).
@@ -142,18 +165,16 @@ fn e2e_auth_psk_chave_certa_abre_errada_fecha() {
     assert!(wait_ready_unix(&sock, DEADLINE));
 
     // Chave certa: handshake transparente, leitura funciona.
-    let mut ok = bus_cliente(
-        registry_cliente(&sock, &["temp_a"]),
-        |c| c.psk = Some(b"chave-compartilhada".to_vec()),
-    );
+    let mut ok = bus_cliente(registry_cliente(&sock, &["temp_a"]), |c| {
+        c.psk = Some(b"chave-compartilhada".to_vec())
+    });
     let mut ledger = ChainLedger::new();
     assert!(ok.read_sensor("temp_a", &mut ledger).is_ok());
 
     // Chave errada: fechamento sem AUTH_OK ⇒ falha honesta (nunca valor).
-    let mut ruim = bus_cliente(
-        registry_cliente(&sock, &["temp_a"]),
-        |c| c.psk = Some(b"chave-errada".to_vec()),
-    );
+    let mut ruim = bus_cliente(registry_cliente(&sock, &["temp_a"]), |c| {
+        c.psk = Some(b"chave-errada".to_vec())
+    });
     let mut ledger2 = ChainLedger::new();
     assert!(matches!(
         ruim.read_sensor("temp_a", &mut ledger2),
@@ -167,7 +188,11 @@ fn e2e_cliente_sem_auth_contra_servidor_com_psk_falha_fechado() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: Some(b"segredo".to_vec()), caps: 0, ..Default::default() },
+        PeerConfig {
+            psk: Some(b"segredo".to_vec()),
+            caps: 0,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -180,7 +205,11 @@ fn e2e_cliente_sem_auth_contra_servidor_com_psk_falha_fechado() {
         bus.read_sensor("temp_a", &mut ledger),
         Err(SensorFailure::Inaccessible)
     ));
-    assert_eq!(contar(&ledger, "ALERT"), 1, "falha de I/O registrada com alerta");
+    assert_eq!(
+        contar(&ledger, "ALERT"),
+        1,
+        "falha de I/O registrada com alerta"
+    );
 }
 
 #[test]
@@ -189,7 +218,11 @@ fn e2e_falha_de_item_no_lote_so_alerta_quando_o_programa_pede() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::BATCH, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: caps::BATCH,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -205,7 +238,11 @@ fn e2e_falha_de_item_no_lote_so_alerta_quando_o_programa_pede() {
     // do schema: o alerta pertence à pergunta feita).
     let v = bus.read_sensor("temp_a", &mut ledger).unwrap();
     assert!(v.is_finite());
-    assert_eq!(contar(&ledger, "ALERT"), 0, "falha pré-buscada não é alertada");
+    assert_eq!(
+        contar(&ledger, "ALERT"),
+        0,
+        "falha pré-buscada não é alertada"
+    );
 
     // Agora o programa pede temp_bad: cache-miss ⇒ READ individual ⇒ erro
     // honesto com alerta (condição não avaliada neste tick).
@@ -224,20 +261,19 @@ fn e2e_peer_v1_0_degrada_com_evento_e_continua_operando() {
     use vbl_fxp::transport::serve_unix;
     let sock = tmpdir("v10");
     let _srv = serve_unix(&sock, |msg| match msg.opcode {
-        vbl_fxp::schema::op::READ => Some(vbl_fxp::Message::read_ok(42.0, "temp_a", false, msg.seq)),
+        vbl_fxp::schema::op::READ => {
+            Some(vbl_fxp::Message::read_ok(42.0, "temp_a", false, msg.seq))
+        }
         _ => Some(vbl_fxp::Message::bye(msg.seq)),
     })
     .expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
 
-    let mut bus = bus_cliente(
-        registry_cliente(&sock, &["temp_a"]),
-        |c| {
-            c.batch_prefetch = true;
-            c.compression = true;
-            c.wire_timestamp = true;
-        },
-    );
+    let mut bus = bus_cliente(registry_cliente(&sock, &["temp_a"]), |c| {
+        c.batch_prefetch = true;
+        c.compression = true;
+        c.wire_timestamp = true;
+    });
     let mut ledger = ChainLedger::new();
     let v = bus.read_sensor("temp_a", &mut ledger).unwrap();
     assert_eq!(v, 42.0);
@@ -255,7 +291,10 @@ fn e2e_peer_v1_0_degrada_com_evento_e_continua_operando() {
 
 fn multicast_ou_skip() -> bool {
     let g = vbl_fxp::discover::DEFAULT_GROUP;
-    let ip = match g.ip() { std::net::IpAddr::V4(v) => v, _ => return false };
+    let ip = match g.ip() {
+        std::net::IpAddr::V4(v) => v,
+        _ => return false,
+    };
     std::net::UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))
         .and_then(|s| s.join_multicast_v4(&ip, &std::net::Ipv4Addr::UNSPECIFIED))
         .is_ok()
@@ -275,7 +314,11 @@ fn e2e_descoberta_resolve_peer_no_build_e_sem_anuncio_inacessivel() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::TIMESTAMP, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: caps::TIMESTAMP,
+            ..Default::default()
+        },
     );
     let (_srv, port) = serve_tcp_peer(&peer).expect("servidor tcp");
     // Origem do beacon = interface de saída multicast; o servidor escuta em
@@ -300,7 +343,10 @@ fn e2e_descoberta_resolve_peer_no_build_e_sem_anuncio_inacessivel() {
         c.wire_timestamp = true;
     });
     let mut ledger = ChainLedger::new();
-    assert!(bus.read_sensor("temp_a", &mut ledger).is_ok(), "descoberto ⇒ leitura funciona");
+    assert!(
+        bus.read_sensor("temp_a", &mut ledger).is_ok(),
+        "descoberto ⇒ leitura funciona"
+    );
     assert!(bus.wire_timestamp_of("temp_a").is_some());
 
     // Endpoint descritível de volta (probe/config).
@@ -313,12 +359,24 @@ fn e2e_descoberta_resolve_peer_no_build_e_sem_anuncio_inacessivel() {
     .unwrap()
     .apply(&mut r2)
     .unwrap();
-    let mut bus2 = bus_cliente(r2, |c| { c.discover_window = Duration::from_millis(150); });
+    let mut bus2 = bus_cliente(r2, |c| {
+        c.discover_window = Duration::from_millis(150);
+    });
     // Sem anúncio no prazo: registrado porém inacessível (FORMAL §4.7) —
     // construção NUNCA falha.
-    let entrada = bus2.registry_rico().devices().find(|d| d.name == "temp_a").unwrap();
+    let entrada = bus2
+        .registry_rico()
+        .devices()
+        .find(|d| d.name == "temp_a")
+        .unwrap();
     assert!(matches!(entrada.endpoint, Endpoint::AutoRemote { .. }));
-    assert_eq!(Endpoint::AutoRemote { identifier: "x".into() }.description(), "discover:x");
+    assert_eq!(
+        Endpoint::AutoRemote {
+            identifier: "x".into()
+        }
+        .description(),
+        "discover:x"
+    );
     let mut led2 = ChainLedger::new();
     assert!(matches!(
         bus2.read_sensor("temp_a", &mut led2),
@@ -337,23 +395,39 @@ fn registry_peer_com_ator() -> DeviceRegistry {
     // Ator do peer com limites: 10..255, safety 200.
     let _ = r.register(DeviceEntry::actor(
         "Fan",
-        ActorLimits { min: Some(10.0), max: Some(255.0), safety_limit: Some(200.0) },
+        ActorLimits {
+            min: Some(10.0),
+            max: Some(255.0),
+            safety_limit: Some(200.0),
+        },
     ));
     // Ator de fallback citável (ReserveFan).
     let _ = r.register(DeviceEntry::actor(
         "ReserveFan",
-        ActorLimits { min: Some(10.0), max: Some(255.0), safety_limit: None },
+        ActorLimits {
+            min: Some(10.0),
+            max: Some(255.0),
+            safety_limit: None,
+        },
     ));
     // Ator de extensão com min > 0: o sim do peer NÃO o pré-registra,
     // então os limites do registro rico valem (min 50/max 100).
     let _ = r.register(DeviceEntry::actor(
         "Servo",
-        ActorLimits { min: Some(50.0), max: Some(100.0), safety_limit: None },
+        ActorLimits {
+            min: Some(50.0),
+            max: Some(100.0),
+            safety_limit: None,
+        },
     ));
     // Ator que FALHA no peer (endpoint morto) — dispara fallback.
     let mut moribundo = DeviceEntry::actor(
         "Dying",
-        ActorLimits { min: Some(0.0), max: Some(255.0), safety_limit: None },
+        ActorLimits {
+            min: Some(0.0),
+            max: Some(255.0),
+            safety_limit: None,
+        },
     );
     moribundo.mode = vbl_fxp::registry::DeviceMode::Real;
     moribundo.endpoint = vbl_fxp::registry::Endpoint::Remote {
@@ -375,7 +449,11 @@ fn e2e_act_remota_entrega_rejeita_e_aplica_fallback() {
     let peer = PeerServer::new(
         peer_bus(reg),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::TIMESTAMP, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: caps::TIMESTAMP,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -393,11 +471,10 @@ fn e2e_act_remota_entrega_rejeita_e_aplica_fallback() {
         sock.display()
     );
     cfg.push_str("fallback.Fan = ReserveFan\n");
-    FxpConfig::parse(&cfg)
-        .unwrap()
-        .apply(&mut reg_cli)
-        .unwrap();
-    let mut bus = bus_cliente(reg_cli, |c| { c.wire_timestamp = true; });
+    FxpConfig::parse(&cfg).unwrap().apply(&mut reg_cli).unwrap();
+    let mut bus = bus_cliente(reg_cli, |c| {
+        c.wire_timestamp = true;
+    });
     let mut ledger = ChainLedger::new();
 
     // 1) Entregue: valor dentro dos limites.
@@ -449,7 +526,9 @@ fn peer_responde_hello_heartbeat_e_ignora_desconhecido() {
     let mut c = Connection::unix(&sock, Duration::from_secs(2)).expect("conectar");
 
     // HELLO devolve o registro DO servidor (§4.4) — com DeviceDesc preenchido.
-    let resp = c.request(&Message::hello(Vec::new(), 1), Duration::from_secs(2)).expect("hello");
+    let resp = c
+        .request(&Message::hello(Vec::new(), 1), Duration::from_secs(2))
+        .expect("hello");
     let Body::Hello { devices, .. } = resp.body else {
         panic!("esperava HELLO_OK, veio {:?}", resp.opcode)
     };
@@ -471,7 +550,10 @@ fn peer_responde_hello_heartbeat_e_ignora_desconhecido() {
     s.flush().unwrap();
     let mut buf = [0u8; 16];
     let n = s.read(&mut buf).unwrap_or(0);
-    assert_eq!(n, 0, "peer deve fechar diante de opcode desconhecido (recebeu {n} bytes)");
+    assert_eq!(
+        n, 0,
+        "peer deve fechar diante de opcode desconhecido (recebeu {n} bytes)"
+    );
 }
 
 #[test]
@@ -481,7 +563,11 @@ fn batch_de_um_sensor_cai_no_caminho_individual() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::BATCH, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: caps::BATCH,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -489,7 +575,9 @@ fn batch_de_um_sensor_cai_no_caminho_individual() {
     // Cliente com apenas temp_b remota (temp_a/temp_c fora do registro →
     // alvos_de_batch devolve só temp_b = 1 item).
     let reg = registry_cliente(&sock, &["temp_b"]);
-    let mut bus = bus_cliente(reg, |c| { c.batch_prefetch = true; });
+    let mut bus = bus_cliente(reg, |c| {
+        c.batch_prefetch = true;
+    });
     let mut ledger = ChainLedger::new();
     assert!(bus.read_sensor("temp_b", &mut ledger).is_ok());
     // Sem evento de lote: 1 item = caminho individual (§4.7).
@@ -507,7 +595,11 @@ fn e2e_act_ack_rejeicao_por_minimo_maximo_e_outros_acks() {
     let peer = PeerServer::new(
         peer_bus(registry_peer_com_ator()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::TIMESTAMP, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: caps::TIMESTAMP,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -531,18 +623,26 @@ fn e2e_act_ack_rejeicao_por_minimo_maximo_e_outros_acks() {
         sock.display()
     );
     FxpConfig::parse(&cfg2).unwrap().apply(&mut reg).unwrap();
-    let mut bus = bus_cliente(reg, |c| { c.wire_timestamp = true; });
+    let mut bus = bus_cliente(reg, |c| {
+        c.wire_timestamp = true;
+    });
     let mut ledger = ChainLedger::new();
 
     // Abaixo do MÍNIMO do peer ⇒ ACT_ACK Rejected(limit=Min) mapeado de volta.
     assert!(matches!(
         bus.act("Servo", Value::Num(5.0), &mut ledger),
-        ActOutcome::Rejected { limit: vbl_runtime::fxp::Limit::Min, .. }
+        ActOutcome::Rejected {
+            limit: vbl_runtime::fxp::Limit::Min,
+            ..
+        }
     ));
     // Acima do MÁXIMO do peer ⇒ Rejected(Max).
     assert!(matches!(
         bus.act("Servo", Value::Num(300.0), &mut ledger),
-        ActOutcome::Rejected { limit: vbl_runtime::fxp::Limit::Max, .. }
+        ActOutcome::Rejected {
+            limit: vbl_runtime::fxp::Limit::Max,
+            ..
+        }
     ));
     // Valor Ident (não numérico) atravessa o fio e volta do peer.
     let _ = bus.act("Fan", Value::Ident("auto".into()), &mut ledger);
@@ -573,7 +673,11 @@ fn e2e_item_de_lote_com_erro_do_peer_so_alerta_quando_perguntado() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::BATCH, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: caps::BATCH,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -586,7 +690,9 @@ fn e2e_item_de_lote_com_erro_do_peer_so_alerta_quando_perguntado() {
         sock.display()
     );
     FxpConfig::parse(&cfg).unwrap().apply(&mut reg).unwrap();
-    let mut bus = bus_cliente(reg, |c| { c.batch_prefetch = true; });
+    let mut bus = bus_cliente(reg, |c| {
+        c.batch_prefetch = true;
+    });
     let mut ledger = ChainLedger::new();
 
     // 1ª pergunta: temp_bad (o lote leva temp_a + temp_bad = 2 itens). O peer
@@ -600,10 +706,16 @@ fn e2e_item_de_lote_com_erro_do_peer_so_alerta_quando_perguntado() {
     // (temp_bad ficou inacessível) e volta OK.
     assert!(bus.read_sensor("temp_a", &mut ledger).is_ok());
     assert!(
-        ledger.events.iter().all(|e| e.kind != "ALERT"
-            || !e.msg.contains("temp_a")),
+        ledger
+            .events
+            .iter()
+            .all(|e| e.kind != "ALERT" || !e.msg.contains("temp_a")),
         "temp_a acessível não deve virar alerta: {:?}",
-        ledger.events.iter().filter(|e| e.kind == "ALERT").collect::<Vec<_>>()
+        ledger
+            .events
+            .iter()
+            .filter(|e| e.kind == "ALERT")
+            .collect::<Vec<_>>()
     );
 }
 
@@ -617,7 +729,11 @@ fn peer_fecha_conexao_com_lixo_pre_autenticacao() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: Some(b"segredo".to_vec()), caps: 0, ..Default::default() },
+        PeerConfig {
+            psk: Some(b"segredo".to_vec()),
+            caps: 0,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -628,7 +744,11 @@ fn peer_fecha_conexao_com_lixo_pre_autenticacao() {
     let mut s = std::os::unix::net::UnixStream::connect(&sock).expect("conectar");
     let mut challenge = [0u8; 4 + 12 + 2 + 32];
     s.read_exact(&mut challenge).expect("challenge do peer");
-    assert_eq!(&challenge[4..7], b"FXP", "primeiro frame deve ser o challenge");
+    assert_eq!(
+        &challenge[4..7],
+        b"FXP",
+        "primeiro frame deve ser o challenge"
+    );
 
     // READ comum antes do PSK ⇒ o peer fecha sem responder (fail-closed).
     s.write_all(&frame).unwrap();
@@ -672,7 +792,9 @@ fn peer_cru_responde_lote_com_opcode_errado_e_bus_falha_honesto() {
         sock.display()
     );
     FxpConfig::parse(&cfg).unwrap().apply(&mut reg).unwrap();
-    let mut bus = bus_cliente(reg, |c| { c.batch_prefetch = true; });
+    let mut bus = bus_cliente(reg, |c| {
+        c.batch_prefetch = true;
+    });
     let mut ledger = ChainLedger::new();
 
     let r = bus.read_sensor("temp_a", &mut ledger);
@@ -689,7 +811,11 @@ fn peer_batch_item_nao_registrado_viaja_e_vira_alerta_tipado() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::BATCH, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: caps::BATCH,
+            ..Default::default()
+        },
     );
     assert_eq!(peer.config().caps, caps::BATCH, "acessor de config honesto");
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
@@ -702,7 +828,9 @@ fn peer_batch_item_nao_registrado_viaja_e_vira_alerta_tipado() {
         sock.display()
     );
     FxpConfig::parse(&cfg).unwrap().apply(&mut reg).unwrap();
-    let mut bus = bus_cliente(reg, |c| { c.batch_prefetch = true; });
+    let mut bus = bus_cliente(reg, |c| {
+        c.batch_prefetch = true;
+    });
     let mut ledger = ChainLedger::new();
 
     // O PEER não conhece o nome ⇒ item Err(nao_registrado) espelhado de
@@ -723,12 +851,20 @@ fn peer_act_com_str_e_rejeicao_de_safety_remota() {
     let mut reg_peer = registry_peer_com_ator();
     let _ = reg_peer.register(DeviceEntry::actor(
         "Guincho",
-        vbl_runtime::fxp::ActorLimits { min: Some(0.0), max: Some(100.0), safety_limit: Some(90.0) },
+        vbl_runtime::fxp::ActorLimits {
+            min: Some(0.0),
+            max: Some(100.0),
+            safety_limit: Some(90.0),
+        },
     ));
     let peer = PeerServer::new(
         peer_bus(reg_peer),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: 0,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -748,15 +884,16 @@ fn peer_act_com_str_e_rejeicao_de_safety_remota() {
     // Rejeição de SAFETY que só o peer conhece (tag 2 no fio).
     assert!(matches!(
         bus.act("Guincho", Value::Num(95.0), &mut ledger),
-        ActOutcome::Rejected { limit: vbl_runtime::fxp::Limit::SafetyLimit, .. }
+        ActOutcome::Rejected {
+            limit: vbl_runtime::fxp::Limit::SafetyLimit,
+            ..
+        }
     ));
     // WireValue::Str atravessa o fio e volta como ack tipado do peer.
     let out = bus.act("Guincho", Value::Str("modo".into()), &mut ledger);
     assert!(matches!(
         out,
-        ActOutcome::Delivered
-            | ActOutcome::Rejected { .. }
-            | ActOutcome::InvalidValue { .. }
+        ActOutcome::Delivered | ActOutcome::Rejected { .. } | ActOutcome::InvalidValue { .. }
     ));
 }
 
@@ -776,13 +913,20 @@ fn hello_do_peer_carrega_a_matriz_completa_de_descritores() {
     let peer = PeerServer::new(
         peer_bus(reg),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: 0,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
 
-    let mut c = vbl_fxp::transport::Connection::unix(&sock, Duration::from_secs(2)).expect("conectar");
-    let resp = c.request(&Message::hello(Vec::new(), 1), Duration::from_secs(2)).expect("hello");
+    let mut c =
+        vbl_fxp::transport::Connection::unix(&sock, Duration::from_secs(2)).expect("conectar");
+    let resp = c
+        .request(&Message::hello(Vec::new(), 1), Duration::from_secs(2))
+        .expect("hello");
     let vbl_fxp::schema::Body::Hello { devices } = resp.body else {
         panic!("esperava HELLO_OK");
     };
@@ -792,10 +936,31 @@ fn hello_do_peer_carrega_a_matriz_completa_de_descritores() {
     }
     // Os sabores voltam tipados pelo peer real: ator com limites+safety e
     // dispositivos sem limites (o sensor com faixa já coberto no codec).
-    let ator_com_limites = devices.iter().any(|d| matches!(d,
-        DeviceDesc::Actor { min: Some(_), max: Some(_), safety: Some(_), .. }));
-    let sem_limites = devices.iter().any(|d| matches!(d,
-        DeviceDesc::Sensor { min: None, max: None, .. } | DeviceDesc::Actor { min: None, max: None, .. }));
+    let ator_com_limites = devices.iter().any(|d| {
+        matches!(
+            d,
+            DeviceDesc::Actor {
+                min: Some(_),
+                max: Some(_),
+                safety: Some(_),
+                ..
+            }
+        )
+    });
+    let sem_limites = devices.iter().any(|d| {
+        matches!(
+            d,
+            DeviceDesc::Sensor {
+                min: None,
+                max: None,
+                ..
+            } | DeviceDesc::Actor {
+                min: None,
+                max: None,
+                ..
+            }
+        )
+    });
     assert!(ator_com_limites && sem_limites, "{devices:?}");
 }
 
@@ -839,7 +1004,11 @@ fn lote_de_um_sensor_cai_no_caminho_individual() {
     let peer = PeerServer::new(
         peer_bus(reg),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: 0,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -853,9 +1022,9 @@ fn lote_de_um_sensor_cai_no_caminho_individual() {
 
 #[test]
 fn rogue_lote_sem_o_sensor_pedido_e_resposta_trocada_alertam() {
-    use vbl_fxp::Message;
     use vbl_fxp::schema::{op, BatchResult};
     use vbl_fxp::transport::serve_unix;
+    use vbl_fxp::Message;
     // Três roubos de lote, três cláusulas honestas do cliente (§4.7):
     // (a) resposta que não traz o sensor pedido ⇒ "lote sem o sensor pedido";
     // (b) resposta trocada (READ_OK no lugar do lote) ⇒ "resposta inesperada";
@@ -868,7 +1037,10 @@ fn rogue_lote_sem_o_sensor_pedido_e_resposta_trocada_alertam() {
                 op::HELLO => Some(Message::hello(Vec::new(), msg.seq)),
                 op::READ_BATCH => match truque {
                     "sem_nome" => Some(Message::read_batch_ok(
-                        vec![BatchResult::Ok { value: 1.0, canonical: "temp_a".into() }],
+                        vec![BatchResult::Ok {
+                            value: 1.0,
+                            canonical: "temp_a".into(),
+                        }],
                         msg.seq,
                     )),
                     "resposta_trocada" => Some(Message::read_ok(9.0, "temp_a", true, msg.seq)),
@@ -887,16 +1059,27 @@ fn rogue_lote_sem_o_sensor_pedido_e_resposta_trocada_alertam() {
         let reg = registry_cliente(&sock, &["temp_a", "temp_b"]);
         let mut bus = bus_cliente(reg, |c| c.batch_prefetch = true);
         let mut ledger = ChainLedger::new();
-        let alvo = if truque == "sem_nome" { "temp_b" } else { "temp_a" };
+        let alvo = if truque == "sem_nome" {
+            "temp_b"
+        } else {
+            "temp_a"
+        };
         let r = bus.read_sensor(alvo, &mut ledger);
-        assert!(matches!(r, Err(SensorFailure::Inaccessible)), "{truque}: {r:?}");
+        assert!(
+            matches!(r, Err(SensorFailure::Inaccessible)),
+            "{truque}: {r:?}"
+        );
         assert!(
             ledger
                 .events
                 .iter()
                 .any(|e| e.msg.contains("lote") || e.msg.contains("transporte")),
             "{truque}: sem alerta honesto — {:?}",
-            ledger.events.iter().map(|e| e.msg.clone()).collect::<Vec<_>>()
+            ledger
+                .events
+                .iter()
+                .map(|e| e.msg.clone())
+                .collect::<Vec<_>>()
         );
     }
 }
@@ -910,12 +1093,20 @@ fn violacao_de_limite_do_cliente_bloqueia_antes_do_fio() {
     let mut regp = registry_peer_com_ator();
     let _ = regp.register(DeviceEntry::actor(
         "Guincho",
-        ActorLimits { min: Some(0.0), max: Some(100.0), safety_limit: Some(90.0) },
+        ActorLimits {
+            min: Some(0.0),
+            max: Some(100.0),
+            safety_limit: Some(90.0),
+        },
     ));
     let peer = PeerServer::new(
         peer_bus(regp),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: 0,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -974,7 +1165,11 @@ fn power_real_ausente_marca_inacessivel_e_fallback_local_entrega() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: 0,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -983,7 +1178,9 @@ fn power_real_ausente_marca_inacessivel_e_fallback_local_entrega() {
     let mut ledger = ChainLedger::new();
     // A leitura segue válida: cpu_power inacessível é retrato ausente, não
     // erro de leitura (§4.7 — a potência só fica indisponível p/ atribuição).
-    let v = bus.read_sensor("temp_a", &mut ledger).expect("leitura com power ausente");
+    let v = bus
+        .read_sensor("temp_a", &mut ledger)
+        .expect("leitura com power ausente");
     assert!(v.is_finite(), "{v}");
 
     // Fan com rota remota morta + fallback local ReserveFan: a entrega cai
@@ -1005,8 +1202,8 @@ fn power_real_ausente_marca_inacessivel_e_fallback_local_entrega() {
 
 #[test]
 fn peer_cru_cumpre_o_protocolo_nas_bordas() {
-    use vbl_fxp::Message;
     use vbl_fxp::schema::{op, Body};
+    use vbl_fxp::Message;
 
     let sock = tmpdir("peer-bordas");
     let mut reg = registry_peer_com_ator();
@@ -1022,7 +1219,11 @@ fn peer_cru_cumpre_o_protocolo_nas_bordas() {
     let peer = PeerServer::new(
         peer_bus(reg),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0b111, ..Default::default() },
+        PeerConfig {
+            psk: None,
+            caps: 0b111,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -1031,8 +1232,14 @@ fn peer_cru_cumpre_o_protocolo_nas_bordas() {
     // responder (violação de protocolo, §4.5).
     let mut c =
         vbl_fxp::transport::Connection::unix(&sock, Duration::from_secs(1)).expect("conectar");
-    let resp = c.request(&Message::read_batch(vec!["temp_a".into()], 1), Duration::from_millis(300));
-    assert!(resp.is_err(), "batch sem caps devia ser ignorado, veio {resp:?}");
+    let resp = c.request(
+        &Message::read_batch(vec!["temp_a".into()], 1),
+        Duration::from_millis(300),
+    );
+    assert!(
+        resp.is_err(),
+        "batch sem caps devia ser ignorado, veio {resp:?}"
+    );
     drop(c);
 
     // (2) ACT com corpo de outro opcode (frame forjado): peer fecha honesto.
@@ -1044,11 +1251,17 @@ fn peer_cru_cumpre_o_protocolo_nas_bordas() {
         timestamp_us: None,
         seq: 2,
         name: "Fan".into(),
-        body: Body::ReadOk { value: 1.0, canonical: "Fan".into() },
+        body: Body::ReadOk {
+            value: 1.0,
+            canonical: "Fan".into(),
+        },
     };
     let _ = c2.enviar(&forjado);
     let resp2 = c2.receive(Duration::from_millis(300));
-    assert!(resp2.is_err(), "ACT forjado devia fechar a conexão, veio {resp2:?}");
+    assert!(
+        resp2.is_err(),
+        "ACT forjado devia fechar a conexão, veio {resp2:?}"
+    );
     drop(c2);
 
     // (3) HELLO negociado com LZ4 ⇒ resposta parte comprimida (§4.8).
@@ -1068,5 +1281,8 @@ fn peer_cru_cumpre_o_protocolo_nas_bordas() {
         vbl_fxp::transport::Connection::unix(&sock, Duration::from_secs(1)).expect("conectar 4");
     c4.enviar(&Message::bye(5)).expect("enviar bye");
     let depois = c4.receive(Duration::from_millis(300));
-    assert!(depois.is_err(), "pós-BYE a conexão devia terminar: {depois:?}");
+    assert!(
+        depois.is_err(),
+        "pós-BYE a conexão devia terminar: {depois:?}"
+    );
 }

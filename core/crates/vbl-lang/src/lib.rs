@@ -21,7 +21,7 @@ pub mod parser;
 pub mod token;
 
 pub use ast::{
-    Action, Conjugation, CmpOp, Declaration, Duration, ExprKind, Expression, FormAttrs, FormDecl,
+    Action, CmpOp, Conjugation, Declaration, Duration, ExprKind, Expression, FormAttrs, FormDecl,
     MainBlock, PhysicalUnit, Program, ReviewDecl, Rule, SensorRef, Statement, Threshold, TimeUnit,
 };
 pub use diag::{Diagnostic, Diagnostics, Span};

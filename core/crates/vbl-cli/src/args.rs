@@ -26,6 +26,14 @@ pub enum Command {
         /// PSK do cliente remoto (§4.6): lida da env `VAR` — a chave nunca
         /// trafega nem fica em arquivo.
         fxp_psk_env: Option<String>,
+        /// zstd com dicionário TREINADO (v1.3 §4.8) — pede `ZSTD + DICT`
+        /// ao peer (o gatilho do `HELLO` é o mesmo); sem concessão, degrada
+        /// para id 2/plano pela interseção de `CAPS_OK`.
+        zstd: bool,
+        /// Store TOFU (v1.3 §7) para endpoints `tcps:...@tofu` — arquivo
+        /// JSON da primeira confiança; default: `$XDG_STATE_HOME` (ou
+        /// `~/.local/state`)`/verbo/fxp-known-hosts.json`.
+        tofu_store: Option<PathBuf>,
     },
     /// `vbl fxp-probe` — tabela de dispositivos/modos/rotas/disponibilidade
     /// (auditoria do registro FXP no host; PLAN Etapa 3).
@@ -54,6 +62,9 @@ pub enum Command {
         batch: bool,
         /// Anuncia TIMESTAMP (§5) — carimbo físico nas respostas.
         timestamp: bool,
+        /// Anuncia ZSTD (v1.3 §4.8) — zstd com dicionário TREINADO; implica
+        /// `--dict` (o gatilho do `HELLO` é o mesmo).
+        zstd: bool,
         /// Caderno do peer (produção); sem ele, o Caderno fica desligado
         /// (aviso honesto — §4.7 não registra eventos sem Caderno).
         ledger: Option<PathBuf>,
@@ -96,6 +107,7 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
             let mut dict = false;
             let mut batch = false;
             let mut timestamp = false;
+            let mut zstd = false;
             let mut ledger = None;
             let mut tls_cert = None;
             let mut tls_key = None;
@@ -113,14 +125,9 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                         ))
                     }
                     "--serve" => {
-                        serve = Some(
-                            args.next()
-                                .ok_or("--serve exige unix:PATH|tcp:PORTA")?,
-                        )
+                        serve = Some(args.next().ok_or("--serve exige unix:PATH|tcp:PORTA")?)
                     }
-                    "--auth" => {
-                        auth = Some(args.next().ok_or("--auth exige psk:VAR_DE_ENV")?)
-                    }
+                    "--auth" => auth = Some(args.next().ok_or("--auth exige psk:VAR_DE_ENV")?),
                     "--tls-cert" => {
                         tls_cert = Some(PathBuf::from(
                             args.next().ok_or("--tls-cert exige ARQUIVO.pem")?,
@@ -135,18 +142,16 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                         announce = Some(args.next().ok_or("--announce exige IDENTIFICADOR")?)
                     }
                     "--announce-mdns" => {
-                        announce_mdns = Some(
-                            args.next().ok_or("--announce-mdns exige IDENTIFICADOR")?,
-                        )
+                        announce_mdns =
+                            Some(args.next().ok_or("--announce-mdns exige IDENTIFICADOR")?)
                     }
                     "--compress" => compress = true,
                     "--dict" => dict = true,
                     "--batch" => batch = true,
                     "--timestamp" => timestamp = true,
+                    "--zstd" => zstd = true,
                     "--ledger" => {
-                        ledger = Some(PathBuf::from(
-                            args.next().ok_or("--ledger exige ARQUIVO")?,
-                        ))
+                        ledger = Some(PathBuf::from(args.next().ok_or("--ledger exige ARQUIVO")?))
                     }
                     other => return Err(format!("argumento de fxpd inesperado: {other}\n{USAGE}")),
                 }
@@ -167,6 +172,7 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                 dict,
                 batch,
                 timestamp,
+                zstd,
                 ledger,
                 tls_cert,
                 tls_key,
@@ -183,10 +189,18 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
             let mut fxp_mode = None;
             let mut fxp_config = None;
             let mut fxp_psk_env = None;
+            let mut zstd = false;
+            let mut tofu_store: Option<PathBuf> = None;
             while let Some(a) = args.next() {
                 match a.as_str() {
                     "--fxp-psk-env" => {
                         fxp_psk_env = Some(args.next().ok_or("--fxp-psk-env exige VAR")?)
+                    }
+                    "--zstd" => zstd = true,
+                    "--tofu-store" => {
+                        tofu_store = Some(PathBuf::from(
+                            args.next().ok_or("--tofu-store exige ARQUIVO")?,
+                        ))
                     }
                     "--ticks" => {
                         ticks = Some(
@@ -276,6 +290,8 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                 fxp_mode,
                 fxp_config,
                 fxp_psk_env,
+                zstd,
+                tofu_store,
             })
         }
         "fxp-probe" => {
@@ -328,7 +344,7 @@ uso:
   vbl fxpd --serve unix:PATH|tcp:PORTA [opções]
   vbl ledger-verify <ARQUIVO>
 
-opções de fxpd (schema v1.1/v1.2 — docs/FXP-SCHEMA-v1.md §7/§4.5–§4.9):
+opções de fxpd (schema v1.1/v1.2/v1.3 — docs/FXP-SCHEMA-v1.md §7/§4.5–§4.10):
   --fxp-config ARQUIVO             registro/config FXP servido pelo peer
   --fxp-mode MODO                  simulado|real|hibrido (padrão: o da config, senão simulado)
   --serve unix:PATH|tcp:PORTA      transporte do peer (porta 0 = efêmera)
@@ -341,6 +357,8 @@ opções de fxpd (schema v1.1/v1.2 — docs/FXP-SCHEMA-v1.md §7/§4.5–§4.9):
   --dict                           anuncia DICT (v1.2 §4.8): dicionário do registro
   --batch                          anuncia READ_BATCH (§4.7)
   --timestamp                      anuncia FLAG_TIMESTAMP (§5 — carimbo físico)
+  --zstd                           anuncia ZSTD (v1.3 §4.8): zstd com dicionário
+                                   TREINADO; implica --dict (gatilho do HELLO é o mesmo)
   --ledger ARQUIVO                 Caderno do peer (produção .vcad); sem ele, desligado
 
 opções de run:
@@ -358,6 +376,10 @@ opções de run:
   --fxp-mode MODO                  simulado|real|hibrido (padrão: simulado; sobrepõe a config)
   --fxp-config ARQUIVO             registro/config FXP (dispositivos, endpoints, fallback)
   --fxp-psk-env VAR                PSK do cliente remoto (§4.6): chave vem da env VAR
+  --zstd                           pede ZSTD+DICT (v1.3 §4.8): compressão zstd com
+                                   dicionário TREINADO derivado do registro do peer
+  --tofu-store ARQUIVO             store TOFU (v1.3 §7) p/ endpoints tcps:...@tofu;
+                                   default: $XDG_STATE_HOME (ou ~/.local/state)/verbo/fxp-known-hosts.json
 
 opções de fxp-probe:
   --fxp-config ARQUIVO             registro/config FXP a auditar
@@ -391,7 +413,10 @@ mod tests {
             vec!["check", "a.vl", "b.vl"],
             vec!["ledger-verify", "a.vcad", "b.vcad"],
         ] {
-            let err = match parse_args(args(&caso)) { Err(e) => e, Ok(_) => panic!("{caso:?} devia falhar") };
+            let err = match parse_args(args(&caso)) {
+                Err(e) => e,
+                Ok(_) => panic!("{caso:?} devia falhar"),
+            };
             assert!(err.contains("argumento inesperado"), "{caso:?}: {err}");
             assert!(err.contains("USO") || err.contains("uso"), "{err}");
         }
@@ -436,6 +461,8 @@ mod tests {
             fxp_mode,
             fxp_config,
             fxp_psk_env: _,
+            zstd: _,
+            tofu_store: _,
         } = parse_args(args(&[
             "run",
             "p.vl",
@@ -546,6 +573,7 @@ mod tests {
             dict,
             batch,
             timestamp,
+            zstd,
             ledger,
             tls_cert,
             tls_key,
@@ -567,6 +595,7 @@ mod tests {
             "--dict",
             "--batch",
             "--timestamp",
+            "--zstd",
             "--ledger",
             "peer.vcad",
             "--tls-cert",
@@ -584,7 +613,7 @@ mod tests {
         assert_eq!(auth.as_deref(), Some("psk:MINHA_VAR"));
         assert_eq!(announce.as_deref(), Some("fxpd-lab"));
         assert_eq!(announce_mdns.as_deref(), Some("fxpd-lab-mdns"));
-        assert!(compress && dict && batch && timestamp);
+        assert!(compress && dict && batch && timestamp && zstd);
         assert_eq!(ledger, Some(PathBuf::from("peer.vcad")));
         assert_eq!(tls_cert, Some(PathBuf::from("srv.pem")));
         assert_eq!(tls_key, Some(PathBuf::from("srv.key.pem")));
@@ -595,6 +624,7 @@ mod tests {
         assert!(parse_args(args(&["fxpd", "--turbo"])).is_err());
         assert!(parse_args(args(&["fxpd", "--serve"])).is_err());
         assert!(parse_args(args(&["fxpd", "--auth"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--zstd"])).is_err());
         assert!(parse_args(args(&["fxpd", "--announce"])).is_err());
         assert!(parse_args(args(&["fxpd", "--announce-mdns"])).is_err());
         assert!(parse_args(args(&["fxpd", "--ledger"])).is_err());

@@ -73,7 +73,11 @@ impl PeerServer {
         ledger: Arc<Mutex<dyn Ledger + Send>>,
         config: PeerConfig,
     ) -> Self {
-        Self { bus, ledger, config }
+        Self {
+            bus,
+            ledger,
+            config,
+        }
     }
 
     /// Config (probe/diagnóstico).
@@ -108,8 +112,12 @@ pub fn serve_unix_peer(server: &PeerServer, path: &Path) -> Result<Server, Trans
         while !flag_off.load(Ordering::SeqCst) {
             match listener.accept() {
                 Ok((flow, _)) => {
-                    let (bus, ledger, config, flag_conn) =
-                        (bus.clone(), ledger.clone(), config.clone(), flag_off.clone());
+                    let (bus, ledger, config, flag_conn) = (
+                        bus.clone(),
+                        ledger.clone(),
+                        config.clone(),
+                        flag_off.clone(),
+                    );
                     std::thread::spawn(move || {
                         serve_connection(Current::Unix(flow), &bus, &ledger, &config, &flag_conn)
                     });
@@ -134,14 +142,18 @@ pub fn serve_tcp_peer(server: &PeerServer) -> Result<(Server, u16), TransportErr
 }
 
 /// Variante com porta explícita (`--serve tcp:PORTA`; 0 = efêmera).
-pub fn serve_tcp_peer_port(server: &PeerServer, port: u16) -> Result<(Server, u16), TransportError> {
+pub fn serve_tcp_peer_port(
+    server: &PeerServer,
+    port: u16,
+) -> Result<(Server, u16), TransportError> {
     // TLS v1.2 (§7): config validada UMA vez no arranque — PEM ruim ⇒ erro
     // honesto antes do 1º cliente; o Arc compartilhado serve N conexões.
     let tls_cfg: Option<Arc<rustls::ServerConfig>> = match &server.config.tls {
-        Some(a) => Some(Arc::new(
-            crate::tls::server_config(a)
-                .map_err(|e| TransportError::ConnectionFailed(e.to_string()))?,
-        )),
+        Some(a) => {
+            Some(Arc::new(crate::tls::server_config(a).map_err(|e| {
+                TransportError::ConnectionFailed(e.to_string())
+            })?))
+        }
         None => None,
     };
     let listener = TcpListener::bind(("0.0.0.0", port))
@@ -164,8 +176,12 @@ pub fn serve_tcp_peer_port(server: &PeerServer, port: u16) -> Result<(Server, u1
         while !flag_off.load(Ordering::SeqCst) {
             match listener.accept() {
                 Ok((stream, _)) => {
-                    let (bus, ledger, config, flag_conn) =
-                        (bus.clone(), ledger.clone(), config.clone(), flag_off.clone());
+                    let (bus, ledger, config, flag_conn) = (
+                        bus.clone(),
+                        ledger.clone(),
+                        config.clone(),
+                        flag_off.clone(),
+                    );
                     let tls_conn = tls_cfg.clone();
                     std::thread::spawn(move || {
                         // Handshake TLS antes da máquina de estados: quem fala
@@ -209,6 +225,13 @@ fn serve_connection(
     flow.set_timeout(Duration::from_millis(250));
     let mut rest: Vec<u8> = Vec::new();
 
+    // v1.3 §7: o CAPS do cliente pode ter chegado como 0-RTT (early data do
+    // TLS, na conexão retomada) — drena ANTES do laço; é a primeira entrada
+    // da máquina de estados. Sem early data, vazio e nada muda.
+    if let Some(early) = flow.take_early_data() {
+        rest = early;
+    }
+
     // ---- AUTH (§4.6): com PSK, o servidor FALA PRIMEIRO (challenge). -------
     let server_nonce = if config.psk.is_some() {
         match auth::nonce() {
@@ -235,13 +258,17 @@ fn serve_connection(
     // v1.2 §4.8: dict derivado do registro LOCAL (o servidor publica os
     // nomes que viram dicionário). Só é usado depois do HELLO do cliente —
     // prova de que o outro lado já derivou os mesmos bytes.
-    let mut dict_local: Option<Vec<u8>> = None;
+    let mut dict_local: Option<schema::compress::DictConexao> = None;
     let mut dict_ready = false;
     loop {
         if shutdown.load(Ordering::SeqCst) {
             return;
         }
-        match read_frame(&mut flow, &mut rest, dict_local.as_deref().filter(|_| dict_ready)) {
+        match read_frame(
+            &mut flow,
+            &mut rest,
+            dict_local.as_ref().filter(|_| dict_ready),
+        ) {
             Ok(Some(msg)) => {
                 // Fail closed: com PSK, só AUTH_RESPONSE é aceita pré-auth
                 // (§4.6 — qualquer outra opcode ⇒ fechamento sem razão).
@@ -256,12 +283,21 @@ fn serve_connection(
                     return;
                 }
                 let eh_hello = msg.opcode == op::HELLO;
-                if let Some(resp) =
-                    dispatch(&msg, bus, ledger, config, &mut caps_negociadas, &mut dict_local)
-                {
+                if let Some(resp) = dispatch(
+                    &msg,
+                    bus,
+                    ledger,
+                    config,
+                    &mut caps_negociadas,
+                    &mut dict_local,
+                ) {
                     // O HELLO de resposta nunca sai com dict (o cliente só
                     // terá o dicionário depois de recebê-lo).
-                    let dict = if dict_ready && !eh_hello { dict_local.as_deref() } else { None };
+                    let dict = if dict_ready && !eh_hello {
+                        dict_local.as_ref()
+                    } else {
+                        None
+                    };
                     if write_frame(&mut flow, &resp, caps_negociadas, dict).is_err() {
                         return;
                     }
@@ -290,8 +326,7 @@ fn handle_auth(
     server_nonce: &[u8; auth::NONCE_LEN],
     flow: &mut Current,
 ) -> AuthResult {
-    let (Some(key), Body::AuthResponse { nonce, mac }) = (config.psk.as_deref(), &msg.body)
-    else {
+    let (Some(key), Body::AuthResponse { nonce, mac }) = (config.psk.as_deref(), &msg.body) else {
         return AuthResult::Close; // não-autenticado falando outra coisa
     };
     if auth::verify(key, nonce, server_nonce, mac) {
@@ -310,24 +345,44 @@ fn dispatch(
     ledger: &Arc<Mutex<dyn Ledger + Send>>,
     config: &PeerConfig,
     caps_negociadas: &mut u16,
-    dict_local: &mut Option<Vec<u8>>,
+    dict_local: &mut Option<schema::compress::DictConexao>,
 ) -> Option<Message> {
     match msg.opcode {
         op::CAPS => {
-            let Body::Caps { capabilities } = msg.body else { return None };
+            let Body::Caps { capabilities } = msg.body else {
+                return None;
+            };
             // Interseção pedidos × anunciados; bits reservados ignorados
-            // (peer v1.1 ignora o bit DICT no decode ⇒ interseção sem ele).
+            // (peers antigos ignoram bits novos no decode ⇒ interseção sem
+            // eles — a promoção v1.2/v1.3 é segura por construção).
             *caps_negociadas = capabilities & config.caps & !caps::RESERVED;
+            let nomes: Vec<String> = bus
+                .lock()
+                .map(|b| {
+                    b.registry_rico()
+                        .devices()
+                        .map(|d| d.name.clone())
+                        .collect()
+                })
+                .unwrap_or_default();
+            // v1.3 §4.8: ZSTD concedido SÓ com DICT também concedido (o
+            // gatilho do HELLO é o mesmo) e SÓ quando o dicionário TREINA —
+            // sem treino, degradação honesta: o bit sai da interseção.
+            if *caps_negociadas & caps::ZSTD != 0 {
+                match (*caps_negociadas & caps::DICT != 0)
+                    .then(|| schema::compress::zstd_dict_from_registry(&nomes))
+                    .flatten()
+                {
+                    Some(d) => *dict_local = Some(schema::compress::DictConexao::Zstd(d)),
+                    None => *caps_negociadas &= !caps::ZSTD,
+                }
+            }
             // v1.2 §4.8: DICT concedido ⇒ deriva o dicionário do registro
             // servido (os mesmos bytes que o cliente obterá via HELLO).
-            if *caps_negociadas & caps::DICT != 0 {
-                let nomes: Vec<String> = bus
-                    .lock()
-                    .map(|b| {
-                        b.registry_rico().devices().map(|d| d.name.clone()).collect()
-                    })
-                    .unwrap_or_default();
-                *dict_local = Some(schema::compress::dict_from_registry(&nomes));
+            if *caps_negociadas & caps::DICT != 0 && dict_local.is_none() {
+                *dict_local = Some(schema::compress::DictConexao::Lz4(
+                    schema::compress::dict_from_registry(&nomes),
+                ));
             }
             Some(Message::caps_ok(*caps_negociadas, msg.seq))
         }
@@ -342,13 +397,17 @@ fn dispatch(
             if (*caps_negociadas) & caps::BATCH == 0 {
                 return None; // violação de protocolo: fechar sem responder
             }
-            let Body::ReadBatch { names } = &msg.body else { return None };
+            let Body::ReadBatch { names } = &msg.body else {
+                return None;
+            };
             // §4.7: item sintético no lote ⇒ frame inteiro marcado (marca
             // conservadora — nunca deixa valor simulado passar sem marca).
             let any_synthetic = bus
                 .lock()
                 .map(|b| {
-                    names.iter().any(|n| matches!(b.route_of(n), Some(Route::Simulator)))
+                    names
+                        .iter()
+                        .any(|n| matches!(b.route_of(n), Some(Route::Simulator)))
                 })
                 .unwrap_or(false);
             let mut resp = handle_batch(bus, ledger, names, msg.seq);
@@ -377,25 +436,34 @@ fn dispatch(
     }
 }
 
-/// Escreve a resposta com compressão negociada (§4.8/v1.2) — o codec decide
-/// "só quando compensa"; com dict pronto, o id 2 tem precedência sobre o
-/// LZ4 simples (mesma regra do cliente em `transport::Connection`).
+/// Escreve a resposta com compressão negociada (§4.8/v1.2/v1.3) — o codec
+/// decide "só quando compensa"; com dict pronto, o id 3 (zstd treinado)
+/// ou o id 2 (LZ4) têm precedência sobre o LZ4 simples (mesma regra do
+/// cliente em `transport::Connection`).
 fn write_frame(
     flow: &mut Current,
     msg: &Message,
     caps_negociadas: u16,
-    dict: Option<&[u8]>,
+    dict: Option<&schema::compress::DictConexao>,
 ) -> Result<(), TransportError> {
-    let frame = if let Some(dict) = dict {
-        let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
-        schema::encode_with_compression_dict(msg, dict, &mut f).map_err(TransportError::from)?;
-        f
-    } else if caps_negociadas & caps::LZ4 != 0 {
-        let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
-        schema::encode_with_compression(msg, &mut f).map_err(TransportError::from)?;
-        f
-    } else {
-        schema::encode_to_vec(msg).map_err(TransportError::from)?
+    let frame = match dict {
+        Some(schema::compress::DictConexao::Zstd(dict)) => {
+            let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
+            schema::encode_with_zstd_dict(msg, dict, &mut f).map_err(TransportError::from)?;
+            f
+        }
+        Some(schema::compress::DictConexao::Lz4(dict)) => {
+            let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
+            schema::encode_with_compression_dict(msg, dict, &mut f)
+                .map_err(TransportError::from)?;
+            f
+        }
+        None if caps_negociadas & caps::LZ4 != 0 => {
+            let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
+            schema::encode_with_compression(msg, &mut f).map_err(TransportError::from)?;
+            f
+        }
+        None => schema::encode_to_vec(msg).map_err(TransportError::from)?,
     };
     flow.write_all(&frame)
         .map_err(|e| TransportError::Broken(format!("escrita: {e}")))
@@ -436,22 +504,43 @@ fn handle_batch(
 ) -> Message {
     let mut bus = match bus.lock() {
         Ok(b) => b,
-        Err(_) => return Message::read_batch_ok(vec![BatchResult::Err { reason: reason::BUSY }], seq),
+        Err(_) => {
+            return Message::read_batch_ok(
+                vec![BatchResult::Err {
+                    reason: reason::BUSY,
+                }],
+                seq,
+            )
+        }
     };
     let mut led = match ledger.lock() {
         Ok(l) => l,
-        Err(_) => return Message::read_batch_ok(vec![BatchResult::Err { reason: reason::BUSY }], seq),
+        Err(_) => {
+            return Message::read_batch_ok(
+                vec![BatchResult::Err {
+                    reason: reason::BUSY,
+                }],
+                seq,
+            )
+        }
     };
     let results = names
         .iter()
         .map(|name| {
             let canonical = bus.registry_rico().canonical_of(name).to_string();
             if !bus.registry_rico().contains(&canonical) {
-                return BatchResult::Err { reason: reason::NOT_REGISTERED };
+                return BatchResult::Err {
+                    reason: reason::NOT_REGISTERED,
+                };
             }
             match bus.read_sensor(&canonical, &mut *led) {
-                Ok(v) => BatchResult::Ok { value: v, canonical },
-                Err(_) => BatchResult::Err { reason: reason::INACCESSIBLE },
+                Ok(v) => BatchResult::Ok {
+                    value: v,
+                    canonical,
+                },
+                Err(_) => BatchResult::Err {
+                    reason: reason::INACCESSIBLE,
+                },
             }
         })
         .collect();
@@ -514,5 +603,8 @@ fn hello_do_registro(bus: &Arc<Mutex<FxpBus>>) -> Vec<DeviceDesc> {
         Ok(b) => b,
         Err(_) => return vec![],
     };
-    bus.registry_rico().devices().map(|d| d.to_device_desc()).collect()
+    bus.registry_rico()
+        .devices()
+        .map(|d| d.to_device_desc())
+        .collect()
 }

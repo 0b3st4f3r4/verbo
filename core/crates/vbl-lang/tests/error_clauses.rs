@@ -174,7 +174,10 @@ fn clausulas_complementares_atores_string_e_bordas() {
     assert!(!d2.has_errors(), "{d2}");
 
     // Duração com número e EOF imediato (sem unidade e sem '}').
-    contem("event A { value: 1, horizon: 5", &["duracao_invalida", "bloco_nao_fechado"]);
+    contem(
+        "event A { value: 1, horizon: 5",
+        &["duracao_invalida", "bloco_nao_fechado"],
+    );
 
     // every sem '{' após o período.
     contem(

@@ -17,7 +17,10 @@ fn dir_temp(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!(
         "vbl-bench-{tag}-{}-{}",
         std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     let _ = std::fs::create_dir_all(&d);
     d
@@ -59,7 +62,9 @@ fn bench_tick_scales(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
             let mut forms = String::new();
             for i in 0..n {
-                forms.push_str(&format!("event F{i} {{ value: \"v{i}\", horizon: 1000000s }}\n"));
+                forms.push_str(&format!(
+                    "event F{i} {{ value: \"v{i}\", horizon: 1000000s }}\n"
+                ));
             }
             let (p, d) = parse(&forms);
             assert!(!d.has_errors());
@@ -120,5 +125,11 @@ fn bench_fxp_act(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_transition_review, bench_tick_scales, bench_subvert, bench_fxp_act);
+criterion_group!(
+    benches,
+    bench_transition_review,
+    bench_tick_scales,
+    bench_subvert,
+    bench_fxp_act
+);
 criterion_main!(benches);

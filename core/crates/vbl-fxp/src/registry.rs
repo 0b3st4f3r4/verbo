@@ -11,10 +11,10 @@
 //! plano consumido pelo loader/runtime — incluindo os aliases, para que a
 //! validação de referências aceite ambos os nomes.
 
+use crate::schema::DeviceDesc;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use vbl_runtime::fxp::{ActorLimits, Registry as RuntimeRegistry, SensorInfo};
-use crate::schema::DeviceDesc;
 
 /// Modo de operação global do barramento (PLAN §3.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -99,11 +99,19 @@ pub enum DeviceKind {
 #[derive(Debug, Clone, PartialEq)]
 pub enum RemoteAddr {
     Unix(PathBuf),
-    Tcp { host: String, port: u16 },
+    Tcp {
+        host: String,
+        port: u16,
+    },
     /// TCP + TLS 1.3 (v1.2 §7): confidencialidade/MAC por frame; a confiança
-    /// é a impressão digital SHA-256 do DER do certificado do servidor
-    /// (`tcps:host:porta@sha256:HEX`) — sem pin não há conexão (fail closed).
-    TcpTls { host: String, port: u16, fingerprint: crate::tls::Fingerprint },
+    /// no certificado do servidor é declarada no endpoint (v1.3 §7): pin
+    /// SHA-256 (`@sha256:HEX`, v1.2) ou TOFU (`@tofu`, v1.3 — grava na
+    /// primeira conexão, verifica nas seguintes; fail closed nos dois).
+    TcpTls {
+        host: String,
+        port: u16,
+        trust: crate::tls::Trust,
+    },
 }
 
 /// Endpoint concreto do dispositivo — o **nome simbólico nunca é caminho de
@@ -156,14 +164,18 @@ impl Endpoint {
             if id.is_empty() {
                 return Err(RegistryError::InvalidEndpoint(s.into()));
             }
-            return Ok(Endpoint::AutoRemote { identifier: id.into() });
+            return Ok(Endpoint::AutoRemote {
+                identifier: id.into(),
+            });
         }
         if let Some(id) = s.strip_prefix("mdns:") {
             if id.is_empty() {
                 return Err(RegistryError::InvalidEndpoint(s.into()));
             }
             #[cfg(feature = "mdns")]
-            return Ok(Endpoint::AutoRemoteMdns { identifier: id.into() });
+            return Ok(Endpoint::AutoRemoteMdns {
+                identifier: id.into(),
+            });
             #[cfg(not(feature = "mdns"))]
             return Err(RegistryError::InvalidEndpoint(format!(
                 "{s} (mDNS exige compilar com --features mdns)"
@@ -180,31 +192,43 @@ impl Endpoint {
             "rapl_constraint" => Ok(Endpoint::RaplConstraint { file: path(rest) }),
             "hwmon_pwm" => Ok(Endpoint::HwmonPwm { file: path(rest) }),
             "led" => Ok(Endpoint::LedClass { dir: path(rest) }),
-            "unix" => Ok(Endpoint::Remote { addr: RemoteAddr::Unix(path(rest)) }),
+            "unix" => Ok(Endpoint::Remote {
+                addr: RemoteAddr::Unix(path(rest)),
+            }),
             "tcp" => {
                 let (host, port) = parse_tcp_target(s, rest, "tcp:host:porta")?;
-                Ok(Endpoint::Remote { addr: RemoteAddr::Tcp { host, port } })
+                Ok(Endpoint::Remote {
+                    addr: RemoteAddr::Tcp { host, port },
+                })
             }
             "tcps" => {
-                // v1.2 §7: tcps:host:porta@sha256:HEX — pin OBRIGATÓRIO; sem
-                // ele não há confiança declarada e a construção falha.
-                let (target, pin_txt) = rest.rsplit_once('@').ok_or_else(|| {
+                // v1.2/v1.3 §7: tcps:host:porta@CONFIANÇA — o slot final é
+                // `sha256:HEX` (pin declarado) ou `tofu` (confiança na
+                // primeira conexão, gravada no store). Sem slot não há
+                // confiança declarada e a construção falha.
+                let (target, confianca_txt) = rest.rsplit_once('@').ok_or_else(|| {
                     RegistryError::InvalidEndpoint(format!(
-                        "{s} (tcps exige @sha256:HEX — sem pin não há confiança declarada)"
+                        "{s} (tcps exige @sha256:HEX ou @tofu — sem confiança declarada não há conexão)"
                     ))
                 })?;
-                let hex = pin_txt.strip_prefix("sha256:").ok_or_else(|| {
-                    RegistryError::InvalidEndpoint(format!(
-                        "{s} (pin deve ser sha256:HEX de 64 dígitos)"
-                    ))
-                })?;
-                let fingerprint = crate::tls::unhex32(hex).ok_or_else(|| {
-                    RegistryError::InvalidEndpoint(format!(
-                        "{s} (pin sha256 precisa de 64 dígitos hex)"
-                    ))
-                })?;
+                let trust = if confianca_txt == "tofu" {
+                    crate::tls::Trust::Tofu
+                } else {
+                    let hex = confianca_txt.strip_prefix("sha256:").ok_or_else(|| {
+                        RegistryError::InvalidEndpoint(format!(
+                            "{s} (confiança deve ser sha256:HEX de 64 dígitos ou tofu)"
+                        ))
+                    })?;
+                    crate::tls::Trust::Pin(crate::tls::unhex32(hex).ok_or_else(|| {
+                        RegistryError::InvalidEndpoint(format!(
+                            "{s} (pin sha256 precisa de 64 dígitos hex)"
+                        ))
+                    })?)
+                };
                 let (host, port) = parse_tcp_target(s, target, "host:porta")?;
-                Ok(Endpoint::Remote { addr: RemoteAddr::TcpTls { host, port, fingerprint } })
+                Ok(Endpoint::Remote {
+                    addr: RemoteAddr::TcpTls { host, port, trust },
+                })
             }
             _ => Err(RegistryError::InvalidEndpoint(s.into())),
         }
@@ -225,10 +249,13 @@ impl Endpoint {
             Endpoint::Remote { addr } => match addr {
                 RemoteAddr::Unix(p) => format!("unix:{}", p.display()),
                 RemoteAddr::Tcp { host, port } => format!("tcp:{host}:{port}"),
-                RemoteAddr::TcpTls { host, port, fingerprint } => format!(
-                    "tcps:{host}:{port}@sha256:{}",
-                    crate::tls::hex32(fingerprint)
-                ),
+                RemoteAddr::TcpTls { host, port, trust } => match trust {
+                    crate::tls::Trust::Pin(fingerprint) => format!(
+                        "tcps:{host}:{port}@sha256:{}",
+                        crate::tls::hex32(fingerprint)
+                    ),
+                    crate::tls::Trust::Tofu => format!("tcps:{host}:{port}@tofu"),
+                },
             },
             Endpoint::AutoRemote { identifier } => format!("discover:{identifier}"),
             Endpoint::AutoRemoteMdns { identifier } => format!("mdns:{identifier}"),
@@ -301,16 +328,19 @@ impl DeviceEntry {
     /// pelo `PeerServer` para o lado remoto enxergar limites (FORMAL §4.3).
     pub fn to_device_desc(&self) -> DeviceDesc {
         match &self.kind {
-            DeviceKind::Sensor { quantity, unit, range: (min, max), precision_pct } => {
-                DeviceDesc::Sensor {
-                    name: self.name.clone(),
-                    min: *min,
-                    max: *max,
-                    quantity: quantity.clone(),
-                    unit: unit.clone(),
-                    precision_pct: *precision_pct,
-                }
-            }
+            DeviceKind::Sensor {
+                quantity,
+                unit,
+                range: (min, max),
+                precision_pct,
+            } => DeviceDesc::Sensor {
+                name: self.name.clone(),
+                min: *min,
+                max: *max,
+                quantity: quantity.clone(),
+                unit: unit.clone(),
+                precision_pct: *precision_pct,
+            },
             DeviceKind::Actor { limits } => DeviceDesc::Actor {
                 name: self.name.clone(),
                 min: limits.min,
@@ -350,10 +380,16 @@ impl std::fmt::Display for RegistryError {
                 write!(f, "'{n}' colide com nome/alias já registrado")
             }
             RegistryError::UnknownAlias { alias, canonical } => {
-                write!(f, "alias '{alias}' aponta para dispositivo inexistente '{canonical}'")
+                write!(
+                    f,
+                    "alias '{alias}' aponta para dispositivo inexistente '{canonical}'"
+                )
             }
             RegistryError::UnknownFallback { actor, alternativo } => {
-                write!(f, "fallback de '{actor}' cita '{alternativo}', fora do registro (FORMAL §4.3)")
+                write!(
+                    f,
+                    "fallback de '{actor}' cita '{alternativo}', fora do registro (FORMAL §4.3)"
+                )
             }
             RegistryError::ChainedAlias(n) => {
                 write!(f, "alias '{n}' não pode apontar para outro alias")
@@ -395,12 +431,22 @@ impl DeviceRegistry {
         }
         for (name, min, max, safety, legacy) in [
             ("CpuPowerCap", Some(10.0), Some(250.0), Some(200.0), None),
-            ("Fan", Some(0.0), Some(255.0), Some(200.0), Some("Ventoinha")),
+            (
+                "Fan",
+                Some(0.0),
+                Some(255.0),
+                Some(200.0),
+                Some("Ventoinha"),
+            ),
             ("StatusLed", None, None, None, Some("LedIndicador")),
         ] {
             let mut entry = DeviceEntry::actor(
                 name,
-                ActorLimits { min, max, safety_limit: safety },
+                ActorLimits {
+                    min,
+                    max,
+                    safety_limit: safety,
+                },
             );
             // Nomes v1 (PT) permanecem aceitos como aliases — configs e
             // programas antigos seguem válidos (FORMAL §6, nota de nomes).
@@ -636,7 +682,10 @@ impl FxpConfig {
                 }
                 "retries" => {
                     cfg.retries = Some(u32::try_from(num("retries")?).map_err(|_| {
-                        RegistryError::InvalidConfig(format!("linha {}: retries muito grande", i + 1))
+                        RegistryError::InvalidConfig(format!(
+                            "linha {}: retries muito grande",
+                            i + 1
+                        ))
                     })?)
                 }
                 _ => {
@@ -655,14 +704,12 @@ impl FxpConfig {
                         }
                         cfg.fallback.insert(dev.into(), alts);
                     } else {
-                        let (name, field) = key
-                            .split_once('.')
-                            .ok_or_else(|| {
-                                RegistryError::InvalidConfig(format!(
-                                    "linha {}: chave desconhecida '{key}'",
-                                    i + 1
-                                ))
-                            })?;
+                        let (name, field) = key.split_once('.').ok_or_else(|| {
+                            RegistryError::InvalidConfig(format!(
+                                "linha {}: chave desconhecida '{key}'",
+                                i + 1
+                            ))
+                        })?;
                         let d = cfg.devices.entry(name.into()).or_default();
                         match field {
                             "alias_de" => d.alias_of = Some(value.into()),
@@ -747,7 +794,12 @@ impl FxpConfig {
                     entry.endpoint = ep.clone();
                 }
                 match &mut entry.kind {
-                    DeviceKind::Sensor { quantity, unit, precision_pct, range } => {
+                    DeviceKind::Sensor {
+                        quantity,
+                        unit,
+                        precision_pct,
+                        range,
+                    } => {
                         if let Some(g) = &d.quantity {
                             *quantity = g.clone();
                         }
@@ -778,8 +830,7 @@ impl FxpConfig {
                         if let Some(v) = d.safety_limit {
                             limits.safety_limit = Some(v);
                         }
-                        if d.quantity.is_some() || d.unit.is_some() || d.precision_pct.is_some()
-                        {
+                        if d.quantity.is_some() || d.unit.is_some() || d.precision_pct.is_some() {
                             return Err(RegistryError::InvalidConfig(format!(
                                 "ator '{name}' não aceita grandeza/unidade/precisao_pct"
                             )));
@@ -812,7 +863,9 @@ impl FxpConfig {
                     }
                 } else if endpoint.is_remote() {
                     // Ator remoto sem limites declarados (ex.: StatusLed remoto).
-                    DeviceKind::Actor { limits: ActorLimits::default() }
+                    DeviceKind::Actor {
+                        limits: ActorLimits::default(),
+                    }
                 } else {
                     return Err(RegistryError::InvalidConfig(format!(
                         "dispositivo novo '{name}' precisa de grandeza (sensor) ou limites (ator)"

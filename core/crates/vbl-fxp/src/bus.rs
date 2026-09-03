@@ -18,17 +18,20 @@
 
 use crate::drivers::{actor_from, discover, sensor_from, ActorDriver, SensorDriver};
 use crate::queue::{Command, CommandQueue};
-use crate::registry::{DeviceKind, DeviceMode, DeviceRegistry, Endpoint, OperationMode, RemoteAddr};
+use crate::registry::{
+    DeviceKind, DeviceMode, DeviceRegistry, Endpoint, OperationMode, RemoteAddr,
+};
 use crate::schema::{caps, flag, reason, AckAct, BatchResult, Body, Message, WireValue};
 use crate::transport::{Connection, TransportError};
 use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use vbl_runtime::ledger::{kinds as rt_kinds, Actuation, Ledger};
 use vbl_runtime::fxp::{
-    ActOutcome, ActorLimits, SensorFailure, Fxp, Limit, Registry as RuntimeRegistry, Value,
+    ActOutcome, ActorLimits, Fxp, Limit, Registry as RuntimeRegistry, SensorFailure, Value,
     PRIORITY_NORMAL,
 };
 use vbl_runtime::json::Json;
+use vbl_runtime::ledger::{kinds as rt_kinds, Actuation, Ledger};
 use vbl_runtime::sim::FxpSimulator;
 
 /// Kinds de evento acrescentados pelo barramento (vocabulário do Caderno —
@@ -92,6 +95,11 @@ pub struct BusConfig {
     /// `caps::DICT` e completa o `HELLO` no handshake; o dicionário é
     /// derivado do registro do peer (nenhum byte cruza o fio).
     pub compression_dict: bool,
+    /// zstd com dicionário TREINADO (v1.3 §4.8) — pede `caps::ZSTD +
+    /// caps::DICT` (o gatilho do `HELLO` é o mesmo); se o peer não conceder
+    /// zstd, a degradação segue a ordem id 3 → id 2 → plano (o que a
+    /// interseção `CAPS_OK` trouxer).
+    pub compression_zstd: bool,
     /// Pedir `FLAG_TIMESTAMP` ao peer e propagar como `fio_us` (§5).
     pub wire_timestamp: bool,
     /// PSK de autenticação do canal remoto (§4.6) — bytes da chave; o CLI
@@ -101,8 +109,14 @@ pub struct BusConfig {
     /// `discover:<identificador>`.
     pub discover_window: Duration,
     /// Grupo de descoberta (v1.2 §4.9): `ip:porta` v4, `[v6]:porta` (scope
-    /// numérico `%N`) e `@fonte-v4` para SSM. Default = grupo v4 do §4.9.
+    /// numérico `%N`) e `@fonte` para SSM (v4 desde a v1.2; v6 desde a
+    /// v1.3 — ex.: `[ff35::7080]:porta@[fe80::1%2]`). Default = grupo v4.
     pub discover_group: Option<String>,
+    /// Store TOFU (v1.3 §7) para endpoints `tcps:...@tofu` — caminho do
+    /// arquivo (o CLI resolve a flag/padrão). `None` + endpoint @tofu ⇒ usa
+    /// [`crate::tls::TofuStore::caminho_padrao`]; sem nenhum ⇒ falha honesta
+    /// da conexão (nunca confiar sem poder gravar a primeira use).
+    pub tofu_store: Option<std::path::PathBuf>,
 }
 
 impl Default for BusConfig {
@@ -118,10 +132,12 @@ impl Default for BusConfig {
             batch_prefetch: false,
             compression: false,
             compression_dict: false,
+            compression_zstd: false,
             wire_timestamp: false,
             psk: None,
             discover_window: Duration::from_millis(500),
             discover_group: None,
+            tofu_store: None,
         }
     }
 }
@@ -172,6 +188,9 @@ pub struct FxpBus {
     wire_ts: BTreeMap<String, u64>,
     /// Peers que não anunciaram v1.1 (CAPS falhou) — degradação honesta.
     v1_peers: BTreeMap<String, bool>,
+    /// Store TOFU aberto (v1.3 §7) — aberto na 1ª conexão `@tofu` e
+    /// compartilhado por todas (a primeira use grava uma única vez).
+    tofu: Option<Arc<Mutex<crate::tls::TofuStore>>>,
     queue: CommandQueue,
     seq: u32,
     disk_bytes: u64,
@@ -250,11 +269,13 @@ impl FxpBus {
                                 ),
                                 Some(txt) => match crate::discover::parse_group(txt) {
                                     Err(_) => Err(crate::discover::DiscoveryError::BeaconInvalido),
-                                    Ok((grupo, Some(fonte))) => crate::discover::discover_peers_ssm(
-                                        config.discover_window,
-                                        grupo,
-                                        fonte,
-                                    ),
+                                    Ok((grupo, Some(fonte))) => {
+                                        crate::discover::discover_peers_ssm(
+                                            config.discover_window,
+                                            grupo,
+                                            fonte,
+                                        )
+                                    }
                                     Ok((grupo, None)) => crate::discover::discover_peers(
                                         config.discover_window,
                                         grupo,
@@ -262,18 +283,17 @@ impl FxpBus {
                                 },
                             };
                             match descoberta {
-                                Ok(peers) => match peers
-                                    .into_iter()
-                                    .find(|p| p.identifier == *identifier)
-                                {
-                                    Some(p) => Some(Endpoint::Remote {
-                                        addr: RemoteAddr::Tcp {
-                                            host: p.source.ip().to_string(),
-                                            port: p.tcp_port,
-                                        },
-                                    }),
-                                    None => None,
-                                },
+                                Ok(peers) => {
+                                    match peers.into_iter().find(|p| p.identifier == *identifier) {
+                                        Some(p) => Some(Endpoint::Remote {
+                                            addr: RemoteAddr::Tcp {
+                                                host: p.source.ip().to_string(),
+                                                port: p.tcp_port,
+                                            },
+                                        }),
+                                        None => None,
+                                    }
+                                }
                                 Err(_) => None,
                             }
                         }
@@ -283,25 +303,24 @@ impl FxpBus {
                             // (mDNS é lossy, mesma honestidade do beacon).
                             #[cfg(feature = "mdns")]
                             match crate::mdns::discover_mdns(config.discover_window) {
-                                Ok(peers) => match peers
-                                    .into_iter()
-                                    .find(|p| p.identifier == *identifier)
-                                {
-                                    Some(p) => Some(Endpoint::Remote {
-                                        addr: match p.tls {
-                                            Some(pin) => RemoteAddr::TcpTls {
-                                                host: p.host.to_string(),
-                                                port: p.port,
-                                                fingerprint: pin,
+                                Ok(peers) => {
+                                    match peers.into_iter().find(|p| p.identifier == *identifier) {
+                                        Some(p) => Some(Endpoint::Remote {
+                                            addr: match p.tls {
+                                                Some(pin) => RemoteAddr::TcpTls {
+                                                    host: p.host.to_string(),
+                                                    port: p.port,
+                                                    trust: crate::tls::Trust::Pin(pin),
+                                                },
+                                                None => RemoteAddr::Tcp {
+                                                    host: p.host.to_string(),
+                                                    port: p.port,
+                                                },
                                             },
-                                            None => RemoteAddr::Tcp {
-                                                host: p.host.to_string(),
-                                                port: p.port,
-                                            },
-                                        },
-                                    }),
-                                    None => None,
-                                },
+                                        }),
+                                        None => None,
+                                    }
+                                }
                                 Err(_) => None,
                             }
                             // Sem a feature o parse já rejeita `mdns:`; o
@@ -368,6 +387,7 @@ impl FxpBus {
             cache: BTreeMap::new(),
             wire_ts: BTreeMap::new(),
             v1_peers: BTreeMap::new(),
+            tofu: None,
             queue: CommandQueue::default(),
             seq: 0,
             disk_bytes: 0,
@@ -401,13 +421,7 @@ impl FxpBus {
         self.routes.get(self.registry.canonical_of(name))
     }
 
-    fn sensor_alert(
-        &mut self,
-        ledger: &mut dyn Ledger,
-        reason: &str,
-        sensor: &str,
-        detail: &str,
-    ) {
+    fn sensor_alert(&mut self, ledger: &mut dyn Ledger, reason: &str, sensor: &str, detail: &str) {
         ledger.alert(
             &format!(
                 "Sensor '{sensor}' — falha de I/O ({reason}): {detail} Condição não avaliada neste tick."
@@ -454,8 +468,10 @@ impl FxpBus {
                 if canonical == "cpu_power" {
                     self.power_inaccessible = true;
                 }
-                let detail =
-                    format!("driver real ({}) falhou.", self.route_description(canonical));
+                let detail = format!(
+                    "driver real ({}) falhou.",
+                    self.route_description(canonical)
+                );
                 self.sensor_alert(ledger, "sensor_inaccessible", canonical, &detail);
                 Err(SensorFailure::Inaccessible)
             }
@@ -478,7 +494,12 @@ impl FxpBus {
         if self.config.batch_prefetch {
             // Conexão+negociação antes da decisão: CAPS precisa estar viva.
             if let Err(e) = self.ensure_remote(&addr, self.config.read_timeout, ledger) {
-                self.sensor_alert(ledger, "sensor_inaccessible", canonical, &format!("transporte: {e}."));
+                self.sensor_alert(
+                    ledger,
+                    "sensor_inaccessible",
+                    canonical,
+                    &format!("transporte: {e}."),
+                );
                 return Err(SensorFailure::Inaccessible);
             }
             if self.granted_caps_of(&addr) & caps::BATCH != 0
@@ -593,25 +614,37 @@ impl FxpBus {
         if self.connections.contains_key(&key) {
             return Ok(());
         }
+        // Handshake tem prazo PRÓPRIO (v1.3 §4.8): a derivação do dicionário
+        // treinado (COVER) é trabalho real nos DOIS lados — o prazo de
+        // leitura (dezenas de ms por sensor) não serve para o handshake.
+        let hs = timeout.max(Duration::from_millis(500));
+        // v1.3 §7: o CAPS pode partir como 0-RTT na conexão TLS retomada —
+        // só sem PSK (com AUTH o servidor fala primeiro, §4.6).
+        let wanted = self.wanted_caps();
+        let early_caps = if wanted != 0 && self.config.psk.is_none() {
+            Some(wanted)
+        } else {
+            None
+        };
         let mut c = match addr {
             RemoteAddr::Unix(p) => Connection::unix(p, timeout)?,
             RemoteAddr::Tcp { host, port } => Connection::tcp(host, *port, timeout)?,
-            // v1.2 §7: TLS com pin — handshake falho/divergente é terminativo
-            // (nunca reconecta em texto plano).
-            RemoteAddr::TcpTls { host, port, fingerprint } => {
-                Connection::tcp_tls(host, *port, fingerprint, timeout)?
+            // v1.2/v1.3 §7: TLS com pin/TOFU — handshake falho/divergente é
+            // terminativo (nunca reconecta em texto plano).
+            RemoteAddr::TcpTls { host, port, trust } => {
+                let confianca = self.confianca_cliente(host, *port, trust)?;
+                Connection::tcp_tls(host, *port, &confianca, hs, early_caps)?
             }
         };
         // §6 — ordem: AUTH → CAPS → trabalho. Falha de AUTENTICAÇÃO é
         // terminativa (segurança não degrada para canal aberto).
         if let Some(psk) = &self.config.psk {
-            if let Err(e) = c.authenticate(psk, timeout) {
+            if let Err(e) = c.authenticate(psk, hs) {
                 return Err(TransportError::Broken(format!("auth: {e}")));
             }
         }
-        let wanted = self.wanted_caps();
         let concedidas = if wanted != 0 {
-            match c.negotiate(wanted, timeout) {
+            match c.negotiate(wanted, hs) {
                 Ok(g) => g,
                 Err(TransportError::Timeout) => return Err(TransportError::Timeout),
                 Err(_) => {
@@ -620,8 +653,9 @@ impl FxpBus {
                     let c2 = match addr {
                         RemoteAddr::Unix(p) => Connection::unix(p, timeout)?,
                         RemoteAddr::Tcp { host, port } => Connection::tcp(host, *port, timeout)?,
-                        RemoteAddr::TcpTls { host, port, fingerprint } => {
-                            Connection::tcp_tls(host, *port, fingerprint, timeout)?
+                        RemoteAddr::TcpTls { host, port, trust } => {
+                            let confianca = self.confianca_cliente(host, *port, trust)?;
+                            Connection::tcp_tls(host, *port, &confianca, hs, early_caps)?
                         }
                     };
                     self.connections.insert(key.clone(), c2);
@@ -642,26 +676,81 @@ impl FxpBus {
         } else {
             0
         };
-        // v1.2 §4.8: DICT concedido ⇒ HELLO integra o handshake. O cliente
-        // publica o registro local e deriva o dicionário do registro do
-        // PEER (o servidor deriva do dele — mesmos bytes, sem fio extra).
+        // v1.2/v1.3 §4.8: DICT concedido ⇒ HELLO integra o handshake. O
+        // cliente publica o registro local e deriva o dicionário do registro
+        // do PEER (o servidor deriva do dele — mesmos bytes, sem fio extra).
+        // Com zstd concedido, o dicionário é o TREINADO (id 3); derivar e
+        // falhar ⇒ erro honesto (divergência de versão não vira silêncio).
         if concedidas & caps::DICT != 0 {
             let local: Vec<crate::schema::DeviceDesc> = self
                 .registry_rico()
                 .devices()
                 .map(|d| d.to_device_desc())
                 .collect();
-            let remoto = c.exchange_hello(&local, timeout).map_err(|e| {
-                TransportError::Broken(format!("handshake dict (HELLO): {e}"))
-            })?;
+            let remoto = c
+                .exchange_hello(&local, hs)
+                .map_err(|e| TransportError::Broken(format!("handshake dict (HELLO): {e}")))?;
             let nomes: Vec<String> = remoto.iter().map(|d| d.name().to_string()).collect();
-            c.set_dict(crate::schema::compress::dict_from_registry(&nomes));
+            if concedidas & caps::ZSTD != 0 {
+                match crate::schema::compress::zstd_dict_from_registry(&nomes) {
+                    Some(d) => c.set_zstd_dict(d),
+                    None => {
+                        return Err(TransportError::Broken(
+                            "peer concedeu ZSTD mas o dicionário treinado não derivou localmente (§4.8) — conexão recusada"
+                                .into(),
+                        ))
+                    }
+                }
+            } else {
+                c.set_dict(crate::schema::compress::dict_from_registry(&nomes));
+            }
         }
         self.connections.insert(key, c);
         Ok(())
     }
 
-    /// Capacidades que este bus pede ao peer (config opt-in v1.1/v1.2).
+    /// Confiança do cliente TLS (v1.3 §7): pin é autossuficiente; TOFU
+    /// abre/compartilha o store (config → padrão do usuário). Falha de
+    /// abertura ⇒ falha fechada da conexão (nunca confiar sem registrar).
+    fn confianca_cliente(
+        &mut self,
+        host: &str,
+        port: u16,
+        trust: &crate::tls::Trust,
+    ) -> Result<crate::tls::ConfiancaCliente, TransportError> {
+        match trust {
+            crate::tls::Trust::Pin(fp) => Ok(crate::tls::ConfiancaCliente::Pin(*fp)),
+            crate::tls::Trust::Tofu => {
+                if self.tofu.is_none() {
+                    let caminho = self
+                        .config
+                        .tofu_store
+                        .clone()
+                        .or_else(crate::tls::TofuStore::caminho_padrao)
+                        .ok_or_else(|| {
+                            TransportError::ConnectionFailed(
+                                "endpoint @tofu sem store: informe --tofu-store (ou XDG_STATE_HOME/HOME)"
+                                    .into(),
+                            )
+                        })?;
+                    let store = crate::tls::TofuStore::open(&caminho).map_err(|e| {
+                        TransportError::ConnectionFailed(format!(
+                            "store TOFU {}: {e}",
+                            caminho.display()
+                        ))
+                    })?;
+                    self.tofu = Some(Arc::new(Mutex::new(store)));
+                }
+                Ok(crate::tls::ConfiancaCliente::Tofu {
+                    store: self.tofu.clone().expect("garantido acima"),
+                    host: host.to_string(),
+                    port,
+                })
+            }
+        }
+    }
+
+    /// Capacidades que este bus pede ao peer (config opt-in v1.1/v1.2/v1.3).
     fn wanted_caps(&self) -> u16 {
         let mut w = 0;
         if self.config.compression {
@@ -669,6 +758,11 @@ impl FxpBus {
         }
         if self.config.compression_dict {
             w |= caps::DICT;
+        }
+        if self.config.compression_zstd {
+            // v1.3 §4.8: zstd anda SEMPRE com DICT — o gatilho do HELLO é o
+            // mesmo e a degradação (sem treino/zstd no peer) cai no id 2.
+            w |= caps::ZSTD | caps::DICT;
         }
         if self.config.batch_prefetch {
             w |= caps::BATCH;
@@ -774,24 +868,44 @@ impl FxpBus {
                             }
                             Some((nome, BatchResult::Err { reason })) => {
                                 let (failure, motivo) = motivo_de_reason(reason);
-                                self.sensor_alert(ledger, motivo, &nome, "peer respondeu erro no lote.");
+                                self.sensor_alert(
+                                    ledger,
+                                    motivo,
+                                    &nome,
+                                    "peer respondeu erro no lote.",
+                                );
                                 Err(failure)
                             }
                             None => {
-                                self.sensor_alert(ledger, "sensor_inaccessible", canonical, "lote sem o sensor pedido.");
+                                self.sensor_alert(
+                                    ledger,
+                                    "sensor_inaccessible",
+                                    canonical,
+                                    "lote sem o sensor pedido.",
+                                );
                                 Err(SensorFailure::Inaccessible)
                             }
                         }
                     }
                     _ => {
-                        self.sensor_alert(ledger, "sensor_inaccessible", canonical, "resposta inesperada ao lote.");
+                        self.sensor_alert(
+                            ledger,
+                            "sensor_inaccessible",
+                            canonical,
+                            "resposta inesperada ao lote.",
+                        );
                         Err(SensorFailure::Inaccessible)
                     }
                 }
             }
             Err(e) => {
                 self.connections.remove(&addr_key(addr));
-                self.sensor_alert(ledger, "sensor_inaccessible", canonical, &format!("transporte: {e}."));
+                self.sensor_alert(
+                    ledger,
+                    "sensor_inaccessible",
+                    canonical,
+                    &format!("transporte: {e}."),
+                );
                 Err(SensorFailure::Inaccessible)
             }
         }
@@ -954,7 +1068,13 @@ impl FxpBus {
                                 1 => Limit::Max,
                                 _ => Limit::SafetyLimit,
                             };
-                            Some(self.reject_over_limit(canonical, value, limit, limit_value, ledger))
+                            Some(self.reject_over_limit(
+                                canonical,
+                                value,
+                                limit,
+                                limit_value,
+                                ledger,
+                            ))
                         }
                         AckAct::MissingActor => {
                             ledger.record(
@@ -1003,7 +1123,13 @@ impl FxpBus {
             }
             Err(e) => {
                 self.connections.remove(&addr_key(&addr));
-                actuation_with_latency(ledger, canonical, value, t0.elapsed().as_micros() as u64, false);
+                actuation_with_latency(
+                    ledger,
+                    canonical,
+                    value,
+                    t0.elapsed().as_micros() as u64,
+                    false,
+                );
                 ledger.record(
                     rt_kinds::ACTOR_UNAVAILABLE,
                     &format!("Heartbeat do ator '{canonical}' não respondeu (transporte: {e})."),
@@ -1030,7 +1156,11 @@ impl FxpBus {
                 let limits = self.limits_of(canonical);
                 if let Some((limit, limit_value)) = self.violation(&limits, value) {
                     return Some(self.reject_over_limit(
-                        canonical, value, limit, limit_value, ledger,
+                        canonical,
+                        value,
+                        limit,
+                        limit_value,
+                        ledger,
                     ));
                 }
                 match self.deliver_real(canonical, value, ledger) {
@@ -1231,9 +1361,15 @@ pub(crate) fn addr_key(addr: &RemoteAddr) -> String {
     match addr {
         RemoteAddr::Unix(p) => format!("unix:{}", p.display()),
         RemoteAddr::Tcp { host, port } => format!("tcp:{host}:{port}"),
-        RemoteAddr::TcpTls { host, port, fingerprint } => {
-            format!("tcps:{host}:{port}@sha256:{}", crate::tls::hex32(fingerprint))
-        }
+        RemoteAddr::TcpTls { host, port, trust } => match trust {
+            crate::tls::Trust::Pin(fingerprint) => {
+                format!(
+                    "tcps:{host}:{port}@sha256:{}",
+                    crate::tls::hex32(fingerprint)
+                )
+            }
+            crate::tls::Trust::Tofu => format!("tcps:{host}:{port}@tofu"),
+        },
     }
 }
 
@@ -1251,12 +1387,7 @@ pub(crate) fn motivo_de_reason(reason: u8) -> (SensorFailure, &'static str) {
 }
 
 /// JSON de evento de leitura com o timestamp do fio quando presente (§5).
-pub(crate) fn fio_us_json(
-    motivo: &str,
-    sensor: &str,
-    valor: f64,
-    fio_us: Option<u64>,
-) -> Json {
+pub(crate) fn fio_us_json(motivo: &str, sensor: &str, valor: f64, fio_us: Option<u64>) -> Json {
     let mut pares = vec![
         ("motivo", Json::str(motivo)),
         ("sensor", Json::str(sensor)),
@@ -1269,11 +1400,7 @@ pub(crate) fn fio_us_json(
 }
 
 impl Fxp for FxpBus {
-    fn read_sensor(
-        &mut self,
-        name: &str,
-        ledger: &mut dyn Ledger,
-    ) -> Result<f64, SensorFailure> {
+    fn read_sensor(&mut self, name: &str, ledger: &mut dyn Ledger) -> Result<f64, SensorFailure> {
         let canonical = self.registry.canonical_of(name).to_string();
         if !self.registry.contains(&canonical) {
             self.sensor_alert(
@@ -1349,13 +1476,7 @@ impl Fxp for FxpBus {
                 // Limites do REGISTRO (inclusivos) antes do envio (§4.3).
                 let limits = self.limits_of(&canonical);
                 if let Some((limit, limit_value)) = self.violation(&limits, &value) {
-                    return self.reject_over_limit(
-                        &canonical,
-                        &value,
-                        limit,
-                        limit_value,
-                        ledger,
-                    );
+                    return self.reject_over_limit(&canonical, &value, limit, limit_value, ledger);
                 }
                 match self.deliver_route(&canonical, &value, ledger) {
                     Some(outcome) => outcome,

@@ -26,6 +26,15 @@ rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 socket2 = { workspace = true }
 mdns-sd = { workspace = true, optional = true }
+# v1.3 (§4.8): zstd com dicionário treinado — algoritmo 3, só negociado.
+zstd = { workspace = true }
+
+# v1.3 (§4.9): SSM IPv6 — a assinatura (grupo, fonte) v6 não existe nem no
+# std nem no socket2 0.6; a chamada crua `setsockopt(IPPROTO_IPV6,
+# MCAST_JOIN_SOURCE_GROUP)` (RFC 3678/4604) resolve em Linux. Outras
+# plataformas: join v6 com fonte falha honesto (`MulticastIndisponivel`).
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { workspace = true }
 
 [features]
 # mDNS/DNS-SD (v1.2 §4.10): descoberta adicional opt-in — o fio §2 não muda.

@@ -2,8 +2,8 @@
 //! runtime, e o config de linhas `key = value` com fallback (§4.3).
 
 use vbl_fxp::registry::{
-    DeviceEntry, DeviceKind, DeviceMode, DeviceRegistry, Endpoint, RegistryError, FxpConfig,
-    OperationMode,
+    DeviceEntry, DeviceKind, DeviceMode, DeviceRegistry, Endpoint, FxpConfig, OperationMode,
+    RegistryError,
 };
 use vbl_runtime::fxp::ActorLimits;
 
@@ -13,22 +13,38 @@ fn minimum_registry_has_formal_6_mandatory_devices() {
     assert_eq!(r.len(), 6, "3 sensores + 3 atores obrigatórios");
     // Sensores: grandeza/unidade/precisão do §6.
     let t = r.get("cpu_temp").unwrap();
-    let DeviceKind::Sensor { quantity, unit, precision_pct, .. } = &t.kind else {
+    let DeviceKind::Sensor {
+        quantity,
+        unit,
+        precision_pct,
+        ..
+    } = &t.kind
+    else {
         panic!("cpu_temp deveria ser sensor");
     };
     assert_eq!(quantity, "temperature");
     assert_eq!(unit, "°C");
     assert_eq!(*precision_pct, 2.0);
     let p = r.get("cpu_power").unwrap();
-    let DeviceKind::Sensor { precision_pct, .. } = &p.kind else { panic!() };
+    let DeviceKind::Sensor { precision_pct, .. } = &p.kind else {
+        panic!()
+    };
     assert_eq!(*precision_pct, 5.0);
     // Atores: limites inclusivos do §6.
-    let DeviceKind::Actor { limits } = &r.get("CpuPowerCap").unwrap().kind else { panic!() };
+    let DeviceKind::Actor { limits } = &r.get("CpuPowerCap").unwrap().kind else {
+        panic!()
+    };
     assert_eq!(
         limits,
-        &ActorLimits { min: Some(10.0), max: Some(250.0), safety_limit: Some(200.0) }
+        &ActorLimits {
+            min: Some(10.0),
+            max: Some(250.0),
+            safety_limit: Some(200.0)
+        }
     );
-    let DeviceKind::Actor { limits } = &r.get("Fan").unwrap().kind else { panic!() };
+    let DeviceKind::Actor { limits } = &r.get("Fan").unwrap().kind else {
+        panic!()
+    };
     assert_eq!(limits.safety_limit, Some(200.0));
     // Tudo simulado por padrão (CI-safe).
     assert!(r.devices().all(|d| d.mode == DeviceMode::Simulated));
@@ -116,7 +132,9 @@ fn config_parses_and_applies_overrides_and_extensions() {
     assert_eq!(t.mode, DeviceMode::Real);
     assert_eq!(
         t.endpoint,
-        Endpoint::ThermalZone { dir: "/sys/class/thermal/thermal_zone0".into() }
+        Endpoint::ThermalZone {
+            dir: "/sys/class/thermal/thermal_zone0".into()
+        }
     );
 
     // Alias aplicado.
@@ -126,12 +144,17 @@ fn config_parses_and_applies_overrides_and_extensions() {
     let res = r.get("ReserveFan").unwrap();
     assert_eq!(res.mode, DeviceMode::Real);
     assert!(res.endpoint.is_remote());
-    let DeviceKind::Actor { limits } = &res.kind else { panic!("esperava ator") };
+    let DeviceKind::Actor { limits } = &res.kind else {
+        panic!("esperava ator")
+    };
     assert_eq!(limits.min, Some(0.0));
     assert_eq!(limits.max, Some(255.0));
 
     // Fallback no registro (FORMAL §4.3).
-    assert_eq!(r.get("Fan").unwrap().fallback, vec!["ReserveFan".to_string()]);
+    assert_eq!(
+        r.get("Fan").unwrap().fallback,
+        vec!["ReserveFan".to_string()]
+    );
 }
 
 #[test]
@@ -194,7 +217,9 @@ fn config_rejects_malformations() {
     FxpConfig::parse("SolarPanel.grandeza = luz\nSolarPanel.unidade = W/m2\nSolarPanel.min = 0\nSolarPanel.max = 1200\n")
         .and_then(|c| c.apply(&mut r2))
         .unwrap();
-    let DeviceKind::Sensor { range: (min, max), .. } = &r2.get("SolarPanel").unwrap().kind
+    let DeviceKind::Sensor {
+        range: (min, max), ..
+    } = &r2.get("SolarPanel").unwrap().kind
     else {
         panic!("esperava sensor");
     };
@@ -239,15 +264,24 @@ use vbl_fxp::registry::RemoteAddr;
 fn modos_parse_nome_e_erro() {
     // modo do barramento
     assert_eq!(OperationMode::parse("real").unwrap(), OperationMode::Real);
-    assert_eq!(OperationMode::parse("simulado").unwrap(), OperationMode::Simulated);
-    assert_eq!(OperationMode::parse("hibrido").unwrap(), OperationMode::Hybrid);
+    assert_eq!(
+        OperationMode::parse("simulado").unwrap(),
+        OperationMode::Simulated
+    );
+    assert_eq!(
+        OperationMode::parse("hibrido").unwrap(),
+        OperationMode::Hybrid
+    );
     assert_eq!(OperationMode::Real.name(), "real");
     assert_eq!(OperationMode::Simulated.name(), "simulado");
     assert_eq!(OperationMode::Hybrid.name(), "hibrido");
     assert!(OperationMode::parse("voador").is_err());
     // modo individual do dispositivo
     assert_eq!(DeviceMode::parse("real").unwrap(), DeviceMode::Real);
-    assert_eq!(DeviceMode::parse("simulado").unwrap(), DeviceMode::Simulated);
+    assert_eq!(
+        DeviceMode::parse("simulado").unwrap(),
+        DeviceMode::Simulated
+    );
     assert_eq!(DeviceMode::Real.name(), "real");
     assert_eq!(DeviceMode::Simulated.name(), "simulado");
     assert_eq!(DeviceMode::default(), DeviceMode::Simulated);
@@ -259,7 +293,9 @@ fn endpoint_parse_erro_e_descricao_de_todas_as_rotas() {
     // tcp malformado
     let e = Endpoint::parse("tcp:sem_porta").unwrap_err().to_string();
     assert!(e.contains("esperado tcp:host:porta"), "{e}");
-    let e = Endpoint::parse("tcp:127.0.0.1:porta").unwrap_err().to_string();
+    let e = Endpoint::parse("tcp:127.0.0.1:porta")
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("porta inválida"), "{e}");
     // esquema desconhecido
     assert!(Endpoint::parse("bluetooth:x").is_err());
@@ -268,21 +304,67 @@ fn endpoint_parse_erro_e_descricao_de_todas_as_rotas() {
     let casos = [
         ("simulado", Endpoint::Simulated),
         ("auto", Endpoint::Auto),
-        ("thermal_zone:/sys/t0", Endpoint::ThermalZone { dir: "/sys/t0".into() }),
-        ("hwmon_temp:/sys/hw", Endpoint::HwmonTemp { file: "/sys/hw".into() }),
-        ("rapl_energy:/sys/rapl", Endpoint::RaplEnergy { dir: "/sys/rapl".into() }),
-        ("rapl_constraint:/sys/c", Endpoint::RaplConstraint { file: "/sys/c".into() }),
-        ("hwmon_pwm:/sys/pwm", Endpoint::HwmonPwm { file: "/sys/pwm".into() }),
-        ("led:/sys/leds", Endpoint::LedClass { dir: "/sys/leds".into() }),
-        ("unix:/tmp/fxpd.sock", Endpoint::Remote { addr: RemoteAddr::Unix("/tmp/fxpd.sock".into()) }),
-        ("tcp:127.0.0.1:9000", Endpoint::Remote { addr: RemoteAddr::Tcp { host: "127.0.0.1".into(), port: 9000 } }),
+        (
+            "thermal_zone:/sys/t0",
+            Endpoint::ThermalZone {
+                dir: "/sys/t0".into(),
+            },
+        ),
+        (
+            "hwmon_temp:/sys/hw",
+            Endpoint::HwmonTemp {
+                file: "/sys/hw".into(),
+            },
+        ),
+        (
+            "rapl_energy:/sys/rapl",
+            Endpoint::RaplEnergy {
+                dir: "/sys/rapl".into(),
+            },
+        ),
+        (
+            "rapl_constraint:/sys/c",
+            Endpoint::RaplConstraint {
+                file: "/sys/c".into(),
+            },
+        ),
+        (
+            "hwmon_pwm:/sys/pwm",
+            Endpoint::HwmonPwm {
+                file: "/sys/pwm".into(),
+            },
+        ),
+        (
+            "led:/sys/leds",
+            Endpoint::LedClass {
+                dir: "/sys/leds".into(),
+            },
+        ),
+        (
+            "unix:/tmp/fxpd.sock",
+            Endpoint::Remote {
+                addr: RemoteAddr::Unix("/tmp/fxpd.sock".into()),
+            },
+        ),
+        (
+            "tcp:127.0.0.1:9000",
+            Endpoint::Remote {
+                addr: RemoteAddr::Tcp {
+                    host: "127.0.0.1".into(),
+                    port: 9000,
+                },
+            },
+        ),
     ];
     for (texto, endpoint) in casos {
         assert_eq!(Endpoint::parse(texto).unwrap(), endpoint, "{texto}");
         assert_eq!(endpoint.description(), texto, "{texto:?}");
     }
     // só rotas remotas são remotas
-    assert!(Endpoint::Remote { addr: RemoteAddr::Unix("/x".into()) }.is_remote());
+    assert!(Endpoint::Remote {
+        addr: RemoteAddr::Unix("/x".into())
+    }
+    .is_remote());
     assert!(!Endpoint::Simulated.is_remote());
     // registro: contagem e vazio
     let vazio = DeviceRegistry::default();
@@ -292,7 +374,8 @@ fn endpoint_parse_erro_e_descricao_de_todas_as_rotas() {
 
 #[test]
 fn config_matriz_de_chaves_globais_e_erros() {
-    let cfg = FxpConfig::parse("\
+    let cfg = FxpConfig::parse(
+        "\
 # comentário
 mode = hibrido
 cache_ttl_ms = 100
@@ -301,7 +384,9 @@ act_timeout_local_ms = 40
 act_timeout_remote_ms = 400
 queue_timeout_ms = 2500
 retries = 3
-").unwrap();
+",
+    )
+    .unwrap();
     assert_eq!(cfg.mode, Some(OperationMode::Hybrid));
     assert_eq!(cfg.cache_ttl_ms, Some(100));
     assert_eq!(cfg.read_timeout_ms, Some(20));
@@ -313,26 +398,38 @@ retries = 3
     // cláusulas de erro das chaves globais
     let e = FxpConfig::parse("sem igual").unwrap_err().to_string();
     assert!(e.contains("sem '='"), "{e}");
-    let e = FxpConfig::parse("cache_ttl_ms = x").unwrap_err().to_string();
+    let e = FxpConfig::parse("cache_ttl_ms = x")
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("cache_ttl_ms espera inteiro"), "{e}");
-    let e = FxpConfig::parse("act_timeout_local_ms = x").unwrap_err().to_string();
+    let e = FxpConfig::parse("act_timeout_local_ms = x")
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("act_timeout_local_ms espera inteiro"), "{e}");
-    let e = FxpConfig::parse("queue_timeout_ms = dez").unwrap_err().to_string();
+    let e = FxpConfig::parse("queue_timeout_ms = dez")
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("queue_timeout_ms espera inteiro"), "{e}");
     let e = FxpConfig::parse("mode = voador").unwrap_err().to_string();
     assert!(e.contains("modo desconhecido"), "{e}");
     let e = FxpConfig::parse(format!("retries = {}", u64::from(u32::MAX) + 1).as_str())
-        .unwrap_err().to_string();
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("retries muito grande"), "{e}");
-    let e = FxpConfig::parse("chave_sem_ponto = 1").unwrap_err().to_string();
+    let e = FxpConfig::parse("chave_sem_ponto = 1")
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("chave desconhecida 'chave_sem_ponto'"), "{e}");
-    let e = FxpConfig::parse("fallback.Fan = , ,").unwrap_err().to_string();
+    let e = FxpConfig::parse("fallback.Fan = , ,")
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("fallback sem alternativos"), "{e}");
 }
 
 #[test]
 fn config_matriz_de_campos_de_dispositivo() {
-    let cfg = FxpConfig::parse("\
+    let cfg = FxpConfig::parse(
+        "\
 cpu_temp.mode = real
 cpu_temp.endpoint = auto
 cpu_temp.grandeza = temperatura
@@ -343,7 +440,9 @@ cpu_temp.max = 120
 Fan.safety_limit = 200
 human_attention.alias_de = attention
 ReserveFan.endpoint = unix:/tmp/fxpd.sock
-").unwrap();
+",
+    )
+    .unwrap();
     let ct = &cfg.devices["cpu_temp"];
     assert_eq!(ct.mode, Some(DeviceMode::Real));
     assert_eq!(ct.endpoint, Some(Endpoint::Auto));
@@ -353,16 +452,25 @@ ReserveFan.endpoint = unix:/tmp/fxpd.sock
     assert_eq!(ct.min, Some(-40.0));
     assert_eq!(ct.max, Some(120.0));
     assert_eq!(cfg.devices["Fan"].safety_limit, Some(200.0));
-    assert_eq!(cfg.devices["human_attention"].alias_of.as_deref(), Some("attention"));
+    assert_eq!(
+        cfg.devices["human_attention"].alias_of.as_deref(),
+        Some("attention")
+    );
 
     // erros por campo
     for (linha, trecho) in [
         ("cpu_temp.mode = voador", "modo de dispositivo desconhecido"),
         ("cpu_temp.endpoint = bluetooth:x", "endpoint inválido"),
-        ("cpu_temp.precisao_pct = preciso", "precisao_pct espera número"),
+        (
+            "cpu_temp.precisao_pct = preciso",
+            "precisao_pct espera número",
+        ),
         ("cpu_temp.min = frio", "min espera número"),
         ("Fan.safety_limit = muito", "safety_limit espera número"),
-        ("cpu_temp.campo_novo = 1", "campo de dispositivo desconhecido 'campo_novo'"),
+        (
+            "cpu_temp.campo_novo = 1",
+            "campo de dispositivo desconhecido 'campo_novo'",
+        ),
     ] {
         let e = FxpConfig::parse(linha).unwrap_err().to_string();
         assert!(e.contains(trecho), "{linha}: {e}");
@@ -371,7 +479,8 @@ ReserveFan.endpoint = unix:/tmp/fxpd.sock
 
 #[test]
 fn apply_sobrescreve_existente_e_registra_extensoes() {
-    let cfg = FxpConfig::parse("\
+    let cfg = FxpConfig::parse(
+        "\
 cpu_temp.mode = real
 cpu_temp.grandeza = temperatura
 cpu_temp.unidade = °C
@@ -391,7 +500,9 @@ ReserveFan.min = 0
 ReserveFan.max = 255
 RemoteLed.endpoint = unix:/tmp/led.sock
 fallback.Fan = ReserveFan
-").unwrap();
+",
+    )
+    .unwrap();
     let mut registry = DeviceRegistry::minimum();
     cfg.apply(&mut registry).unwrap();
 
@@ -399,38 +510,64 @@ fallback.Fan = ReserveFan
     assert!(registry.contains("ReserveFan")); // extensão ator por limites
     assert!(registry.contains("RemoteLed")); // ator remoto sem limites
     assert!(registry.contains("human_attention")); // alias visível
-    // fallback registrado: cita canônico do mínimo (alternativa válida)
+                                                   // fallback registrado: cita canônico do mínimo (alternativa válida)
     let cfg_fallback = FxpConfig::parse("fallback.Fan = CpuPowerCap").unwrap();
     assert!(cfg_fallback.apply(&mut DeviceRegistry::minimum()).is_ok());
     // fallback citando desconhecido → erro de registro (§4.3)
     let cfg_ruim = FxpConfig::parse("fallback.Fan = NemExiste").unwrap();
-    let e = cfg_ruim.apply(&mut DeviceRegistry::minimum()).unwrap_err().to_string();
+    let e = cfg_ruim
+        .apply(&mut DeviceRegistry::minimum())
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("fora do registro"), "{e}");
 
     // erros de aplicação
     let mut r = DeviceRegistry::minimum();
-    let e = FxpConfig::parse("cpu_temp.safety_limit = 100").unwrap()
-        .apply(&mut r).unwrap_err().to_string();
-    assert!(e.contains("sensor 'cpu_temp' não aceita safety_limit"), "{e}");
-    let e = FxpConfig::parse("Fan.grandeza = potencia").unwrap()
-        .apply(&mut r).unwrap_err().to_string();
+    let e = FxpConfig::parse("cpu_temp.safety_limit = 100")
+        .unwrap()
+        .apply(&mut r)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        e.contains("sensor 'cpu_temp' não aceita safety_limit"),
+        "{e}"
+    );
+    let e = FxpConfig::parse("Fan.grandeza = potencia")
+        .unwrap()
+        .apply(&mut r)
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("ator 'Fan' não aceita grandeza"), "{e}");
-    let e = FxpConfig::parse("novo_dispositivo.mode = simulado").unwrap()
-        .apply(&mut r).unwrap_err().to_string();
-    assert!(e.contains("precisa de grandeza (sensor) ou limites (ator)"), "{e}");
-    let e = FxpConfig::parse("novo_sensor.grandeza = x\nnovo_sensor.safety_limit = 9").unwrap()
-        .apply(&mut r).unwrap_err().to_string();
+    let e = FxpConfig::parse("novo_dispositivo.mode = simulado")
+        .unwrap()
+        .apply(&mut r)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        e.contains("precisa de grandeza (sensor) ou limites (ator)"),
+        "{e}"
+    );
+    let e = FxpConfig::parse("novo_sensor.grandeza = x\nnovo_sensor.safety_limit = 9")
+        .unwrap()
+        .apply(&mut r)
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("não aceita safety_limit"), "{e}");
     // alias encadeado e alias com mode/endpoint: rejeitados na leitura
     let e = FxpConfig::parse("a.alias_de = attention\nb.alias_de = a")
-        .unwrap_err().to_string();
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("não pode apontar para outro alias"), "{e}");
     let e = FxpConfig::parse("humido.alias_de = attention\nhumido.mode = real")
-        .unwrap_err().to_string();
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("não aceita mode/endpoint"), "{e}");
     // alias para canônico desconhecido
-    let e = FxpConfig::parse("x.alias_de = nem_existe").unwrap()
-        .apply(&mut r).unwrap_err().to_string();
+    let e = FxpConfig::parse("x.alias_de = nem_existe")
+        .unwrap()
+        .apply(&mut r)
+        .unwrap_err()
+        .to_string();
     assert!(e.contains("aponta para dispositivo inexistente"), "{e}");
 }
 
@@ -445,11 +582,19 @@ fn display_de_todos_os_erros_de_registro() {
         "'ReserveFan' colide com nome/alias já registrado"
     );
     assert_eq!(
-        RegistryError::UnknownAlias { alias: "x".into(), canonical: "y".into() }.to_string(),
+        RegistryError::UnknownAlias {
+            alias: "x".into(),
+            canonical: "y".into()
+        }
+        .to_string(),
         "alias 'x' aponta para dispositivo inexistente 'y'"
     );
     assert_eq!(
-        RegistryError::UnknownFallback { actor: "Fan".into(), alternativo: "N".into() }.to_string(),
+        RegistryError::UnknownFallback {
+            actor: "Fan".into(),
+            alternativo: "N".into()
+        }
+        .to_string(),
         "fallback de 'Fan' cita 'N', fora do registro (FORMAL §4.3)"
     );
     assert_eq!(
@@ -500,7 +645,10 @@ fn endpoint_discover_exige_identificador_e_descreve_de_volta() {
         other => panic!("esperava AutoRemote, veio {other:?}"),
     }
     assert_eq!(
-        Endpoint::AutoRemote { identifier: "fxpd-lab".into() }.description(),
+        Endpoint::AutoRemote {
+            identifier: "fxpd-lab".into()
+        }
+        .description(),
         "discover:fxpd-lab"
     );
 }
@@ -511,7 +659,13 @@ fn to_device_desc_cobre_sensor_e_ator() {
     use vbl_runtime::fxp::ActorLimits;
     let sensor = DeviceEntry::sensor("cpu_temp", "temperature", "°C", 1.5);
     match sensor.to_device_desc() {
-        DeviceDesc::Sensor { name, quantity, unit, precision_pct, .. } => {
+        DeviceDesc::Sensor {
+            name,
+            quantity,
+            unit,
+            precision_pct,
+            ..
+        } => {
             assert_eq!(name, "cpu_temp");
             assert_eq!(quantity, "temperature");
             assert_eq!(unit, "°C");
@@ -521,10 +675,19 @@ fn to_device_desc_cobre_sensor_e_ator() {
     }
     let ator = DeviceEntry::actor(
         "Fan",
-        ActorLimits { min: Some(10.0), max: Some(255.0), safety_limit: Some(200.0) },
+        ActorLimits {
+            min: Some(10.0),
+            max: Some(255.0),
+            safety_limit: Some(200.0),
+        },
     );
     match ator.to_device_desc() {
-        DeviceDesc::Actor { name, min, max, safety } => {
+        DeviceDesc::Actor {
+            name,
+            min,
+            max,
+            safety,
+        } => {
             assert_eq!(name, "Fan");
             assert_eq!(min, Some(10.0));
             assert_eq!(max, Some(255.0));
@@ -545,13 +708,24 @@ fn clausulas_de_erro_do_registro_e_do_config() {
     let mut invasor = DeviceEntry::sensor("invasor", "attention", "%", 0.0);
     invasor.aliases = vec!["human_attention".to_string()];
     let colisao = r.register(invasor);
-    assert!(matches!(colisao, Err(RegistryError::ConflictingAlias(_))), "{colisao:?}");
+    assert!(
+        matches!(colisao, Err(RegistryError::ConflictingAlias(_))),
+        "{colisao:?}"
+    );
 
     // alias encadeado (apelido de apelido) ⇒ recusado.
-    let chained = r.set_alias("alias_de_human", "human_attention").unwrap_err();
-    assert!(matches!(chained, RegistryError::ChainedAlias(_)), "{chained:?}");
+    let chained = r
+        .set_alias("alias_de_human", "human_attention")
+        .unwrap_err();
+    assert!(
+        matches!(chained, RegistryError::ChainedAlias(_)),
+        "{chained:?}"
+    );
 
     // compress_threshold precisa ser inteiro — negativo é recusado no parse.
     let parse_err = FxpConfig::parse("mode = simulado\ncompress_threshold = -5\n").unwrap_err();
-    assert!(parse_err.to_string().contains("compress_threshold"), "{parse_err}");
+    assert!(
+        parse_err.to_string().contains("compress_threshold"),
+        "{parse_err}"
+    );
 }

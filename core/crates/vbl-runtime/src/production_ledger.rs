@@ -24,8 +24,8 @@
 //! em bytes crus. O verificador recomputa `hash_n = SHA-256(hash_{n-1} ||
 //! linha_n)` — adulteração retroativa quebra a cadeia.
 
-use crate::ledger::{stamp_time, sha256_double_hex, Ledger, ChainLedger};
 use crate::json::{write_number, write_string, Json};
+use crate::ledger::{sha256_double_hex, stamp_time, ChainLedger, Ledger};
 use std::collections::BTreeMap;
 use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -54,7 +54,14 @@ const BUFFER_BYTES: usize = 64 * 1024;
 /// `Json`/`BTreeMap` intermediários — bytes idênticos à composição geral
 /// (garantido por teste de equivalência).
 enum Msg {
-    LedgerEvent { seq: usize, tick: u64, t: f64, kind: String, msg: String, extra: Json },
+    LedgerEvent {
+        seq: usize,
+        tick: u64,
+        t: f64,
+        kind: String,
+        msg: String,
+        extra: Json,
+    },
     Leak(Leak),
     End,
 }
@@ -280,10 +287,22 @@ fn write_thread(rec: Receiver<Msg>, path: PathBuf) -> std::io::Result<Summary> {
     while let Ok(msg) = rec.recv() {
         match msg {
             Msg::End => break,
-            Msg::LedgerEvent { seq, tick, t, kind, msg, mut extra } => {
+            Msg::LedgerEvent {
+                seq,
+                tick,
+                t,
+                kind,
+                msg,
+                mut extra,
+            } => {
                 stamp_time(&mut extra, tick, t);
-                let event =
-                    crate::ledger::LedgerEvent { seq, kind, msg, extra, hash: String::new() };
+                let event = crate::ledger::LedgerEvent {
+                    seq,
+                    kind,
+                    msg,
+                    extra,
+                    hash: String::new(),
+                };
                 line.clear();
                 event.write_line(&mut line);
             }
@@ -309,7 +328,12 @@ fn write_thread(rec: Receiver<Msg>, path: PathBuf) -> std::io::Result<Summary> {
     w.write_all(head.as_bytes())?; // 64 bytes hex
     bytes += FOOTER_BYTES as u64;
     w.flush()?;
-    Ok(Summary { events, bytes, chain_head: head, ..Default::default() })
+    Ok(Summary {
+        events,
+        bytes,
+        chain_head: head,
+        ..Default::default()
+    })
 }
 
 /// Composição direta da linha canônica do evento LEAK (v1: VAZAMENTO) — byte a byte
@@ -369,8 +393,7 @@ pub struct VerificationReport {
 
 /// Verifica um log do Caderno detectando o formato pelo magic.
 pub fn verify(path: &Path) -> Result<VerificationReport, String> {
-    let mut arquivo = std::fs::File::open(path)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut arquivo = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut magic = [0u8; 4];
     let n_read = arquivo
         .read(&mut magic)
@@ -386,10 +409,17 @@ pub fn verify(path: &Path) -> Result<VerificationReport, String> {
 pub fn verify_binary(path: &Path) -> Result<VerificationReport, String> {
     let mut data = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     if data.len() < 5 || &data[..4] != MAGIC {
-        return Err(format!("{}: não é um Caderno binário v{VERSION}", path.display()));
+        return Err(format!(
+            "{}: não é um Caderno binário v{VERSION}",
+            path.display()
+        ));
     }
     if data[4] != VERSION {
-        return Err(format!("{}: versão {} não suportada", path.display(), data[4]));
+        return Err(format!(
+            "{}: versão {} não suportada",
+            path.display(),
+            data[4]
+        ));
     }
     let mut pos = 5usize;
     let mut head = ChainLedger::INITIAL_HEAD.to_owned();
@@ -412,7 +442,9 @@ pub fn verify_binary(path: &Path) -> Result<VerificationReport, String> {
         let start = data.len() - FOOTER_BYTES;
         if &data[start..start + 4] == FOOTER_MAGIC {
             events_footer = Some(u32::from_le_bytes(
-                data[start + 4..start + 8].try_into().map_err(|_| "rodapé truncado")?,
+                data[start + 4..start + 8]
+                    .try_into()
+                    .map_err(|_| "rodapé truncado")?,
             ));
             if let Ok(h) = std::str::from_utf8(&data[start + 8..start + 8 + 64]) {
                 footer_head = Some(h.to_owned());
@@ -441,8 +473,7 @@ pub fn verify_binary(path: &Path) -> Result<VerificationReport, String> {
         let line = std::str::from_utf8(line_bytes)
             .map_err(|_| format!("{}: frame com UTF-8 inválido", path.display()))?;
         let expected = sha256_double_hex(head.as_bytes(), line.as_bytes());
-        let read_hex: String =
-            hash_bytes.iter().map(|b| format!("{b:02x}")).collect();
+        let read_hex: String = hash_bytes.iter().map(|b| format!("{b:02x}")).collect();
         if expected != read_hex {
             rel.chain_ok = false;
             rel.first_broken.get_or_insert(rel.events);
@@ -472,8 +503,7 @@ pub fn verify_binary(path: &Path) -> Result<VerificationReport, String> {
 
 /// Verifica o export JSONL (um evento por linha, com `hash`).
 pub fn verify_jsonl(path: &Path) -> Result<VerificationReport, String> {
-    let text = std::fs::read_to_string(path)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut head = ChainLedger::INITIAL_HEAD.to_owned();
     let mut rel = VerificationReport {
         events: 0,
@@ -524,8 +554,7 @@ pub fn verify_jsonl(path: &Path) -> Result<VerificationReport, String> {
                 extra.insert(k.clone(), v.clone());
             }
         }
-        let canonical_line =
-            line_from(seq, &kind, &msg, &extra);
+        let canonical_line = line_from(seq, &kind, &msg, &extra);
         let expected = sha256_double_hex(head.as_bytes(), canonical_line.as_bytes());
         if expected != read_hash {
             rel.chain_ok = false;
@@ -594,16 +623,20 @@ fn acumular_stats(line: &str, rel: &mut VerificationReport) {
 pub fn jsonl_from_binary(binary: &Path, jsonl: &Path) -> Result<usize, String> {
     let data = std::fs::read(binary).map_err(|e| format!("{}: {e}", binary.display()))?;
     if data.len() < 5 || &data[..4] != MAGIC {
-        return Err(format!("{}: não é um Caderno binário v{VERSION}", binary.display()));
+        return Err(format!(
+            "{}: não é um Caderno binário v{VERSION}",
+            binary.display()
+        ));
     }
     let mut pos = 5usize;
-    let mut file = std::fs::File::create(jsonl)
-        .map_err(|e| format!("{}: {e}", jsonl.display()))?;
+    let mut file = std::fs::File::create(jsonl).map_err(|e| format!("{}: {e}", jsonl.display()))?;
     let mut n = 0usize;
     while pos + 4 <= data.len() {
         // para no rodapé: frame truncado ⇒ era o rodapé
         let size = u32::from_le_bytes(
-            data[pos..pos + 4].try_into().map_err(|_| "frame truncado")?,
+            data[pos..pos + 4]
+                .try_into()
+                .map_err(|_| "frame truncado")?,
         ) as usize;
         let Some(line_bytes) = data.get(pos + 4..pos + 4 + size) else {
             break;
@@ -611,14 +644,15 @@ pub fn jsonl_from_binary(binary: &Path, jsonl: &Path) -> Result<usize, String> {
         let Some(hash_bytes) = data.get(pos + 4 + size..pos + 4 + size + 32) else {
             break; // rodapé (sem 32 bytes de hash)
         };
-        let line = std::str::from_utf8(line_bytes)
-            .map_err(|_| "frame com UTF-8 inválido".to_string())?;
+        let line =
+            std::str::from_utf8(line_bytes).map_err(|_| "frame com UTF-8 inválido".to_string())?;
         let jsonl_line = event_jsonl_from_line(line, hash_bytes)?;
         writeln!(file, "{jsonl_line}").map_err(|e| format!("{}: {e}", jsonl.display()))?;
         n += 1;
         pos += 4 + size + 32;
     }
-    file.flush().map_err(|e| format!("{}: {e}", jsonl.display()))?;
+    file.flush()
+        .map_err(|e| format!("{}: {e}", jsonl.display()))?;
     Ok(n)
 }
 
@@ -631,7 +665,10 @@ fn event_jsonl_from_line(line: &str, hash_raw: &[u8]) -> Result<String, String> 
     let msg = parts.next().ok_or("linha sem msg")?;
     let extra = parts.next();
     let mut fields = BTreeMap::new();
-    fields.insert("seq".to_owned(), Json::num(seq.parse::<f64>().map_err(|_| "seq inválido")?));
+    fields.insert(
+        "seq".to_owned(),
+        Json::num(seq.parse::<f64>().map_err(|_| "seq inválido")?),
+    );
     fields.insert("kind".to_owned(), Json::str(kind));
     fields.insert("msg".to_owned(), Json::str(msg));
     if let Some(extra) = extra {

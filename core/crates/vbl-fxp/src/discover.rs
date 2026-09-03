@@ -1,8 +1,11 @@
-//! Descoberta multicast FXP v1.1/v1.2 — beacon `FXPD` em UDP
+//! Descoberta multicast FXP v1.1/v1.2/v1.3 — beacon `FXPD` em UDP
 //! (docs/FXP-SCHEMA-v1.md §4.9). A v1.2 adiciona grupos IPv6 (join
 //! `join_multicast_v6`, hops = TTL §4.9, scope do link-local) e SSM IPv4
-//! (assinatura por fonte — RFC 4607; SSM IPv6 fica fora do escopo: nem std
-//! nem socket2 expõem `MCAST_JOIN_SOURCE_GROUP` para v6 — §9 honesto).
+//! (assinatura por fonte — RFC 4607). A v1.3 completa a §9 da v1.2:
+//! **SSM IPv6** (RFC 4604) via `setsockopt(IPPROTO_IPV6, MCAST_JOIN_SOURCE_GROUP)`
+//! — nem `std` nem `socket2` 0.6 expõem a assinatura por fonte para v6; a
+//! chamada crua (Unix, RFC 3678) desbloqueia o item. Fora do Unix o join
+//! v6+fonte falha honesto (`MulticastIndisponivel`).
 //!
 //! Datagrama único, **sem ack** (UDP é lossy; liveness fica no heartbeat/TCP).
 //! O anúncio **não carrega dado de sensor** — apenas identidade do servidor,
@@ -80,11 +83,51 @@ pub fn registry_hash(names: &[String]) -> u32 {
     u32::from_le_bytes([out[0], out[1], out[2], out[3]])
 }
 
-/// Parse da config de descoberta (v1.2 §4.9): `ip:porta` (IPv4),
+/// Fonte de assinatura SSM (v1.2/v1.3 §4.9, RFC 4607/4604): IPv4 simples ou
+/// IPv6 com scope opcional (link-local exige o índice da interface).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FonteSsm {
+    /// Fonte IPv4 (v1.2).
+    V4(Ipv4Addr),
+    /// Fonte IPv6 (v1.3) — `scope` é o `sin6_scope_id` da fonte (0 = rota).
+    V6 { addr: Ipv6Addr, scope: u32 },
+}
+
+impl FonteSsm {
+    /// IP da fonte (para casar com a origem do datagrama em testes).
+    pub fn ip(self) -> IpAddr {
+        match self {
+            FonteSsm::V4(a) => IpAddr::V4(a),
+            FonteSsm::V6 { addr, .. } => IpAddr::V6(addr),
+        }
+    }
+}
+
+/// `[v6(%N)]` → `(addr, scope)` — usado no grupo e na fonte SSM v6.
+fn parse_v6_com_scope(txt: &str, contexto: &str) -> Result<(Ipv6Addr, u32), DiscoveryError> {
+    let (ip, scope) = match txt.split_once('%') {
+        Some((ip, escopo)) => {
+            let n: u32 = escopo.parse().map_err(|_| {
+                DiscoveryError::MulticastIndisponivel(format!(
+                    "scope numérico inválido: {contexto} (ex.: [fe80::1%3]:porta)"
+                ))
+            })?;
+            (ip, n)
+        }
+        None => (txt, 0),
+    };
+    let ip: Ipv6Addr = ip.parse().map_err(|_| {
+        DiscoveryError::MulticastIndisponivel(format!("endereço v6 inválido: {contexto}"))
+    })?;
+    Ok((ip, scope))
+}
+
+/// Parse da config de descoberta (v1.2/v1.3 §4.9): `ip:porta` (IPv4),
 /// `[v6]:porta` (IPv6; scope numérico opcional `%N` dentro do colchete) e
-/// `@fonte-v4` para SSM — ex.: `239.255.70.81:7080@192.168.1.10`.
-/// SSM com grupo IPv6 ⇒ erro honesto (fora do escopo, §9).
-pub fn parse_group(s: &str) -> Result<(SocketAddr, Option<Ipv4Addr>), DiscoveryError> {
+/// `@fonte` para SSM — fonte v4 solta (`239.255.70.81:7080@192.168.1.10`,
+/// v1.2) ou v6 escopada (`[ff35::7080]:7080@[fe80::1%2]`, v1.3). Fonte com
+/// família diferente do grupo ⇒ erro honesto (SSM é mesmo família).
+pub fn parse_group(s: &str) -> Result<(SocketAddr, Option<FonteSsm>), DiscoveryError> {
     let (alvo, fonte) = match s.split_once('@') {
         Some((a, f)) => (a, Some(f)),
         None => (s, None),
@@ -96,23 +139,10 @@ pub fn parse_group(s: &str) -> Result<(SocketAddr, Option<Ipv4Addr>), DiscoveryE
                 "grupo inválido: {s} (esperado [v6]:porta)"
             )));
         };
-        let (ip, scope) = match addr.split_once('%') {
-            Some((ip, escopo)) => {
-                let n: u32 = escopo.parse().map_err(|_| {
-                    DiscoveryError::MulticastIndisponivel(format!(
-                        "scope numérico inválido: {s} (ex.: [fe80::1%3]:porta)"
-                    ))
-                })?;
-                (ip, n)
-            }
-            None => (addr, 0),
-        };
-        let ip: Ipv6Addr = ip.parse().map_err(|_| {
-            DiscoveryError::MulticastIndisponivel(format!("endereço v6 inválido: {s}"))
-        })?;
-        let porta: u16 = porta.parse().map_err(|_| {
-            DiscoveryError::MulticastIndisponivel(format!("porta inválida: {s}"))
-        })?;
+        let (ip, scope) = parse_v6_com_scope(addr, s)?;
+        let porta: u16 = porta
+            .parse()
+            .map_err(|_| DiscoveryError::MulticastIndisponivel(format!("porta inválida: {s}")))?;
         SocketAddr::V6(std::net::SocketAddrV6::new(ip, porta, 0, scope))
     } else {
         let Some((ip, porta)) = alvo.rsplit_once(':') else {
@@ -123,23 +153,33 @@ pub fn parse_group(s: &str) -> Result<(SocketAddr, Option<Ipv4Addr>), DiscoveryE
         let ip: Ipv4Addr = ip.parse().map_err(|_| {
             DiscoveryError::MulticastIndisponivel(format!("endereço v4 inválido: {s}"))
         })?;
-        let porta: u16 = porta.parse().map_err(|_| {
-            DiscoveryError::MulticastIndisponivel(format!("porta inválida: {s}"))
-        })?;
+        let porta: u16 = porta
+            .parse()
+            .map_err(|_| DiscoveryError::MulticastIndisponivel(format!("porta inválida: {s}")))?;
         SocketAddr::new(IpAddr::V4(ip), porta)
     };
     let fonte = match fonte {
         None => None,
-        Some(f) => {
-            if grupo.is_ipv6() {
-                return Err(DiscoveryError::MulticastIndisponivel(
-                    "SSM IPv6 fora do escopo v1.2 (§9): fonte só com grupo IPv4".into(),
-                ));
+        Some(f) => Some(match grupo {
+            // SSM v6 (v1.3 §4.9): fonte em colchetes, scope opcional.
+            SocketAddr::V6(_) => {
+                let Some(interno) = f.strip_prefix('[').and_then(|r| r.strip_suffix(']')) else {
+                    return Err(DiscoveryError::MulticastIndisponivel(format!(
+                        "fonte SSM v6 inválida: {s} (esperado @[v6%N])"
+                    )));
+                };
+                let (addr, scope) = parse_v6_com_scope(interno, s)?;
+                FonteSsm::V6 { addr, scope }
             }
-            Some(f.parse().map_err(|_| {
-                DiscoveryError::MulticastIndisponivel(format!("fonte SSM inválida: {s}"))
-            })?)
-        }
+            SocketAddr::V4(_) => {
+                let Ok(v4) = f.parse() else {
+                    return Err(DiscoveryError::MulticastIndisponivel(format!(
+                        "fonte SSM inválida: {s}"
+                    )));
+                };
+                FonteSsm::V4(v4)
+            }
+        }),
     };
     Ok((grupo, fonte))
 }
@@ -168,12 +208,15 @@ pub fn decode_beacon(buf: &[u8]) -> Result<Beacon, DiscoveryError> {
     if buf.len() < 8 + id_len + 4 {
         return Err(DiscoveryError::BeaconInvalido);
     }
-    let identifier =
-        String::from_utf8(buf[8..8 + id_len].to_vec()).map_err(|_| DiscoveryError::BeaconInvalido)?;
+    let identifier = String::from_utf8(buf[8..8 + id_len].to_vec())
+        .map_err(|_| DiscoveryError::BeaconInvalido)?;
     let off = 8 + id_len;
-    let registry_hash =
-        u32::from_le_bytes([buf[off], buf[off + 1], buf[off + 2], buf[off + 3]]);
-    Ok(Beacon { tcp_port, identifier, registry_hash })
+    let registry_hash = u32::from_le_bytes([buf[off], buf[off + 1], buf[off + 2], buf[off + 3]]);
+    Ok(Beacon {
+        tcp_port,
+        identifier,
+        registry_hash,
+    })
 }
 
 /// Peer descoberto na rede.
@@ -276,7 +319,11 @@ impl Announcer {
                 }
             }
         });
-        Ok(Self { identifier: identifier.into(), stop, handle: Some(handle) })
+        Ok(Self {
+            identifier: identifier.into(),
+            stop,
+            handle: Some(handle),
+        })
     }
 
     pub fn identifier(&self) -> &str {
@@ -312,15 +359,15 @@ pub fn discover_peers(
     coletar_peers(socket, window)
 }
 
-/// SSM (v1.2 §4.9): assina (fonte, grupo) — só datagramas DA FONTE chegam
-/// (RFC 4607; IPv4). O servidor deve anunciar com bind na mesma fonte
-/// ([`Announcer::start_bound`]).
+/// SSM (v1.2/v1.3 §4.9): assina (fonte, grupo) — só datagramas DA FONTE chegam
+/// (RFC 4607 para v4, RFC 4604 para v6). O servidor deve anunciar com bind na
+/// mesma fonte ([`Announcer::start_bound`]).
 pub fn discover_peers_ssm(
     window: Duration,
     group: SocketAddr,
-    source: Ipv4Addr,
+    fonte: FonteSsm,
 ) -> Result<Vec<DiscoveredPeer>, DiscoveryError> {
-    let (socket, _) = listener_multicast(group, Some(source))?;
+    let (socket, _) = listener_multicast(group, Some(fonte))?;
     coletar_peers(socket, window)
 }
 
@@ -364,12 +411,13 @@ fn coletar_peers(
     Ok(peers)
 }
 
-/// Listener multicast v1.2: v4 (com SSM quando `fonte` informado) ou v6
-/// (join com scope; hops irrelevantes no listener). Devolve o socket pronto
-/// para recv. Falha de rede ⇒ honesto (`MulticastIndisponivel`).
+/// Listener multicast v1.2/v1.3: v4 (com SSM quando `fonte` = [`FonteSsm::V4`])
+/// ou v6 (join com scope; SSM v6 via [`FonteSsm::V6`] e o join crua da v1.3).
+/// Hops irrelevantes no listener. Devolve o socket pronto para recv. Falha de
+/// rede ⇒ honesto (`MulticastIndisponivel`).
 fn listener_multicast(
     group: SocketAddr,
-    fonte: Option<Ipv4Addr>,
+    fonte: Option<FonteSsm>,
 ) -> Result<(UdpSocket, Option<Ipv4Addr>), DiscoveryError> {
     use socket2::{Domain, Protocol, Socket, Type};
     match group {
@@ -383,9 +431,16 @@ fn listener_multicast(
                 .map_err(|e| DiscoveryError::MulticastIndisponivel(e.to_string()))?;
             match fonte {
                 // SSM (v1.2): assina (fonte, grupo) — sem ruído de outros fxpd.
-                Some(f) => sock
+                Some(FonteSsm::V4(f)) => sock
                     .join_ssm_v4(&f, &grupo, &Ipv4Addr::UNSPECIFIED)
                     .map_err(|e| DiscoveryError::MulticastIndisponivel(e.to_string()))?,
+                // Fonte v6 em grupo v4: família divergente (parse v1.3 já
+                // recusa; guard honesto para quem chama a API diretamente).
+                Some(FonteSsm::V6 { .. }) => {
+                    return Err(DiscoveryError::MulticastIndisponivel(
+                        "fonte SSM v6 em grupo IPv4 — SSM é mesmo família (§4.9)".into(),
+                    ))
+                }
                 None => sock
                     .join_multicast_v4(&grupo, &Ipv4Addr::UNSPECIFIED)
                     .map_err(|e| DiscoveryError::MulticastIndisponivel(e.to_string()))?,
@@ -402,11 +457,117 @@ fn listener_multicast(
                 .map_err(|e| DiscoveryError::MulticastIndisponivel(e.to_string()))?;
             // Interface = scope do grupo (0 = padrão da rota; link-local
             // exige o índice da interface para ter semântica).
-            sock.join_multicast_v6(&grupo, v6.scope_id())
-                .map_err(|e| DiscoveryError::MulticastIndisponivel(e.to_string()))?;
+            match fonte {
+                // SSM IPv6 (v1.3 §4.9, RFC 4604): join (grupo, fonte) crua —
+                // a assinatura por fonte v6 não existe no std/socket2 0.6.
+                Some(FonteSsm::V6 {
+                    addr: fonte_v6,
+                    scope: escopo_fonte,
+                }) => join_ssm_v6(&sock, &grupo, v6.scope_id(), &fonte_v6, escopo_fonte)?,
+                Some(FonteSsm::V4(_)) => {
+                    return Err(DiscoveryError::MulticastIndisponivel(
+                        "fonte SSM v4 em grupo IPv6 — SSM é mesmo família (§4.9)".into(),
+                    ))
+                }
+                None => sock
+                    .join_multicast_v6(&grupo, v6.scope_id())
+                    .map_err(|e| DiscoveryError::MulticastIndisponivel(e.to_string()))?,
+            }
             Ok((sock.into(), None))
         }
     }
+}
+
+/// Join SSM IPv6 (v1.3 §4.9 — RFC 3678/4604): `setsockopt(IPPROTO_IPV6,
+/// MCAST_JOIN_SOURCE_GROUP, group_source_req)`. A opção MCAST_* (42–48) é
+/// compartilhada entre os níveis IPPROTO_IP/IPPROTO_IPV6 no Linux; nem std
+/// nem socket2 0.6 a expõem para v6 e a crate `libc` liga a constante sem o
+/// struct — o POD `repr(C)` local (sobre `sockaddr_storage` da libc) completa
+/// o que a glibc define em `netinet/in.h`, desbloqueando o item registrado
+/// na §9 da v1.2. Escopo honesto: **Linux** (o número da opção é definido
+/// pelo SO — em BSD/macOS o valor difere e não se adivinha). Falha do OS ⇒
+/// honesto (`MulticastIndisponivel`).
+#[cfg(target_os = "linux")]
+fn join_ssm_v6(
+    sock: &socket2::Socket,
+    grupo: &Ipv6Addr,
+    escopo_grupo: u32,
+    fonte: &Ipv6Addr,
+    escopo_fonte: u32,
+) -> Result<(), DiscoveryError> {
+    use std::os::fd::AsRawFd;
+
+    /// `group_source_req` da RFC 3678 (glibc `netinet/in.h`) — a crate libc
+    /// (0.2.189) não o liga; POD plano, sem padding sensível.
+    #[repr(C)]
+    struct GroupSourceReq {
+        gsr_interface: u32,
+        gsr_group: libc::sockaddr_storage,
+        gsr_source: libc::sockaddr_storage,
+    }
+
+    let req = GroupSourceReq {
+        gsr_interface: escopo_grupo,
+        gsr_group: sockaddr_in6_em_storage(grupo, escopo_grupo),
+        gsr_source: sockaddr_in6_em_storage(fonte, escopo_fonte),
+    };
+    // SAFETY: `req` é um POD plano (sockaddr_storage embutidos), vivo pela
+    // duração da chamada; setsockopt só lê.
+    let r = unsafe {
+        libc::setsockopt(
+            sock.as_raw_fd(),
+            libc::IPPROTO_IPV6,
+            libc::MCAST_JOIN_SOURCE_GROUP,
+            &req as *const GroupSourceReq as *const libc::c_void,
+            std::mem::size_of::<GroupSourceReq>() as libc::socklen_t,
+        )
+    };
+    if r != 0 {
+        return Err(DiscoveryError::MulticastIndisponivel(format!(
+            "join SSM IPv6 ({grupo}@{fonte}): {}",
+            std::io::Error::last_os_error()
+        )));
+    }
+    Ok(())
+}
+
+/// `sockaddr_in6` (libc) copiado byte a byte para `sockaddr_storage` — o
+/// padrão RFC 3678 (`memcpy(&gsr->gsr_group, &sin6, sizeof(sin6))`).
+#[cfg(target_os = "linux")]
+fn sockaddr_in6_em_storage(addr: &Ipv6Addr, scope: u32) -> libc::sockaddr_storage {
+    let mut sa: libc::sockaddr_in6 = unsafe { std::mem::zeroed() };
+    sa.sin6_family = libc::AF_INET6 as libc::sa_family_t;
+    sa.sin6_port = 0; // porta é ignorada no join multicast
+    sa.sin6_addr = libc::in6_addr {
+        s6_addr: addr.octets(),
+    };
+    sa.sin6_scope_id = scope;
+    let mut ss: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+    // SAFETY: sockaddr_storage é grande/alinhado para qualquer sockaddr;
+    // copiamos só sizeof(sockaddr_in6) bytes.
+    unsafe {
+        std::ptr::copy_nonoverlapping(
+            &sa as *const libc::sockaddr_in6 as *const u8,
+            &mut ss as *mut libc::sockaddr_storage as *mut u8,
+            std::mem::size_of::<libc::sockaddr_in6>(),
+        );
+    }
+    ss
+}
+
+/// Fora do Linux: o número da opção `MCAST_JOIN_SOURCE_GROUP` é definido pelo
+/// SO e não se adivinha (BSD/macOS diferem do Linux) ⇒ falha honesta (§4.9).
+#[cfg(not(target_os = "linux"))]
+fn join_ssm_v6(
+    _sock: &socket2::Socket,
+    grupo: &Ipv6Addr,
+    _escopo_grupo: u32,
+    fonte: &Ipv6Addr,
+    _escopo_fonte: u32,
+) -> Result<(), DiscoveryError> {
+    Err(DiscoveryError::MulticastIndisponivel(format!(
+        "SSM IPv6 implementado via setsockopt Linux (RFC 3678/4604): {grupo}@{fonte}"
+    )))
 }
 
 #[cfg(test)]
@@ -422,9 +583,24 @@ mod tests {
         assert!(g.is_ipv6() && f.is_none());
         let (g, f) = parse_group("[fe80::7080%3]:7080").expect("v6 scope");
         assert!(g.is_ipv6() && f.is_none());
-        let (g, f) = parse_group("239.255.70.81:7080@127.0.0.1").expect("ssm");
-        assert_eq!(f, Some(Ipv4Addr::LOCALHOST));
+        let (g, f) = parse_group("239.255.70.81:7080@127.0.0.1").expect("ssm v4");
+        assert_eq!(f, Some(FonteSsm::V4(Ipv4Addr::LOCALHOST)));
         let _ = g;
+        // v1.3 §4.9 — SSM IPv6: fonte v6 escopada e global
+        let (g, f) = parse_group("[ff35::7080]:7080@[fe80::1%2]").expect("ssm v6 link-local");
+        assert!(g.is_ipv6());
+        assert_eq!(
+            f,
+            Some(FonteSsm::V6 {
+                addr: Ipv6Addr::new(0xfe80, 0, 0, 0, 0, 0, 0, 1),
+                scope: 2
+            })
+        );
+        let (_, f) = parse_group("[ff35::7080]:7080@[2001:db8::1]").expect("ssm v6 global");
+        assert_eq!(
+            f.map(FonteSsm::ip),
+            Some(IpAddr::V6("2001:db8::1".parse().expect("v6")))
+        );
         // Recusas honestas: cada braço de erro do parse.
         assert!(parse_group("sem-separador").is_err());
         assert!(parse_group("[ff15::7080]:porta").is_err());
@@ -433,14 +609,37 @@ mod tests {
         assert!(parse_group("[endereco]:7080").is_err());
         assert!(parse_group("endereco:7080").is_err());
         assert!(parse_group("239.255.70.80:99999").is_err());
-        assert!(parse_group("[ff15::7080]:7080@10.0.0.1").is_err());
+        // Família da fonte divergente do grupo (SSM é mesmo família):
+        assert!(
+            parse_group("[ff15::7080]:7080@10.0.0.1").is_err(),
+            "fonte v4 solta em grupo v6"
+        );
+        assert!(
+            parse_group("[ff15::7080]:7080@[10.0.0.1]").is_err(),
+            "v4 colchetado não é fonte v6"
+        );
+        assert!(
+            parse_group("239.255.70.80:7080@[fe80::1]").is_err(),
+            "fonte v6 em grupo v4"
+        );
+        assert!(
+            parse_group("[ff35::7080]:7080@[fe80::1%x]").is_err(),
+            "scope da fonte não numérico"
+        );
+        assert!(
+            parse_group("[ff35::7080]:7080@[fe80::1").is_err(),
+            "colchete da fonte aberto"
+        );
     }
 
     #[test]
     fn discovery_error_display_honesto() {
         let e = DiscoveryError::MulticastIndisponivel("motivo x".into());
         assert_eq!(e.to_string(), "descoberta multicast indisponível: motivo x");
-        assert_eq!(DiscoveryError::BeaconInvalido.to_string(), "beacon FXPD malformado");
+        assert_eq!(
+            DiscoveryError::BeaconInvalido.to_string(),
+            "beacon FXPD malformado"
+        );
     }
 
     #[test]

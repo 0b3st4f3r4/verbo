@@ -10,16 +10,17 @@ runtime via trait `vbl_runtime::Fxp`.
 
 ## Camadas
 
-- `schema` — codec da mensagem v1.1 (serialização sem perda, little-endian,
+- `schema` — codec da mensagem v1.3 (serialização sem perda, little-endian,
   ack/seq; docs/FXP-SCHEMA-v1.md): CAPS (§4.5), AUTH PSK-HMAC-SHA256 (§4.6),
-  READ_BATCH (§4.7), compressão LZ4 do corpo (§4.8) e FLAG_TIMESTAMP (§5 —
-  carimbo físico do fio, anotação de laboratório);
+  READ_BATCH (§4.7), compressão do corpo (§4.8: LZ4, LZ4+dict, zstd+dict
+  treinado) e FLAG_TIMESTAMP (§5 — carimbo físico do fio, anotação de
+  laboratório);
 - `auth` — MAC/nonce do handshake PSK (§4.6): HMAC-SHA256 sobre
   `"FXP-AUTH1" ‖ nonce_cliente ‖ nonce_servidor`, verificação em tempo
   constante, nonces de 32 B por conexão;
 - `discover` — beacon multicast `FXPD` (§4.9): anúncio periódico
   (`Announcer`) e escuta (`discover_peers`), opt-in, sem dado de sensor no
-  anúncio;
+  anúncio; IPv6, SSM v4 e SSM v6 (assinatura de fonte, RFC 3678);
 - `registry` — registro de dispositivos com aliases, modos
   real/simulado/híbrido, política de fallback (§4.3) e endpoint
   `discover:<identificador>`;
@@ -27,8 +28,9 @@ runtime via trait `vbl_runtime::Fxp`.
   de atenção simulada (obrigatória em CI);
 - `queue` — fila de comandos com prioridade (`subvert` = máxima), timeout e
   retry;
-- `transport` — frames v1.1 sobre in-process / Unix socket / TCP com ack,
-  negociação CAPS e handshake AUTH;
+- `transport` — frames v1.3 sobre in-process / Unix socket / TCP / TLS 1.3
+  com ack, negociação CAPS (inclusive como 0-RTT na retomada, §7), handshake
+  AUTH e dicionário de compressão tipado;
 - `peer` — `PeerServer`, servidor de referência do schema (máquina de estados
   AUTH → CAPS → trabalho; serve Unix/TCP, anuncia recursos por flag no
   `vbl fxpd`);
@@ -36,7 +38,11 @@ runtime via trait `vbl_runtime::Fxp`.
   honestidade de dados (§4.7): dispositivo inacessível em modo real ⇒
   condição não avaliada + registro no Caderno, nunca dado falsificado;
   lote (§4.7) e compressão (§4.8) são opt-in por config e degradam para
-  v1.0 puro com peer antigo (evento `fxp_peer_v1` no Caderno).
+  v1.0 puro com peer antigo (evento `fxp_peer_v1` no Caderno); TLS com
+  pin (`@sha256:HEX`) ou TOFU (`@tofu`, store `TofuStore` JSON atômico);
+- `tls` — TLS 1.3 (rustls/`ring`) com pinning SHA-256, TOFU
+  (trust-on-first-use com falha fechada na divergência), cache de
+  `ClientConfig` (resumo de sessão) e 0-RTT para o `CAPS` (§7);
 
 O simulador determinístico do runtime (`vbl-runtime::sim`) é o backend do modo
 `simulado` — paridade bit a bit com a Etapa 2.

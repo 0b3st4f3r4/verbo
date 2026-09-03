@@ -20,31 +20,35 @@
 //! Etapa 1/2); o bus o usa como backend simulado — modo `simulado` é bit a bit
 //! compatível com a Etapa 2.
 
-
 pub mod auth;
 pub mod bus;
 pub mod discover;
 pub mod drivers;
+/// mDNS/DNS-SD (v1.2 §4.10) — opt-in: compile com `--features mdns`.
+#[cfg(feature = "mdns")]
+pub mod mdns;
 pub mod peer;
 pub mod queue;
 pub mod registry;
 pub mod schema;
 pub mod tls;
-/// mDNS/DNS-SD (v1.2 §4.10) — opt-in: compile com `--features mdns`.
-#[cfg(feature = "mdns")]
-pub mod mdns;
 pub mod transport;
 
-pub use auth::{mac as auth_mac, nonce as auth_nonce, verify as auth_verify, NONCE_LEN as AUTH_NONCE_BYTES};
+pub use auth::{
+    mac as auth_mac, nonce as auth_nonce, verify as auth_verify, NONCE_LEN as AUTH_NONCE_BYTES,
+};
 pub use bus::{BusConfig, FxpBus, Route};
 pub use discover::{
-    decode_beacon, discover_peers, encode_beacon, registry_hash, Announcer, Beacon,
-    DEFAULT_GROUP, DEFAULT_INTERVAL, DiscoveredPeer, DiscoveryError, MULTICAST_TTL,
+    decode_beacon, discover_peers, encode_beacon, registry_hash, Announcer, Beacon, DiscoveredPeer,
+    DiscoveryError, DEFAULT_GROUP, DEFAULT_INTERVAL, MULTICAST_TTL,
 };
 pub use drivers::{ActorDriver, AttentionSource, SensorDriver, SimulatedAttention};
 pub use peer::{PeerConfig, PeerServer};
-pub use queue::{Command, QueueError, CommandQueue, PRIORITY_NORMAL, PRIORITY_SUBVERT};
-pub use registry::{DeviceEntry, DeviceKind, DeviceMode, DeviceRegistry, Endpoint, RegistryError, FxpConfig, OperationMode, RemoteAddr};
-pub use schema::{AckAct, BatchResult, Body, DeviceDesc, SchemaError, Message, WireValue};
-pub use tls::TlsAccept;
-pub use transport::{TransportError, Server};
+pub use queue::{Command, CommandQueue, QueueError, PRIORITY_NORMAL, PRIORITY_SUBVERT};
+pub use registry::{
+    DeviceEntry, DeviceKind, DeviceMode, DeviceRegistry, Endpoint, FxpConfig, OperationMode,
+    RegistryError, RemoteAddr,
+};
+pub use schema::{AckAct, BatchResult, Body, DeviceDesc, Message, SchemaError, WireValue};
+pub use tls::{ConfiancaCliente, TlsAccept, TofuFalha, TofuStore, Trust};
+pub use transport::{Server, TransportError};

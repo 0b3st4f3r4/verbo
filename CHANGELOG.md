@@ -9,6 +9,31 @@ de suporte + 6 meses de descontinuação = 7 anos de ciclo de vida.
 ## [Não lançado]
 
 ### Adicionado
+- **FXP v1.3** — as quatro extensões remanescentes da §9 da v1.2
+  (`docs/FXP-SCHEMA-v1.md` promovido a v1.3; fio default continua byte a
+  byte v1.0/v1.1/v1.2, golden bytes intactos; tudo negociado e opt-in):
+  - **SSM IPv6 (§4.9)** — assinatura de fonte em grupos IPv6
+    (`[ff35::7080]:porta@[fe80::1%2]`) via `MCAST_JOIN_SOURCE_GROUP`
+    (RFC 3678/4604, `setsockopt` bruto no Linux — socket2 não expõe a opção
+    v6; em outros SO, erro honesto de multicast indisponível).
+  - **TOFU (§7)** — alternativa operacional ao pinning: endpoint
+    `tcps:host:porta@tofu` grava a impressão digital da primeira conexão
+    num store JSON atômico (`vbl run --tofu-store`; default
+    `~/.local/state/verbo/fxp-known-hosts.json`) e as seguintes verificam
+    contra ela — divergência **fecha a conexão** com motivo TOFU no
+    Caderno. Pin `@sha256:HEX` da v1.2 intocado.
+  - **zstd com dicionário treinado (§4.8, id 3)** — bit `CAPS` `ZSTD`
+    (sempre negociado com `DICT`); COVER sobre os nomes canônicos do
+    registro (teto 16 KiB, nível 3), zero bytes de dicionário no fio;
+    6,8× de compressão contra 5,6× do id 2 no payload canônico; registro
+    pequeno demais para treinar ⇒ `ZSTD` sai da interseção (degradação
+    honesta). `vbl run --zstd`; `vbl fxpd --zstd` (implica `--dict`).
+  - **Resumo de sessão + 0-RTT TLS (§7)** — `ClientConfig` cacheado por
+    confiança ⇒ segunda conexão retoma (`Resumed`); o frame `CAPS`
+    idempotente pode partir como 0-RTT (teto 512 B) junto do
+    `ClientHello` — recusado, o cliente renegocia normal. `ACT`/`READ`
+    nunca viajam adiantados; com AUTH+PSK nada é adiantado (servidor
+    fala primeiro).
 - **FXP v1.2** — as quatro extensões remanescentes da §9 da v1.1
   (`docs/FXP-SCHEMA-v1.md` promovido a v1.2; fio default continua byte a
   byte v1.0/v1.1, golden bytes intactos; tudo negociado e opt-in):

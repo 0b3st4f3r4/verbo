@@ -8,14 +8,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use vbl_fxp::bus::{BusConfig, FxpBus};
-use vbl_fxp::registry::{DeviceRegistry, FxpConfig, OperationMode};
 use vbl_fxp::queue::PRIORITY_SUBVERT;
+use vbl_fxp::registry::{DeviceRegistry, FxpConfig, OperationMode};
 use vbl_fxp::schema::AckAct;
-use vbl_fxp::transport::{wait_ready_unix, serve_unix};
+use vbl_fxp::transport::{serve_unix, wait_ready_unix};
+use vbl_runtime::fxp::{ActOutcome, Fxp, Limit, SensorFailure, Value};
 use vbl_runtime::ledger::ChainLedger;
-use vbl_runtime::fxp::{
-    ActOutcome, SensorFailure, Fxp, Limit, Value,
-};
 use vbl_runtime::{load, Engine};
 
 const DEADLINE: Duration = Duration::from_secs(2);
@@ -38,9 +36,16 @@ fn fixture_thermal(dir: &Path, millic: i64) {
 }
 
 fn bus_simulated() -> (FxpBus, ChainLedger) {
-    let cfg = BusConfig { mode: OperationMode::Simulated, ..Default::default() };
+    let cfg = BusConfig {
+        mode: OperationMode::Simulated,
+        ..Default::default()
+    };
     (
-        FxpBus::build(DeviceRegistry::minimum(), cfg, vbl_runtime::FxpSimulator::new()),
+        FxpBus::build(
+            DeviceRegistry::minimum(),
+            cfg,
+            vbl_runtime::FxpSimulator::new(),
+        ),
         ChainLedger::new(),
     )
 }
@@ -95,7 +100,10 @@ fn simulated_mode_has_parity_with_stage_2() {
     );
     assert!(matches!(
         bus.act("CpuPowerCap", Value::Num(200.1), &mut ledger),
-        ActOutcome::Rejected { limit: Limit::SafetyLimit, limit_value: 200.0 }
+        ActOutcome::Rejected {
+            limit: Limit::SafetyLimit,
+            limit_value: 200.0
+        }
     ));
 
     // cpu_power para partilha P/N vem do simulador.
@@ -133,18 +141,32 @@ fn hybrid_reads_real_driver_and_converts_unit() {
 fn real_mode_without_route_inaccessible_never_fabricated() {
     // Global REAL: attention (simulada no registro) fica inacessível — o bus
     // não fabrica leitura sintética em modo real (§4.7).
-    let cfg = BusConfig { mode: OperationMode::Real, ..Default::default() };
+    let cfg = BusConfig {
+        mode: OperationMode::Real,
+        ..Default::default()
+    };
     let (mut bus, mut ledger) = (
-        FxpBus::build(DeviceRegistry::minimum(), cfg, vbl_runtime::FxpSimulator::new()),
+        FxpBus::build(
+            DeviceRegistry::minimum(),
+            cfg,
+            vbl_runtime::FxpSimulator::new(),
+        ),
         ChainLedger::new(),
     );
     assert_eq!(
         bus.read_sensor("attention", &mut ledger),
         Err(SensorFailure::Inaccessible)
     );
-    assert!(ledger.search("ALERT", &[]).iter().any(|e| e.msg.contains("attention")));
+    assert!(ledger
+        .search("ALERT", &[])
+        .iter()
+        .any(|e| e.msg.contains("attention")));
     // A rota documenta o motivo (honestidade observável).
-    assert!(bus.route_of("attention").unwrap().description().contains("inacessível"));
+    assert!(bus
+        .route_of("attention")
+        .unwrap()
+        .description()
+        .contains("inacessível"));
 }
 
 #[test]
@@ -160,7 +182,10 @@ fn cache_ttl_saves_real_reads() {
     cfg.apply(&mut registry).unwrap();
     let mut bus = FxpBus::build(
         registry,
-        BusConfig { mode: OperationMode::Hybrid, ..Default::default() },
+        BusConfig {
+            mode: OperationMode::Hybrid,
+            ..Default::default()
+        },
         vbl_runtime::FxpSimulator::new(),
     );
     let mut ledger = ChainLedger::new();
@@ -204,16 +229,25 @@ review SpeculativeTrading {
 }
 "#;
     let (program, diags) = vbl_lang::parse(source);
-    assert!(diags.errors().next().is_none(), "programa deve parsear: {diags:?}");
+    assert!(
+        diags.errors().next().is_none(),
+        "programa deve parsear: {diags:?}"
+    );
     let _ = load(&mut engine, &program);
 
     engine.tick();
 
     // 1) subvert dissolve no mesmo tick (§4.5).
-    assert!(engine.form("SpeculativeTrading").is_none(), "forma subvertida deve dissolver no tick");
+    assert!(
+        engine.form("SpeculativeTrading").is_none(),
+        "forma subvertida deve dissolver no tick"
+    );
     // 2) a act pós-subvert chegou ao DRIVER REAL em µW (50 W).
     let written = fs::read_to_string(&cap).unwrap();
-    assert_eq!(written, "50000000", "CpuPowerCap real deve receber 50 W em µW");
+    assert_eq!(
+        written, "50000000",
+        "CpuPowerCap real deve receber 50 W em µW"
+    );
     // 3) trilha no Caderno: ATUACAO sucesso + SUBVERSAO.
     assert!(engine
         .ledger
@@ -251,13 +285,19 @@ fn real_fallback_alternate_actor_full_trail() {
     cfg.apply(&mut registry).unwrap();
     let mut bus = FxpBus::build(
         registry,
-        BusConfig { mode: OperationMode::Hybrid, ..Default::default() },
+        BusConfig {
+            mode: OperationMode::Hybrid,
+            ..Default::default()
+        },
         vbl_runtime::FxpSimulator::new(),
     );
     let mut ledger = ChainLedger::new();
 
     // Primário OK: entrega direta no pwm1.
-    assert_eq!(bus.act("Fan", Value::Num(200.0), &mut ledger), ActOutcome::Delivered);
+    assert_eq!(
+        bus.act("Fan", Value::Num(200.0), &mut ledger),
+        ActOutcome::Delivered
+    );
     assert_eq!(fs::read_to_string(&prim).unwrap(), "200");
 
     // Primário morre (endpoint removido) → fallback do registro → pwm2.
@@ -350,7 +390,10 @@ fn read_by_alias_records_used_and_canonical() {
     );
     let mut ledger = ChainLedger::new();
 
-    assert_eq!(bus.read_sensor("human_attention", &mut ledger).unwrap(), 100.0);
+    assert_eq!(
+        bus.read_sensor("human_attention", &mut ledger).unwrap(),
+        100.0
+    );
     // Evento de mapeamento com o canônico (a LEITURA com o nome usado é do
     // consumidor — no engine — e é coberta no teste E2E).
     assert!(ledger
@@ -372,18 +415,18 @@ fn read_by_alias_records_used_and_canonical() {
 #[test]
 fn remote_route_sensor_and_actor_via_schema_v1() {
     let sock = tmpdir("remoto").join("fxpd.sock");
-    let _srv = serve_unix(
-        &sock,
-        |msg| match msg.opcode {
-            vbl_fxp::schema::op::READ => {
-                Some(vbl_fxp::Message::read_ok(77.5, "solar_panel", false, msg.seq))
-            }
-            vbl_fxp::schema::op::ACT => {
-                Some(vbl_fxp::Message::act_ack(AckAct::Delivered, false, msg.seq))
-            }
-            _ => None,
-        },
-    )
+    let _srv = serve_unix(&sock, |msg| match msg.opcode {
+        vbl_fxp::schema::op::READ => Some(vbl_fxp::Message::read_ok(
+            77.5,
+            "solar_panel",
+            false,
+            msg.seq,
+        )),
+        vbl_fxp::schema::op::ACT => {
+            Some(vbl_fxp::Message::act_ack(AckAct::Delivered, false, msg.seq))
+        }
+        _ => None,
+    })
     .expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
 
@@ -401,17 +444,26 @@ fn remote_route_sensor_and_actor_via_schema_v1() {
     cfg.apply(&mut registry).unwrap();
     let mut bus = FxpBus::build(
         registry,
-        BusConfig { mode: OperationMode::Hybrid, ..Default::default() },
+        BusConfig {
+            mode: OperationMode::Hybrid,
+            ..Default::default()
+        },
         vbl_runtime::FxpSimulator::new(),
     );
     let mut ledger = ChainLedger::new();
 
     assert_eq!(bus.read_sensor("solar_panel", &mut ledger).unwrap(), 77.5);
-    assert_eq!(bus.act("Bomba", Value::Num(50.0), &mut ledger), ActOutcome::Delivered);
+    assert_eq!(
+        bus.act("Bomba", Value::Num(50.0), &mut ledger),
+        ActOutcome::Delivered
+    );
     // Limite validado LOCALMENTE antes do envio (§4.3).
     assert!(matches!(
         bus.act("Bomba", Value::Num(101.0), &mut ledger),
-        ActOutcome::Rejected { limit: Limit::Max, limit_value: 100.0 }
+        ActOutcome::Rejected {
+            limit: Limit::Max,
+            limit_value: 100.0
+        }
     ));
 }
 
@@ -469,7 +521,11 @@ fn registry_extension_visible_in_simulator_and_runtime() {
     .unwrap();
     cfg.apply(&mut registry).unwrap();
     let (mut bus, mut ledger) = (
-        FxpBus::build(registry, BusConfig::default(), vbl_runtime::FxpSimulator::new()),
+        FxpBus::build(
+            registry,
+            BusConfig::default(),
+            vbl_runtime::FxpSimulator::new(),
+        ),
         ChainLedger::new(),
     );
 
@@ -478,14 +534,16 @@ fn registry_extension_visible_in_simulator_and_runtime() {
     // …e o backend simulado roteia a extensão com os limites do registro.
     assert!(matches!(
         bus.act("ReserveFan", Value::Num(300.0), &mut ledger),
-        ActOutcome::Rejected { limit: Limit::Max, limit_value: 255.0 }
+        ActOutcome::Rejected {
+            limit: Limit::Max,
+            limit_value: 255.0
+        }
     ));
     assert_eq!(
         bus.act("ReserveFan", Value::Num(255.0), &mut ledger),
         ActOutcome::Delivered
     );
 }
-
 
 // ══════════════════════════════════════════════════════════════════════════
 // Cobertura complementar: descrição de rotas, roteamento do build (auto,
@@ -508,11 +566,18 @@ fn descricoes_de_rota_debug_e_acessores() {
         "remota (unix:/tmp/fxpd.sock)"
     );
     assert_eq!(
-        Route::Remote(RemoteAddr::Tcp { host: "127.0.0.1".into(), port: 9000 }).description(),
+        Route::Remote(RemoteAddr::Tcp {
+            host: "127.0.0.1".into(),
+            port: 9000
+        })
+        .description(),
         "remota (tcp:127.0.0.1:9000)"
     );
     assert_eq!(
-        Route::Inaccessible { reason: "sem hardware".into() }.description(),
+        Route::Inaccessible {
+            reason: "sem hardware".into()
+        }
+        .description(),
         "inacessível (sem hardware)"
     );
 
@@ -525,8 +590,10 @@ fn descricoes_de_rota_debug_e_acessores() {
     assert_eq!(bus.registry_rico().len(), 6); // mínimo §6
     assert!(bus.sim().registry().sensores.contains_key("cpu_temp"));
     assert_eq!(bus.pending_queue(), 0);
-    assert_eq!(bus.route_of("cpu_temp").map(|r| r.description()),
-               Some("simulado (em processo)".into()));
+    assert_eq!(
+        bus.route_of("cpu_temp").map(|r| r.description()),
+        Some("simulado (em processo)".into())
+    );
     assert_eq!(bus.route_of("nem_existe"), None);
     assert_eq!(bus.disk_bytes_used(), 0);
 }
@@ -549,7 +616,10 @@ fn build_roteia_auto_sem_driver_e_simulado_proibido() {
     cfg.apply(&mut registry).unwrap();
     let mut bus = FxpBus::build(
         registry,
-        BusConfig { mode: OperationMode::Hybrid, ..Default::default() },
+        BusConfig {
+            mode: OperationMode::Hybrid,
+            ..Default::default()
+        },
         vbl_runtime::FxpSimulator::new(),
     );
 
@@ -598,14 +668,14 @@ fn build_roteia_auto_sem_driver_e_simulado_proibido() {
 #[test]
 fn ator_em_rota_inacessivel_fallback_ausente_vai_para_a_fila() {
     let mut registry = DeviceRegistry::minimum();
-    let cfg = FxpConfig::parse(
-        "mode = real\nBomba.min = 0\nBomba.max = 100\n",
-    )
-    .unwrap();
+    let cfg = FxpConfig::parse("mode = real\nBomba.min = 0\nBomba.max = 100\n").unwrap();
     cfg.apply(&mut registry).unwrap();
     let mut bus = FxpBus::build(
         registry,
-        BusConfig { mode: OperationMode::Real, ..Default::default() },
+        BusConfig {
+            mode: OperationMode::Real,
+            ..Default::default()
+        },
         vbl_runtime::FxpSimulator::new(),
     );
     let mut ledger = ChainLedger::new();
@@ -641,7 +711,10 @@ fn atuacao_real_limites_inclusivos_dominio_e_falha_de_escrita() {
     let (mut bus, mut ledger) = (
         FxpBus::build(
             registry,
-            BusConfig { mode: OperationMode::Hybrid, ..Default::default() },
+            BusConfig {
+                mode: OperationMode::Hybrid,
+                ..Default::default()
+            },
             vbl_runtime::FxpSimulator::new(),
         ),
         ChainLedger::new(),
@@ -654,16 +727,25 @@ fn atuacao_real_limites_inclusivos_dominio_e_falha_de_escrita() {
     );
     assert!(matches!(
         bus.act("Fan", Value::Num(251.0), &mut ledger),
-        ActOutcome::Rejected { limit: Limit::Max, .. }
+        ActOutcome::Rejected {
+            limit: Limit::Max,
+            ..
+        }
     ));
     assert!(matches!(
         bus.act("Fan", Value::Num(-1.0), &mut ledger),
-        ActOutcome::Rejected { limit: Limit::Min, .. }
+        ActOutcome::Rejected {
+            limit: Limit::Min,
+            ..
+        }
     ));
     // 245 passa no max, estoura o safety → SafetyLimit
     assert!(matches!(
         bus.act("Fan", Value::Num(245.0), &mut ledger),
-        ActOutcome::Rejected { limit: Limit::SafetyLimit, .. }
+        ActOutcome::Rejected {
+            limit: Limit::SafetyLimit,
+            ..
+        }
     ));
     assert!(!ledger.search("actor_rejected_value", &[]).is_empty());
 
@@ -695,7 +777,11 @@ fn potencia_real_via_rapl_e_on_tick_silencioso() {
     cfg.apply(&mut registry).unwrap();
     let mut bus = FxpBus::build(
         registry,
-        BusConfig { mode: OperationMode::Hybrid, cache_ttl: Duration::ZERO, ..Default::default() },
+        BusConfig {
+            mode: OperationMode::Hybrid,
+            cache_ttl: Duration::ZERO,
+            ..Default::default()
+        },
         vbl_runtime::FxpSimulator::new(),
     );
     let mut ledger = ChainLedger::new();
@@ -842,13 +928,23 @@ fn peer_act_todos_os_acks() {
     let dir = tmpdir("peer-act");
     // 1) Rejected do peer (limite violado LÁ) → Rejected terminativo local
     let c = servidor(&dir.join("a.sock"), |seq| {
-        Message::act_ack(AckAct::Rejected { limit: 1, limit_value: 50.0 }, false, seq)
+        Message::act_ack(
+            AckAct::Rejected {
+                limit: 1,
+                limit_value: 50.0,
+            },
+            false,
+            seq,
+        )
     });
     assert!(wait_ready_unix(&c.sock, DEADLINE));
     let (mut bus, mut ledger) = bus_remote(&c.sock, "");
     assert!(matches!(
         bus.act("Bomba", Value::Num(30.0), &mut ledger),
-        ActOutcome::Rejected { limit: Limit::Max, limit_value: 50.0 }
+        ActOutcome::Rejected {
+            limit: Limit::Max,
+            limit_value: 50.0
+        }
     ));
     drop(c);
 
@@ -867,7 +963,13 @@ fn peer_act_todos_os_acks() {
 
     // 3) InvalidValue do peer
     let c = servidor(&dir.join("c.sock"), |seq| {
-        Message::act_ack(AckAct::InvalidValue { reason: "fora do domínio".into() }, false, seq)
+        Message::act_ack(
+            AckAct::InvalidValue {
+                reason: "fora do domínio".into(),
+            },
+            false,
+            seq,
+        )
     });
     assert!(wait_ready_unix(&c.sock, DEADLINE));
     let (mut bus, mut ledger) = bus_remote(&c.sock, "");
@@ -892,13 +994,21 @@ fn peer_act_todos_os_acks() {
 
     // 5) FallbackExecuted do peer: o PEER acionou o fallback DELE
     let c = servidor(&dir.join("e.sock"), |seq| {
-        Message::act_ack(AckAct::FallbackExecuted { alternativo: "BombaBackup".into() }, false, seq)
+        Message::act_ack(
+            AckAct::FallbackExecuted {
+                alternativo: "BombaBackup".into(),
+            },
+            false,
+            seq,
+        )
     });
     assert!(wait_ready_unix(&c.sock, DEADLINE));
     let (mut bus, mut ledger) = bus_remote(&c.sock, "");
     assert_eq!(
         bus.act("Bomba", Value::Num(30.0), &mut ledger),
-        ActOutcome::FallbackExecuted { alternativo: "BombaBackup".into() }
+        ActOutcome::FallbackExecuted {
+            alternativo: "BombaBackup".into()
+        }
     );
     drop(c);
 
@@ -939,7 +1049,10 @@ fn ator_remoto_com_limites_do_registro_rejeita_localmente() {
 
     assert!(matches!(
         bus.act("Bomba", Value::Num(11.0), &mut ledger),
-        ActOutcome::Rejected { limit: Limit::Max, limit_value: 10.0 }
+        ActOutcome::Rejected {
+            limit: Limit::Max,
+            limit_value: 10.0
+        }
     ));
     // ator além do limite do PEER (bomba do peer rejeita) coberto em peer_act
     let _ = ActorLimits::default();

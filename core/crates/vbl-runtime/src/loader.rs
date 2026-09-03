@@ -9,10 +9,10 @@
 //! por §4.7 — sensor ausente nunca dispara regra); `validate` devolve os
 //! diagnósticos de registro para o `check` do CLI.
 
-use crate::ledger::Ledger;
 use crate::engine::Engine;
 use crate::form::{ActionRt, Form, Maintenance, RuleRt};
 use crate::fxp::{Fxp, Value};
+use crate::ledger::Ledger;
 use crate::main_interp::{MainInterpreter, StmtRt};
 use vbl_lang::{Action, Conjugation, Declaration, ExprKind, Program, Statement};
 
@@ -32,10 +32,7 @@ impl std::fmt::Display for LoadDiag {
 /// Carrega o programa no engine (formas na ordem de declaração, regras na
 /// ordem declarada, bloco `main` interpretado). Devolve o interpretador do
 /// `main` (vazio se o programa não tiver `main`).
-pub fn load<F: Fxp, C: Ledger>(
-    engine: &mut Engine<F, C>,
-    program: &Program,
-) -> MainInterpreter {
+pub fn load<F: Fxp, C: Ledger>(engine: &mut Engine<F, C>, program: &Program) -> MainInterpreter {
     for decl in &program.decls {
         match decl {
             Declaration::Form(f) => engine.register_form(runtime_form(f, engine.sim_time)),
@@ -118,9 +115,10 @@ fn acao_runtime(a: &Action) -> ActionRt {
         Action::ReclassifyAsEquilibrium => ActionRt::ReclassifyEquilibrium,
         Action::ReclassifyAsNonequilibrium => ActionRt::ReclassifyNonequilibrium,
         Action::NotifyShutdown => ActionRt::NotifyShutdown,
-        Action::Act { actor, value, .. } => {
-            ActionRt::Act { actor: actor.clone(), value: expr_value(value) }
-        }
+        Action::Act { actor, value, .. } => ActionRt::Act {
+            actor: actor.clone(),
+            value: expr_value(value),
+        },
     }
 }
 
@@ -162,9 +160,16 @@ pub fn runtime_form(f: &vbl_lang::FormDecl, now: f64) -> Form {
                     panic!("nonequilibrium '{}' sem maintenance_deadline", f.name)
                 });
             form.declared_maintenance_deadline = Some(deadline);
-            form.maintenance = Some(Maintenance { deadline_s: deadline, last: now });
-            form.exchange_mode =
-                Some(f.attrs.exchange_mode.clone().unwrap_or_else(|| "cooperation".into()));
+            form.maintenance = Some(Maintenance {
+                deadline_s: deadline,
+                last: now,
+            });
+            form.exchange_mode = Some(
+                f.attrs
+                    .exchange_mode
+                    .clone()
+                    .unwrap_or_else(|| "cooperation".into()),
+            );
         }
         Conjugation::Equilibrium => {
             form.cost_bytes = f.attrs.cost_bytes.map(|b| b.max(0) as u64);

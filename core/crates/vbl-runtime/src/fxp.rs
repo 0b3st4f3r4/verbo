@@ -7,8 +7,8 @@
 //! PLAN §3.5). O registro mínimo obrigatório (FORMAL §6) já vem pronto no
 //! simulador, e a política de fallback é do REGISTRO do FXP (FORMAL §4.3).
 
-use crate::ledger::Ledger;
 use crate::json::Json;
+use crate::ledger::Ledger;
 use std::collections::BTreeMap;
 
 /// Valor de comando/expressão do ator: numérico (limites) ou texto
@@ -78,15 +78,27 @@ impl Registry {
             ("cpu_power", "power", "W"),
             ("attention", "attention", "%"),
         ] {
-            r.sensores
-                .insert(name.into(), SensorInfo { quantity: quantity.into(), unit: unit.into() });
+            r.sensores.insert(
+                name.into(),
+                SensorInfo {
+                    quantity: quantity.into(),
+                    unit: unit.into(),
+                },
+            );
         }
         for (name, min, max, safety) in [
             ("CpuPowerCap", Some(10.0), Some(250.0), Some(200.0)),
             ("Fan", Some(0.0), Some(255.0), Some(200.0)),
             ("StatusLed", None, None, None),
         ] {
-            r.actors.insert(name.into(), ActorLimits { min, max, safety_limit: safety });
+            r.actors.insert(
+                name.into(),
+                ActorLimits {
+                    min,
+                    max,
+                    safety_limit: safety,
+                },
+            );
         }
         r
     }
@@ -146,13 +158,18 @@ impl SensorFailure {
 pub enum ActOutcome {
     Delivered,
     /// Rejeitado sem envio — limite violado (inclusivo: igual ao limite passa).
-    Rejected { limit: Limit, limit_value: f64 },
+    Rejected {
+        limit: Limit,
+        limit_value: f64,
+    },
     /// Ator fora do registro.
     MissingActor,
     /// Heartbeat do ator não respondeu; fallback tentado conforme registro.
     Unavailable,
     /// Fallback acionado com sucesso no ator alternativo.
-    FallbackExecuted { alternativo: String },
+    FallbackExecuted {
+        alternativo: String,
+    },
     /// Todos os fallbacks falharam.
     FallbackExhausted,
     /// Valor fora do **domínio** do ator (extensão da Etapa 3): limites
@@ -160,7 +177,9 @@ pub enum ActOutcome {
     /// (ex.: cor fora do mapa do `StatusLed`, texto em ator numérico).
     /// Sempre auditado (`ACT_ACK.InvalidValue` no schema v1), nunca entrega
     /// silenciosa.
-    InvalidValue { reason: String },
+    InvalidValue {
+        reason: String,
+    },
 }
 
 impl ActOutcome {
@@ -199,8 +218,7 @@ impl Limit {
 pub trait Fxp {
     /// Leitura por nome simbólico. Falha → [`SensorFailure`] + alerta no Caderno
     /// (§4.7: sensor ausente NUNCA é 0.0 — zero é leitura física válida).
-    fn read_sensor(&mut self, name: &str, ledger: &mut dyn Ledger)
-        -> Result<f64, SensorFailure>;
+    fn read_sensor(&mut self, name: &str, ledger: &mut dyn Ledger) -> Result<f64, SensorFailure>;
 
     /// Comando a ator: serializa, valida limites (inclusivos) e entrega;
     /// o Caderno registra tentativa, falha e fallback (§4.3).

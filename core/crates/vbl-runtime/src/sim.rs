@@ -10,12 +10,12 @@
 //!   fallback próprio;
 //! - Mensagens FXP serializadas em processo (schema binário v1: Etapa 3).
 
-use crate::ledger::{kinds, Ledger};
 use crate::fxp::{
-    ActOutcome, ActorLimits, ActorState, ActorEffect, SensorFailure, Fxp, Limit, Registry, SensorInfo,
-    SensorState, Value,
+    ActOutcome, ActorEffect, ActorLimits, ActorState, Fxp, Limit, Registry, SensorFailure,
+    SensorInfo, SensorState, Value,
 };
 use crate::json::Json;
+use crate::ledger::{kinds, Ledger};
 use std::collections::BTreeMap;
 
 /// Mensagem FXP serializada (fronteira em processo, sem schema binário).
@@ -84,8 +84,13 @@ impl SimulatorBuilder {
             disk_bytes_used: 1024,
         };
         for (name, value) in self.values {
-            sim.sensores
-                .insert(name.clone(), SensorState { value, accessible: true });
+            sim.sensores.insert(
+                name.clone(),
+                SensorState {
+                    value,
+                    accessible: true,
+                },
+            );
         }
         // Atores com efeitos físicos determinísticos (PLAN §6.5)
         for name in ["CpuPowerCap", "Fan", "StatusLed"] {
@@ -97,7 +102,13 @@ impl SimulatorBuilder {
                 };
                 sim.actors.insert(
                     name.to_string(),
-                    ActorState { limits, current: None, available: true, fallback: Vec::new(), effect },
+                    ActorState {
+                        limits,
+                        current: None,
+                        available: true,
+                        fallback: Vec::new(),
+                        effect,
+                    },
                 );
             }
         }
@@ -158,7 +169,10 @@ impl FxpSimulator {
 
     /// Agenda valor absoluto para um tick (1-based).
     pub fn schedule(&mut self, tick: u64, sensor: &str, value: f64) {
-        self.schedule.entry(tick).or_default().push((sensor.into(), value));
+        self.schedule
+            .entry(tick)
+            .or_default()
+            .push((sensor.into(), value));
     }
 
     /// Ator para de responder (heartbeat falho — BDD Caso 3).
@@ -186,7 +200,13 @@ impl FxpSimulator {
         self.registry.actors.insert(name.into(), limits.clone());
         self.actors.insert(
             name.into(),
-            ActorState { limits, current: None, available: true, fallback: Vec::new(), effect: ActorEffect::NoEffect },
+            ActorState {
+                limits,
+                current: None,
+                available: true,
+                fallback: Vec::new(),
+                effect: ActorEffect::NoEffect,
+            },
         );
     }
 
@@ -197,7 +217,10 @@ impl FxpSimulator {
         self.registry.sensores.insert(name.into(), info);
         self.sensores.insert(
             name.into(),
-            SensorState { value: 0.0, accessible: true },
+            SensorState {
+                value: 0.0,
+                accessible: true,
+            },
         );
     }
 
@@ -273,11 +296,7 @@ impl Default for FxpSimulator {
 }
 
 impl Fxp for FxpSimulator {
-    fn read_sensor(
-        &mut self,
-        name: &str,
-        ledger: &mut dyn Ledger,
-    ) -> Result<f64, SensorFailure> {
+    fn read_sensor(&mut self, name: &str, ledger: &mut dyn Ledger) -> Result<f64, SensorFailure> {
         let sensor = self.sensores.get(name);
         match sensor {
             None => {
@@ -366,7 +385,10 @@ impl Fxp for FxpSimulator {
     }
 
     fn cpu_power(&self) -> f64 {
-        self.sensores.get("cpu_power").map(|s| s.value).unwrap_or(0.0)
+        self.sensores
+            .get("cpu_power")
+            .map(|s| s.value)
+            .unwrap_or(0.0)
     }
 
     fn on_tick(&mut self, _ledger: &mut dyn Ledger) {
@@ -438,7 +460,9 @@ impl FxpSimulator {
                     ("valor", value.to_json()),
                 ]),
             );
-            return ActOutcome::FallbackExecuted { alternativo: alt.clone() };
+            return ActOutcome::FallbackExecuted {
+                alternativo: alt.clone(),
+            };
         }
         ledger.alert(
             &format!("Todos os fallbacks de '{primary}' falharam."),

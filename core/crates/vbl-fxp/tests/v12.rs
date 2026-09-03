@@ -19,14 +19,16 @@ use vbl_runtime::fxp::Fxp;
 use vbl_runtime::ledger::ChainLedger;
 use vbl_runtime::FxpSimulator;
 
-
 /// Par autoassinado (rcgen): PEMs para o servidor e impressão digital do DER
 /// para o cliente fixar (pin) — o "papel do servidor" do cenário.
 fn certificados() -> (TlsAccept, [u8; 32], String) {
     let ck = rcgen::generate_simple_self_signed(vec!["localhost".into()]).expect("rcgen");
     let fp = tls::fingerprint(ck.cert.der());
     (
-        TlsAccept { certs_pem: ck.cert.pem(), key_pem: ck.signing_key.serialize_pem() },
+        TlsAccept {
+            certs_pem: ck.cert.pem(),
+            key_pem: ck.signing_key.serialize_pem(),
+        },
         fp,
         tls::hex32(&fp),
     )
@@ -38,7 +40,10 @@ fn peer_bus() -> FxpBus {
     let _ = r.register(DeviceEntry::sensor("temp_a", "temperature", "°C", 1.0));
     FxpBus::build(
         r,
-        BusConfig { mode: OperationMode::Hybrid, ..Default::default() },
+        BusConfig {
+            mode: OperationMode::Hybrid,
+            ..Default::default()
+        },
         FxpSimulator::new(),
     )
 }
@@ -51,10 +56,16 @@ fn bus_cliente(porta: u16, pin_hex: &str) -> FxpBus {
          temp_a.mode = real\ntemp_a.endpoint = tcps:127.0.0.1:{porta}@sha256:{pin_hex}\n"
     );
     let mut r = DeviceRegistry::new();
-    FxpConfig::parse(&cfg).expect("config do cliente").apply(&mut r).expect("registro");
+    FxpConfig::parse(&cfg)
+        .expect("config do cliente")
+        .apply(&mut r)
+        .expect("registro");
     FxpBus::build(
         r,
-        BusConfig { mode: OperationMode::Hybrid, ..Default::default() },
+        BusConfig {
+            mode: OperationMode::Hybrid,
+            ..Default::default()
+        },
         FxpSimulator::new(),
     )
 }
@@ -65,13 +76,18 @@ fn e2e_tls_pin_certo_conecta_e_le() {
     let peer = PeerServer::new(
         peer_bus(),
         ChainLedger::new(),
-        PeerConfig { tls: Some(aceitador), ..Default::default() },
+        PeerConfig {
+            tls: Some(aceitador),
+            ..Default::default()
+        },
     );
     let (_srv, porta) = vbl_fxp::peer::serve_tcp_peer(&peer).expect("servidor TLS");
 
     let mut bus = bus_cliente(porta, &pin_hex);
     let mut ledger = ChainLedger::new();
-    let v = bus.read_sensor("temp_a", &mut ledger).expect("leitura via TLS");
+    let v = bus
+        .read_sensor("temp_a", &mut ledger)
+        .expect("leitura via TLS");
     assert!(v.is_finite(), "valor físico válido atravessa o TLS: {v}");
 }
 
@@ -82,14 +98,20 @@ fn e2e_tls_pin_errado_falha_fechada() {
     let peer = PeerServer::new(
         peer_bus(),
         ChainLedger::new(),
-        PeerConfig { tls: Some(aceitador), ..Default::default() },
+        PeerConfig {
+            tls: Some(aceitador),
+            ..Default::default()
+        },
     );
     let (_srv, porta) = vbl_fxp::peer::serve_tcp_peer(&peer).expect("servidor TLS");
 
     let mut bus = bus_cliente(porta, &hex_outra);
     let mut ledger = ChainLedger::new();
     let r = bus.read_sensor("temp_a", &mut ledger);
-    assert!(r.is_err(), "pin divergente tem que falhar fechado, nunca conectar");
+    assert!(
+        r.is_err(),
+        "pin divergente tem que falhar fechado, nunca conectar"
+    );
     // A honestidade mora no Caderno: o evento de I/O registra o motivo
     // completo do transporte (handshake TLS), nunca "sensor falhou" a seco.
     let motivo: String = ledger
@@ -111,7 +133,10 @@ fn e2e_cliente_plano_contra_servidor_tls_falha() {
     let peer = PeerServer::new(
         peer_bus(),
         ChainLedger::new(),
-        PeerConfig { tls: Some(aceitador), ..Default::default() },
+        PeerConfig {
+            tls: Some(aceitador),
+            ..Default::default()
+        },
     );
     let (_srv, porta) = vbl_fxp::peer::serve_tcp_peer(&peer).expect("servidor TLS");
 
@@ -119,8 +144,14 @@ fn e2e_cliente_plano_contra_servidor_tls_falha() {
     // quebra o handshake TLS do servidor — a conexão morre sem resposta.
     let mut c = Connection::tcp("127.0.0.1", porta, Duration::from_millis(500))
         .expect("tcp conecta antes do handshake");
-    let r = c.request(&Message::read("temp_a", 1, true), Duration::from_millis(500));
-    assert!(r.is_err(), "texto plano contra servidor TLS tem que falhar: {r:?}");
+    let r = c.request(
+        &Message::read("temp_a", 1, true),
+        Duration::from_millis(500),
+    );
+    assert!(
+        r.is_err(),
+        "texto plano contra servidor TLS tem que falhar: {r:?}"
+    );
 }
 
 #[test]
@@ -129,8 +160,18 @@ fn e2e_cliente_tls_contra_servidor_plano_falha() {
     let (_srv, porta) = vbl_fxp::peer::serve_tcp_peer(&peer).expect("servidor plano");
 
     let (_a, fp, _hex) = certificados();
-    let r = Connection::tcp_tls("127.0.0.1", porta, &fp, Duration::from_millis(500));
-    assert!(r.is_err(), "handshake TLS contra servidor plano tem que falhar: {r:?}");
+    let confianca = vbl_fxp::tls::ConfiancaCliente::Pin(fp);
+    let r = Connection::tcp_tls(
+        "127.0.0.1",
+        porta,
+        &confianca,
+        Duration::from_millis(500),
+        None,
+    );
+    assert!(
+        r.is_err(),
+        "handshake TLS contra servidor plano tem que falhar: {r:?}"
+    );
 }
 
 #[test]
@@ -139,13 +180,19 @@ fn e2e_unix_rejeita_tls_na_construcao() {
     let peer = PeerServer::new(
         peer_bus(),
         ChainLedger::new(),
-        PeerConfig { tls: Some(aceitador), ..Default::default() },
+        PeerConfig {
+            tls: Some(aceitador),
+            ..Default::default()
+        },
     );
     let r = vbl_fxp::peer::serve_unix_peer(
         &peer,
         &std::env::temp_dir().join(format!("vbl-v12-tls-unix-{}.sock", std::process::id())),
     );
-    assert!(r.is_err(), "TLS é do TCP remoto; unix com tls configurado falha honesto");
+    assert!(
+        r.is_err(),
+        "TLS é do TCP remoto; unix com tls configurado falha honesto"
+    );
 }
 
 #[test]
@@ -160,8 +207,14 @@ fn endpoint_tcps_parse_descricao_roundtrip_e_erros() {
     assert_eq!(Endpoint::parse(&sh).expect("hostname").description(), sh);
 
     // Fail closed: sem pin, pin curto, pin não-hex ⇒ erro de construção.
-    assert!(Endpoint::parse("tcps:127.0.0.1:7080").is_err(), "sem pin não conecta");
-    assert!(Endpoint::parse("tcps:127.0.0.1:7080@sha256:ab").is_err(), "pin curto");
+    assert!(
+        Endpoint::parse("tcps:127.0.0.1:7080").is_err(),
+        "sem pin não conecta"
+    );
+    assert!(
+        Endpoint::parse("tcps:127.0.0.1:7080@sha256:ab").is_err(),
+        "pin curto"
+    );
     assert!(
         Endpoint::parse(&format!("tcps:127.0.0.1:7080@sha256:{}", "zz".repeat(32))).is_err(),
         "pin não-hex"
@@ -183,7 +236,7 @@ fn endpoint_tcps_parse_descricao_roundtrip_e_erros() {
 // reservado; o gatilho de uso é o HELLO (§4.4) nas duas pontas.
 // ======================================================================
 
-use vbl_fxp::schema::{flag, compress, caps, op, Body, SchemaError};
+use vbl_fxp::schema::{caps, compress, flag, op, Body, SchemaError};
 
 /// Nomes pseudo-aleatórios determinísticos (LCG) — alta entropia para o LZ4
 /// não achar repetição intra-frame: sem dicionário não comprime; com o
@@ -197,7 +250,9 @@ fn nomes_ruidosos(n: usize) -> Vec<String> {
         .map(|i| {
             let mut nome = format!("s{i:02}_");
             for _ in 0..43 {
-                s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                s = s
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
                 let cp = 0x4E00 + ((s >> 33) as u32) % 0x51_5B;
                 nome.push(char::from_u32(cp).unwrap_or('x'));
             }
@@ -208,13 +263,29 @@ fn nomes_ruidosos(n: usize) -> Vec<String> {
 
 #[test]
 fn dict_do_registro_e_deterministico_ordenado_e_limitado() {
-    let nomes = vec!["temp_c".to_string(), "temp_a".to_string(), "cpu_temp".to_string()];
+    let nomes = vec![
+        "temp_c".to_string(),
+        "temp_a".to_string(),
+        "cpu_temp".to_string(),
+    ];
     let d1 = compress::dict_from_registry(&nomes);
-    assert_eq!(d1, compress::dict_from_registry(&nomes), "mesmo registro ⇒ mesmo dict");
-    assert_eq!(d1, b"cpu_temp\ntemp_a\ntemp_c", "ordenado e concatenado com \\n (§4.9)");
-    assert!(compress::dict_from_registry(&[]).is_empty(), "registro vazio ⇒ dict vazio");
+    assert_eq!(
+        d1,
+        compress::dict_from_registry(&nomes),
+        "mesmo registro ⇒ mesmo dict"
+    );
+    assert_eq!(
+        d1, b"cpu_temp\ntemp_a\ntemp_c",
+        "ordenado e concatenado com \\n (§4.9)"
+    );
+    assert!(
+        compress::dict_from_registry(&[]).is_empty(),
+        "registro vazio ⇒ dict vazio"
+    );
     // Teto determinístico de 64 KiB: prefixo da ordem ordenada.
-    let mut grandes: Vec<String> = (0..300).map(|i| format!("s{i:03}_{}", "x".repeat(250))).collect();
+    let mut grandes: Vec<String> = (0..300)
+        .map(|i| format!("s{i:03}_{}", "x".repeat(250)))
+        .collect();
     grandes.sort();
     let d = compress::dict_from_registry(&grandes);
     assert_eq!(d.len(), compress::DICT_MAX, "dict limitado a 64 KiB");
@@ -228,7 +299,10 @@ fn schema_dict_roundtrip_com_algoritmo_2() {
     let resultados: Vec<vbl_fxp::BatchResult> = nomes
         .iter()
         .enumerate()
-        .map(|(i, n)| vbl_fxp::BatchResult::Ok { value: i as f64 + 0.5, canonical: n.clone() })
+        .map(|(i, n)| vbl_fxp::BatchResult::Ok {
+            value: i as f64 + 0.5,
+            canonical: n.clone(),
+        })
         .collect();
     let msg = Message::read_batch_ok(resultados, 1);
 
@@ -240,8 +314,15 @@ fn schema_dict_roundtrip_com_algoritmo_2() {
     // Com dict: os nomes moram no dicionário ⇒ comprime e marca id 2.
     let mut com_dict = Vec::new();
     vbl_fxp::schema::encode_with_compression_dict(&msg, &dict, &mut com_dict).unwrap();
-    assert!(com_dict[4 + 5] & flag::COMPRESSED != 0, "frame com dict vem comprimido");
-    assert_eq!(com_dict[4 + 6], compress::ALGO_LZ4_DICT, "byte reservado = id 2");
+    assert!(
+        com_dict[4 + 5] & flag::COMPRESSED != 0,
+        "frame com dict vem comprimido"
+    );
+    assert_eq!(
+        com_dict[4 + 6],
+        compress::ALGO_LZ4_DICT,
+        "byte reservado = id 2"
+    );
     assert!(
         com_dict.len() < plano.len(),
         "dict ({} B) precisa vencer o plano ({} B) com os nomes no dicionário",
@@ -272,7 +353,10 @@ fn dict_frame_sem_dicionario_falha_fechado_como_v1_1() {
     let dict = compress::dict_from_registry(&nomes);
     let resultados: Vec<vbl_fxp::BatchResult> = nomes
         .iter()
-        .map(|n| vbl_fxp::BatchResult::Ok { value: 1.0, canonical: n.clone() })
+        .map(|n| vbl_fxp::BatchResult::Ok {
+            value: 1.0,
+            canonical: n.clone(),
+        })
         .collect();
     let msg = Message::read_batch_ok(resultados, 1);
     let mut frame = Vec::new();
@@ -281,7 +365,10 @@ fn dict_frame_sem_dicionario_falha_fechado_como_v1_1() {
     // Codec sem dicionário (v1.1 real ou conexão sem DICT negociado):
     // id 2 é "algoritmo desconhecido" — fail closed, princípio 7.
     let err = vbl_fxp::schema::decode(&frame).unwrap_err();
-    assert!(matches!(err, SchemaError::UnknownCompression { received: 2 }), "{err:?}");
+    assert!(
+        matches!(err, SchemaError::UnknownCompression { received: 2 }),
+        "{err:?}"
+    );
     let err2 = vbl_fxp::schema::decode_with_dict(&frame, None).unwrap_err();
     assert_eq!(err, err2, "decode() ≡ decode_with_dict(_, None)");
     // Dicionário ERRADO também nunca vira lixo: falha de descompressão.
@@ -291,8 +378,8 @@ fn dict_frame_sem_dicionario_falha_fechado_como_v1_1() {
 
 #[test]
 fn e2e_dict_negociado_com_hello_e_degradacao_v1_1() {
-    use vbl_fxp::transport::wait_ready_unix;
     use std::path::PathBuf;
+    use vbl_fxp::transport::wait_ready_unix;
 
     let sock = std::env::temp_dir().join(format!("vbl-v12-dict-{}.sock", std::process::id()));
 
@@ -301,7 +388,10 @@ fn e2e_dict_negociado_com_hello_e_degradacao_v1_1() {
     let peer = PeerServer::new(
         peer_bus(),
         ChainLedger::new(),
-        PeerConfig { caps: caps::DICT | caps::LZ4, ..Default::default() },
+        PeerConfig {
+            caps: caps::DICT | caps::LZ4,
+            ..Default::default()
+        },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -338,7 +428,10 @@ fn e2e_dict_negociado_com_hello_e_degradacao_v1_1() {
     let peer11 = PeerServer::new(
         peer_bus(),
         ChainLedger::new(),
-        PeerConfig { caps: caps::LZ4, ..Default::default() },
+        PeerConfig {
+            caps: caps::LZ4,
+            ..Default::default()
+        },
     );
     let _srv11 = vbl_fxp::peer::serve_unix_peer(&peer11, &sock11).expect("servidor v1.1");
     assert!(wait_ready_unix(&sock11, DEADLINE));
@@ -400,13 +493,19 @@ fn parse_group_v4_v6_scope_e_ssm() {
     // SSM: @fonte-v4
     let (g, fonte) = parse_group("239.255.70.81:7080@127.0.0.1").expect("ssm");
     assert_eq!(g.to_string(), "239.255.70.81:7080");
-    assert_eq!(fonte, Some(std::net::Ipv4Addr::LOCALHOST));
+    assert_eq!(
+        fonte,
+        Some(vbl_fxp::discover::FonteSsm::V4(
+            std::net::Ipv4Addr::LOCALHOST
+        ))
+    );
     // erros honestos
     assert!(parse_group("sem-porta").is_err());
     assert!(parse_group("239.255.70.80").is_err());
     assert!(parse_group("[ff15::7080]:porta").is_err());
     assert!(parse_group("239.255.70.81:7080@nao-ip").is_err());
-    // SSM exige fonte IPv4 (SSM IPv6 fora do escopo — §9)
+    // Fonte com família divergente do grupo segue recusa honesta
+    // (v1.2 recusava todo SSM em grupo v6; a v1.3 aceita fonte v6 — §4.9).
     assert!(parse_group("[ff15::7080]:7080@127.0.0.1").is_err());
 }
 
@@ -437,7 +536,6 @@ fn beacon_ipv6_loopback_ou_anuncio_ignorado() {
 #[test]
 fn beacon_ssm_v4_assina_a_fonte_ou_ouve_vazio() {
     let (grupo, fonte) = parse_group("239.255.70.82:7082@127.0.0.1").expect("ssm");
-    let fonte = fonte.expect("fonte do ssm");
     // O anunciador liga-se a 127.0.0.1 para que a FONTE do datagrama seja
     // exatamente a assinada (S,G).
     let anunciador = match discover::Announcer::start_bound(
@@ -446,13 +544,12 @@ fn beacon_ssm_v4_assina_a_fonte_ou_ouve_vazio() {
         0x5678,
         grupo,
         Duration::from_millis(50),
-        Some(std::net::IpAddr::V4(fonte)),
+        fonte.map(|f| f.ip()),
     ) {
         Ok(a) => a,
         Err(_) => return, // SSM indisponível no kernel/rede: skip gracioso
     };
-    let peers = discover::discover_peers(Duration::from_millis(700), grupo)
-        .unwrap_or_default();
+    let peers = discover::discover_peers(Duration::from_millis(700), grupo).unwrap_or_default();
     drop(anunciador);
     if let Some(p) = peers.iter().find(|p| p.identifier == "fxpd-ssm-teste") {
         assert_eq!(p.source.ip().to_string(), "127.0.0.1");
@@ -474,13 +571,8 @@ mod mdns_v12 {
 
     #[test]
     fn mdns_annuncia_e_resolve_ou_vazio_gracioso() {
-        let anunciador = MdnsAnnouncer::start(
-            "fxpd-mdns-teste",
-            7391,
-            0x00C0FFEEu32,
-            None,
-        )
-        .expect("anunciador mDNS deve subir em rede com multicast");
+        let anunciador = MdnsAnnouncer::start("fxpd-mdns-teste", 7391, 0x00C0FFEEu32, None)
+            .expect("anunciador mDNS deve subir em rede com multicast");
         let peers = discover_mdns(Duration::from_millis(1200)).unwrap_or_default();
         drop(anunciador);
         if let Some(p) = peers.iter().find(|p| p.identifier == "fxpd-mdns-teste") {
@@ -495,8 +587,7 @@ mod mdns_v12 {
     fn mdns_txt_tls_publica_pin() {
         let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
         let pin = fingerprint(cert.cert.der());
-        let anunciador =
-            MdnsAnnouncer::start("fxpd-mdns-tls", 7392, 0x42, Some(pin)).unwrap();
+        let anunciador = MdnsAnnouncer::start("fxpd-mdns-tls", 7392, 0x42, Some(pin)).unwrap();
         let peers = discover_mdns(Duration::from_millis(1200)).unwrap_or_default();
         drop(anunciador);
         if let Some(p) = peers.iter().find(|p| p.identifier == "fxpd-mdns-tls") {
@@ -509,27 +600,34 @@ mod mdns_v12 {
         use vbl_fxp::Endpoint;
         // Com a feature: parse ok e descrição redonda.
         let ep = Endpoint::parse("mdns:cozinha-fxpd").expect("endpoint mdns");
-        assert_eq!(ep, Endpoint::AutoRemoteMdns { identifier: "cozinha-fxpd".into() });
+        assert_eq!(
+            ep,
+            Endpoint::AutoRemoteMdns {
+                identifier: "cozinha-fxpd".into()
+            }
+        );
         assert_eq!(ep.description(), "mdns:cozinha-fxpd");
         assert!(Endpoint::parse("mdns:").is_err(), "id vazio ⇒ erro honesto");
 
         // e2e: bus com endpoint mdns lê o peer anunciado — se o mDNS do
         // sandbox não resolver, a leitura é inacessível com motivo honesto
         // (nunca dado sintético).
-        let anunciador =
-            MdnsAnnouncer::start("fxpd-mdns-bus", 7393, 0x77, None).unwrap();
-        let resolvido =
-            !discover_mdns(Duration::from_millis(1200)).unwrap_or_default().is_empty();
+        let anunciador = MdnsAnnouncer::start("fxpd-mdns-bus", 7393, 0x77, None).unwrap();
+        let resolvido = !discover_mdns(Duration::from_millis(1200))
+            .unwrap_or_default()
+            .is_empty();
         drop(anunciador);
         if !resolvido {
             return; // sandbox sem mDNS: nada a provar além do parse acima
         }
-        let sock = std::env::temp_dir()
-            .join(format!("vbl-v12-mdns-{}.sock", std::process::id()));
+        let sock = std::env::temp_dir().join(format!("vbl-v12-mdns-{}.sock", std::process::id()));
         let peer = PeerServer::new(
             peer_bus(),
             ChainLedger::new(),
-            PeerConfig { caps: caps::LZ4, ..Default::default() },
+            PeerConfig {
+                caps: caps::LZ4,
+                ..Default::default()
+            },
         );
         let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
         assert!(vbl_fxp::transport::wait_ready_unix(&sock, DEADLINE));
@@ -547,7 +645,10 @@ mod mdns_v12 {
         FxpConfig::parse(cfg2).unwrap().apply(&mut r2).unwrap();
         let mut bus = FxpBus::build(
             r2,
-            BusConfig { mode: OperationMode::Hybrid, ..Default::default() },
+            BusConfig {
+                mode: OperationMode::Hybrid,
+                ..Default::default()
+            },
             FxpSimulator::new(),
         );
         let mut ledger = ChainLedger::new();
@@ -569,7 +670,11 @@ fn dict_regiao_abaixo_do_threshold_sai_plana() {
     let msg = Message::read_ok(36.5, "temp_a", false, 1);
     let mut com_dict = Vec::new();
     vbl_fxp::schema::encode_with_compression_dict(&msg, &dict, &mut com_dict).unwrap();
-    assert_eq!(com_dict[4 + 5] & flag::COMPRESSED, 0, "região pequena sai plana");
+    assert_eq!(
+        com_dict[4 + 5] & flag::COMPRESSED,
+        0,
+        "região pequena sai plana"
+    );
     assert_eq!(com_dict[4 + 6], 0, "sem algoritmo no byte reservado");
 }
 
@@ -587,13 +692,17 @@ fn dict_nunca_infla_o_fio() {
     let msg = Message::read_batch_ok(resultados, 1);
     let mut com_dict = Vec::new();
     vbl_fxp::schema::encode_with_compression_dict(&msg, &dict, &mut com_dict).unwrap();
-    assert_eq!(com_dict[4 + 5] & flag::COMPRESSED, 0, "incompressível sai plano");
+    assert_eq!(
+        com_dict[4 + 5] & flag::COMPRESSED,
+        0,
+        "incompressível sai plano"
+    );
 }
 
 #[test]
 fn exchange_hello_exige_resposta_hello_valida() {
-    use vbl_fxp::transport::{serve_unix, wait_ready_unix};
     use std::path::Path;
+    use vbl_fxp::transport::{serve_unix, wait_ready_unix};
 
     let dir = std::env::temp_dir().join(format!("vbl-v12-hello-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&dir);
@@ -609,14 +718,15 @@ fn exchange_hello_exige_resposta_hello_valida() {
     let err = c
         .exchange_hello(&[], DEADLINE)
         .expect_err("ACK no lugar de HELLO ⇒ erro honesto");
-    assert!(matches!(err, vbl_fxp::transport::TransportError::Broken(m) if m.contains("não é HELLO")));
+    assert!(
+        matches!(err, vbl_fxp::transport::TransportError::Broken(m) if m.contains("não é HELLO"))
+    );
 
     // Nota: o braço "corpo do HELLO inválido" é INATINGÍVEL por fio — o
     // decoder é estrito por opcode (HELLO ⇒ Body::Hello obrigatório) e
     // falha antes (Schema::MissingField), exatamente o fail-closed do §1.2.
     let _ = std::fs::remove_dir_all(&dir);
 }
-
 
 // ======================================================================
 // v1.2 — honestidade do transporte, arestas de decode e descoberta por
@@ -634,7 +744,10 @@ fn transport_error_display_honesto() {
         "ack não chegou no prazo"
     );
     let e = vbl_fxp::transport::TransportError::Schema(SchemaError::InvalidMagic);
-    assert_eq!(e.to_string(), "violação do schema v1: magic inválido (esperado \"FXP\")");
+    assert_eq!(
+        e.to_string(),
+        "violação do schema v1: magic inválido (esperado \"FXP\")"
+    );
 }
 
 /// Corrige o byte do opcode no cabeçalho já codificado (offset 8):
@@ -647,7 +760,10 @@ fn opcode_de(frame: &mut [u8], novo: u8) {
 fn decode_rejeita_batch_vazio_e_read_sem_nome() {
     // READ_BATCH_OK com count=0: encode nunca produz; decode reprova (§4.7).
     let msg = Message::read_batch_ok(
-        vec![vbl_fxp::BatchResult::Ok { value: 1.0, canonical: "temp_a".into() }],
+        vec![vbl_fxp::BatchResult::Ok {
+            value: 1.0,
+            canonical: "temp_a".into(),
+        }],
         1,
     );
     let mut frame = vbl_fxp::schema::encode_to_vec(&msg).unwrap();
@@ -704,23 +820,37 @@ fn encode_nunca_infla_com_ou_sem_dicionario() {
         .collect();
     let resultados: Vec<vbl_fxp::BatchResult> = estranhos
         .iter()
-        .map(|n| vbl_fxp::BatchResult::Ok { value: 1.0, canonical: n.clone() })
+        .map(|n| vbl_fxp::BatchResult::Ok {
+            value: 1.0,
+            canonical: n.clone(),
+        })
         .collect();
     let msg = Message::read_batch_ok(resultados, 1);
 
     let mut com_dict = Vec::new();
     vbl_fxp::schema::encode_with_compression_dict(&msg, &dict, &mut com_dict).unwrap();
-    assert_eq!(com_dict[10] & flag::COMPRESSED, 0, "incompressível com dict sai plano");
+    assert_eq!(
+        com_dict[10] & flag::COMPRESSED,
+        0,
+        "incompressível com dict sai plano"
+    );
 
     let mut sem_dict = Vec::new();
     vbl_fxp::schema::encode_with_compression(&msg, &mut sem_dict).unwrap();
-    assert_eq!(sem_dict[10] & flag::COMPRESSED, 0, "incompressível sem dict sai plano");
+    assert_eq!(
+        sem_dict[10] & flag::COMPRESSED,
+        0,
+        "incompressível sem dict sai plano"
+    );
 }
 
 #[test]
 fn beacon_curto_falha_honesto() {
     let err = vbl_fxp::discover::decode_beacon(&[0xff, 0x00]).unwrap_err();
-    assert!(matches!(err, vbl_fxp::DiscoveryError::BeaconInvalido), "{err:?}");
+    assert!(
+        matches!(err, vbl_fxp::DiscoveryError::BeaconInvalido),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -782,14 +912,16 @@ fn grupo_customizado_do_config_resolve_leitura_remota_ou_falha_honesto() {
     // Com multicast de loopback funcional resolve e lê; sem rede multicast,
     // a rota fica inacessível com motivo honesto — ambos aceitáveis.
     if let Err(e) = bus.read_sensor("temp_a", &mut ledger) {
-        assert!(matches!(e, vbl_runtime::fxp::SensorFailure::Inaccessible), "{e:?}");
+        assert!(
+            matches!(e, vbl_runtime::fxp::SensorFailure::Inaccessible),
+            "{e:?}"
+        );
     }
 }
 
 #[test]
 fn grupo_ssm_do_config_assina_fonte_ou_falha_honesto() {
     use vbl_fxp::discover;
-    use std::net::IpAddr;
 
     let peer = PeerServer::new(peer_bus(), ChainLedger::new(), PeerConfig::default());
     let (_srv, porta) = vbl_fxp::peer::serve_tcp_peer_port(&peer, 0).expect("srv tcp");
@@ -800,7 +932,7 @@ fn grupo_ssm_do_config_assina_fonte_ou_falha_honesto() {
         0x77,
         grupo,
         Duration::from_millis(30),
-        fonte.map(IpAddr::V4),
+        fonte.map(|f| f.ip()),
     ) {
         Ok(a) => a,
         Err(_) => return,
@@ -822,7 +954,10 @@ fn grupo_ssm_do_config_assina_fonte_ou_falha_honesto() {
     );
     let mut ledger = ChainLedger::new();
     if let Err(e) = bus.read_sensor("temp_a", &mut ledger) {
-        assert!(matches!(e, vbl_runtime::fxp::SensorFailure::Inaccessible), "{e:?}");
+        assert!(
+            matches!(e, vbl_runtime::fxp::SensorFailure::Inaccessible),
+            "{e:?}"
+        );
     }
 }
 
@@ -858,13 +993,11 @@ fn peer_v1_0_puro_em_tcp_degrada_honesto_e_continua_lendo() {
                 continue; // v1.0 fecha a conexão: gatilho da degradação honesta
             }
             if opcode == vbl_fxp::schema::op::READ {
-                let nome =
-                    String::from_utf8_lossy(&rest[16..16 + rest[11] as usize]).to_string();
+                let nome = String::from_utf8_lossy(&rest[16..16 + rest[11] as usize]).to_string();
                 let seq = u32::from_le_bytes(rest[12..16].try_into().expect("seq"));
-                let resp = vbl_fxp::schema::encode_to_vec(&Message::read_ok(
-                    42.0, &nome, false, seq,
-                ))
-                .expect("encode");
+                let resp =
+                    vbl_fxp::schema::encode_to_vec(&Message::read_ok(42.0, &nome, false, seq))
+                        .expect("encode");
                 let _ = s.write_all(&resp);
             }
         }

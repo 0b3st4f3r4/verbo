@@ -29,7 +29,9 @@ fn args() -> Config {
         Ok(c) => c,
         Err(msg) => {
             eprintln!("vbl-soak: {msg}");
-            eprintln!("uso: vbl-soak [--alive-forms N] [--ticks T] [--seconds S] [--report A_CADA]");
+            eprintln!(
+                "uso: vbl-soak [--alive-forms N] [--ticks T] [--seconds S] [--report A_CADA]"
+            );
             std::process::exit(2);
         }
     }
@@ -38,12 +40,16 @@ fn args() -> Config {
 /// Parser puro dos argumentos (ensaio in-process; `args` só o amarra ao env).
 /// Valor não numérico mantém o default (a carga é heurística, não contrato).
 fn parse_args(it: impl Iterator<Item = String>) -> Result<Config, String> {
-    let mut c = Config { alive: 10_000, max_ticks: u64::MAX, max_seconds: 0, report: 10_000 };
+    let mut c = Config {
+        alive: 10_000,
+        max_ticks: u64::MAX,
+        max_seconds: 0,
+        report: 10_000,
+    };
     let mut it = it.peekable();
     while let Some(a) = it.next() {
-        let mut value = |default: u64| -> u64 {
-            it.next().and_then(|v| v.parse().ok()).unwrap_or(default)
-        };
+        let mut value =
+            |default: u64| -> u64 { it.next().and_then(|v| v.parse().ok()).unwrap_or(default) };
         match a.as_str() {
             "--alive-forms" => c.alive = value(c.alive as u64) as usize,
             "--ticks" => c.max_ticks = value(c.max_ticks),
@@ -57,7 +63,9 @@ fn parse_args(it: impl Iterator<Item = String>) -> Result<Config, String> {
 
 /// RSS do processo em bytes (VmRSS de /proc/self/status; 0 se indisponível).
 fn rss_bytes() -> u64 {
-    let Ok(status) = std::fs::read_to_string("/proc/self/status") else { return 0 };
+    let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
+        return 0;
+    };
     for line in status.lines() {
         if let Some(rest) = line.strip_prefix("VmRSS:") {
             let kb: u64 = rest
@@ -166,8 +174,8 @@ fn run(cfg: Config) -> i32 {
 
 /// Forma `event` de carga com horizonte curto (renovação pelo runtime).
 fn event_form(name: &str, now: f64) -> vbl_runtime::Form {
-    use vbl_runtime::fxp::Value;
     use vbl_lang::Conjugation;
+    use vbl_runtime::fxp::Value;
     vbl_runtime::Form {
         name: name.into(),
         value: Value::Str(format!("carga-{name}")),
@@ -197,11 +205,30 @@ mod tests {
     fn parse_args_defaults_overrides_e_erro() {
         // defaults (carga de referência: 10k vivas, teto infinito)
         let c = parse_args(std::iter::empty()).unwrap();
-        assert_eq!((c.alive, c.max_ticks, c.max_seconds, c.report), (10_000, u64::MAX, 0, 10_000));
+        assert_eq!(
+            (c.alive, c.max_ticks, c.max_seconds, c.report),
+            (10_000, u64::MAX, 0, 10_000)
+        );
         // overrides completos
-        let c = parse_args(["--alive-forms", "30", "--ticks", "12", "--seconds", "0",
-                            "--report", "5"].iter().map(|s| s.to_string())).unwrap();
-        assert_eq!((c.alive, c.max_ticks, c.max_seconds, c.report), (30, 12, 0, 5));
+        let c = parse_args(
+            [
+                "--alive-forms",
+                "30",
+                "--ticks",
+                "12",
+                "--seconds",
+                "0",
+                "--report",
+                "5",
+            ]
+            .iter()
+            .map(|s| s.to_string()),
+        )
+        .unwrap();
+        assert_eq!(
+            (c.alive, c.max_ticks, c.max_seconds, c.report),
+            (30, 12, 0, 5)
+        );
         // valor não numérico mantém o default (carga é heurística)
         let c = parse_args(["--ticks", "muito"].iter().map(|s| s.to_string())).unwrap();
         assert_eq!(c.max_ticks, u64::MAX);
@@ -239,7 +266,12 @@ mod tests {
         //
         // 1) max_seconds = 1 com teto de ticks altíssimo:
         let inicio = std::time::Instant::now();
-        let cfg = Config { alive: 3, max_ticks: u64::MAX, max_seconds: 1, report: 10_000 };
+        let cfg = Config {
+            alive: 3,
+            max_ticks: u64::MAX,
+            max_seconds: 1,
+            report: 10_000,
+        };
         let _ = run(cfg); // veredito 0 ou 1: sob sanitizer o RSS não é semântico
         assert!(
             inicio.elapsed() < std::time::Duration::from_secs(5),
@@ -251,7 +283,12 @@ mod tests {
         //    a tolerância vira só a folga de 4 MiB e o RSS do próprio processo
         //    a supera ⇒ veredito honesto é FALHA (1), nunca "OK" sem medição.
         // 1 tick com 15k formas num único passe.
-        let cfg = Config { alive: 45_000, max_ticks: 1, max_seconds: 0, report: 10_000 };
+        let cfg = Config {
+            alive: 45_000,
+            max_ticks: 1,
+            max_seconds: 0,
+            report: 10_000,
+        };
         assert_eq!(run(cfg), 1);
     }
 
@@ -259,7 +296,12 @@ mod tests {
     fn ciclo_enxuto_termina_estavel() {
         // 12 ticks com 3 vivas: cobre patamar (tick 10), relatórios periódicos
         // e o veredito final (RSS sob carga constante renova sem crescer)
-        let cfg = Config { alive: 3, max_ticks: 12, max_seconds: 0, report: 5 };
+        let cfg = Config {
+            alive: 3,
+            max_ticks: 12,
+            max_seconds: 0,
+            report: 5,
+        };
         assert_eq!(run(cfg), 0);
     }
 }

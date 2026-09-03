@@ -122,15 +122,24 @@ pub enum ExprKind {
 
 impl Expression {
     pub fn str(s: impl Into<String>, span: Span) -> Self {
-        Self { kind: ExprKind::Str(s.into()), span }
+        Self {
+            kind: ExprKind::Str(s.into()),
+            span,
+        }
     }
 
     pub fn num(v: f64, span: Span) -> Self {
-        Self { kind: ExprKind::Num(v), span }
+        Self {
+            kind: ExprKind::Num(v),
+            span,
+        }
     }
 
     pub fn ident(name: impl Into<String>, span: Span) -> Self {
-        Self { kind: ExprKind::Ident(name.into()), span }
+        Self {
+            kind: ExprKind::Ident(name.into()),
+            span,
+        }
     }
 }
 
@@ -194,7 +203,11 @@ pub enum Action {
     ReclassifyAsNonequilibrium,
     NotifyShutdown,
     /// `act '(' actor_name ',' expression ')'` — comando FXP ao ator.
-    Act { actor: String, value: Expression, actor_span: Span },
+    Act {
+        actor: String,
+        value: Expression,
+        actor_span: Span,
+    },
 }
 
 /// Regra de revisão: `when sensor_ref op threshold '->' action_list`.
@@ -246,8 +259,14 @@ pub struct ReviewDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     Keep(String),
-    Act { actor: String, value: Expression },
-    Every { period: Duration, body: Vec<Statement> },
+    Act {
+        actor: String,
+        value: Expression,
+    },
+    Every {
+        period: Duration,
+        body: Vec<Statement>,
+    },
 }
 
 /// Bloco `main` — opcional, uma única vez, após as demais declarações.

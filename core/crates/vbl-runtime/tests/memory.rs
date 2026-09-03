@@ -22,10 +22,10 @@
 #![cfg(feature = "heap-audit")]
 
 use vbl_lang::{parse, Conjugation};
-use vbl_runtime::ledger::NoopLedger;
 use vbl_runtime::form::Form;
 use vbl_runtime::fxp::Value;
 use vbl_runtime::heap_auditor;
+use vbl_runtime::ledger::NoopLedger;
 use vbl_runtime::{load, Engine, FxpSimulator};
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
@@ -64,7 +64,9 @@ fn heap_per_conjugation(n: usize, conjugation: Conjugation) -> (usize, usize) {
     for i in 0..n {
         match conjugation {
             Conjugation::Event => {
-                program.push_str(&format!("event F{i} {{ value: \"v{i}\", horizon: 1000000s }}\n"));
+                program.push_str(&format!(
+                    "event F{i} {{ value: \"v{i}\", horizon: 1000000s }}\n"
+                ));
             }
             Conjugation::Equilibrium => {
                 program.push_str(&format!(
@@ -94,7 +96,11 @@ fn heap_per_conjugation(n: usize, conjugation: Conjugation) -> (usize, usize) {
     }
     let heap = heap_auditor::current().max(0) as usize;
     let peak = heap_auditor::peak().max(0) as usize;
-    assert_eq!(engine.active_forms().len(), n, "todas as formas seguem ativas");
+    assert_eq!(
+        engine.active_forms().len(),
+        n,
+        "todas as formas seguem ativas"
+    );
     let _ = std::fs::remove_dir_all(&dir);
     (heap, peak)
 }
@@ -118,14 +124,29 @@ fn heap_budget_per_form_and_conjugation() {
     println!("heap/forma nonequilibrium= {per_neq} B (AGENTS provisório: 512 B)");
 
     // Ordem relativa esperada (event ≈ equilibrium < nonequilibrium c/ regra)
-    assert!(per_event < per_neq, "event deve reter menos que nonequilibrium+review");
-    assert!(per_equil < per_neq, "equilibrium deve reter menos que nonequilibrium+review");
+    assert!(
+        per_event < per_neq,
+        "event deve reter menos que nonequilibrium+review"
+    );
+    assert!(
+        per_equil < per_neq,
+        "equilibrium deve reter menos que nonequilibrium+review"
+    );
     // Tetos REVISTOS da Etapa 5 (AGENTS §4 — meta provisória medida:
     // event/equilibrium 743 B, nonequilibrium+review 1448 B na máquina de
     // referência; detalhes em docs/reports/STAGE-5-REPORT.md §2):
-    assert!(per_event <= 1_024, "event: {per_event} B/forma fora do teto revisado (1 KB)");
-    assert!(per_equil <= 1_024, "equilibrium: {per_equil} B/forma fora do teto revisado (1 KB)");
-    assert!(per_neq <= 2_048, "nonequilibrium+review: {per_neq} B/forma fora do teto revisado (2 KB)");
+    assert!(
+        per_event <= 1_024,
+        "event: {per_event} B/forma fora do teto revisado (1 KB)"
+    );
+    assert!(
+        per_equil <= 1_024,
+        "equilibrium: {per_equil} B/forma fora do teto revisado (1 KB)"
+    );
+    assert!(
+        per_neq <= 2_048,
+        "nonequilibrium+review: {per_neq} B/forma fora do teto revisado (2 KB)"
+    );
 }
 
 /// Steady-state (PLAN §5 mitigação): 10.000 formas ativas — heap TOTAL do
@@ -133,7 +154,10 @@ fn heap_budget_per_form_and_conjugation() {
 #[test]
 fn steady_state_10k_forms_within_10mb() {
     let (heap, peak) = heap_per_conjugation(10_000, Conjugation::Event);
-    println!("steady-state 10k event: heap = {} B, pico = {} B", heap, peak);
+    println!(
+        "steady-state 10k event: heap = {} B, pico = {} B",
+        heap, peak
+    );
     assert!(heap <= 10 * 1024 * 1024, "steady-state {heap} B > 10 MB");
 }
 
@@ -168,7 +192,10 @@ fn churn_200k_forms_heap_returns_to_baseline() {
     for _ in 0..3 {
         engine.tick();
     }
-    assert!(engine.active_forms().is_empty(), "todas as formas devem dissolver");
+    assert!(
+        engine.active_forms().is_empty(),
+        "todas as formas devem dissolver"
+    );
     let remaining = heap_auditor::current();
 
     println!("churn: {n} formas, pico de heap = {peak} B");

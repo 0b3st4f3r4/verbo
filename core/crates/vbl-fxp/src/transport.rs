@@ -86,6 +86,23 @@ impl Current {
         }
     }
 
+    /// v1.3 §7 — 0-RTT: drena os bytes adiantados pelo cliente (o frame
+    /// `CAPS` enviado antes do handshake completo). `None` fora de servidor
+    /// TLS ou sem early data. Erro de leitura do buffer interno ⇒ vazio
+    /// honesto (a máquina de estados segue pelo caminho normal).
+    pub(crate) fn take_early_data(&mut self) -> Option<Vec<u8>> {
+        match self {
+            Current::TlsServer(s) => {
+                let mut buf = Vec::new();
+                if let Some(mut early) = s.conn.early_data() {
+                    let _ = early.read_to_end(&mut buf);
+                }
+                Some(buf)
+            }
+            _ => None,
+        }
+    }
+
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
             Current::Unix(s) => s.read(buf),
@@ -118,10 +135,17 @@ pub struct Connection {
     /// Contador próprio de seq dos frames de negociação (não colide com o
     /// espaço de seq do bus — a correlação é por conexão).
     neg_seq: u32,
-    /// Dicionário derivado do registro do PEER (v1.2 §4.8) — instalado pelo
-    /// bus após o `HELLO`; frames só comprimem com dict quando pronto.
-    dict: Option<Vec<u8>>,
+    /// Dicionário derivado do registro do PEER (v1.2/v1.3 §4.8) — instalado
+    /// pelo bus após o `HELLO`; frames só comprimem com dict quando pronto.
+    /// O tipo carrega o ALGORITMO (id 2 LZ4 concatenado / id 3 zstd treinado).
+    dict: Option<schema::compress::DictConexao>,
     dict_ready: bool,
+    /// v1.3 §7: o frame `CAPS` já partiu como 0-RTT durante o handshake TLS
+    /// e foi ACEITO — `negotiate` só espera o `CAPS_OK` (não reenvia).
+    caps_adiantado: bool,
+    /// v1.3 §7: observação imutável da conexão — o frame adiantado partiu e
+    /// foi processado (`Some` só em TLS cliente; `None` em Unix/TCP plano).
+    tls_0rtt: Option<bool>,
 }
 
 impl Connection {
@@ -135,6 +159,8 @@ impl Connection {
             neg_seq: 0,
             dict: None,
             dict_ready: false,
+            caps_adiantado: false,
+            tls_0rtt: None,
         };
         c.current.set_timeout(timeout);
         Ok(c)
@@ -145,7 +171,9 @@ impl Connection {
             .to_socket_addrs()
             .map_err(|e| TransportError::ConnectionFailed(format!("{host}:{port}: {e}")))?
             .next()
-            .ok_or_else(|| TransportError::ConnectionFailed(format!("{host}:{port} sem endereço")))?;
+            .ok_or_else(|| {
+                TransportError::ConnectionFailed(format!("{host}:{port} sem endereço"))
+            })?;
         let s = TcpStream::connect(addr)
             .map_err(|e| TransportError::ConnectionFailed(format!("{addr}: {e}")))?;
         let c = Connection {
@@ -154,6 +182,8 @@ impl Connection {
             neg_seq: 0,
             dict: None,
             dict_ready: false,
+            caps_adiantado: false,
+            tls_0rtt: None,
         };
         c.current.set_timeout(timeout);
         Ok(c)
@@ -161,33 +191,49 @@ impl Connection {
 
     /// Conexão TLS (`tcps:`, v1.2 §7): TCP + rustls TLS 1.3 sob os frames —
     /// confidencialidade e MAC por frame. A confiança é a impressão digital
-    /// (`pin`) do certificado do servidor: divergência ⇒ falha fechada,
-    /// **nunca** texto plano (§4.6: falha de segurança é terminativa). O
-    /// handshake tem orçamento próprio; depois, o `timeout` de trabalho vale
-    /// normalmente.
+    /// (pin fixo v1.2 ou TOFU v1.3): divergência/recusa ⇒ falha fechada,
+    /// **nunca** texto plano (§4.6: falha de segurança é terminativa).
+    ///
+    /// v1.3 §7: com `early_caps = Some(w)` e uma sessão retomável, o frame
+    /// `CAPS` parte como **0-RTT** durante o handshake (poupa 1 RTT por
+    /// conexão); sem retomada, `negotiate` segue o caminho normal. Com PSK
+    /// de aplicação o chamador NÃO adianta CAPS (o servidor fala primeiro
+    /// no AUTH §4.6).
     pub fn tcp_tls(
         host: &str,
         port: u16,
-        pin: &crate::tls::Fingerprint,
+        confianca: &crate::tls::ConfiancaCliente,
         timeout: Duration,
+        early_caps: Option<u16>,
     ) -> Result<Self, TransportError> {
         let addr = (host, port)
             .to_socket_addrs()
             .map_err(|e| TransportError::ConnectionFailed(format!("{host}:{port}: {e}")))?
             .next()
-            .ok_or_else(|| TransportError::ConnectionFailed(format!("{host}:{port} sem endereço")))?;
+            .ok_or_else(|| {
+                TransportError::ConnectionFailed(format!("{host}:{port} sem endereço"))
+            })?;
         let s = TcpStream::connect(addr)
             .map_err(|e| TransportError::ConnectionFailed(format!("{addr}: {e}")))?;
         let name = rustls::pki_types::ServerName::try_from(host.to_string())
             .map_err(|e| TransportError::ConnectionFailed(format!("{host}: nome TLS: {e}")))?;
-        let cfg = Arc::new(crate::tls::client_config(*pin)?);
-        let stream = crate::tls::client_stream(cfg, s, name)?;
+        let cfg = crate::tls::client_config_cached(confianca)?;
+        // O frame adiantado é o próprio CAPS (seq 1 — o mesmo que negotiate
+        // usaria); encode sem dicionário/compressão (handshake §4.5).
+        let early_frame = early_caps
+            .filter(|&w| w != 0)
+            .map(|w| schema::encode_to_vec(&Message::caps(w, 1)))
+            .transpose()?;
+        let (stream, caps_0rtt_aceito) =
+            crate::tls::client_stream(cfg, s, name, early_frame.as_deref())?;
         let c = Connection {
             current: Current::TlsClient(stream),
             negotiated_caps: 0,
             neg_seq: 0,
             dict: None,
             dict_ready: false,
+            caps_adiantado: caps_0rtt_aceito,
+            tls_0rtt: Some(caps_0rtt_aceito),
         };
         c.current.set_timeout(timeout);
         Ok(c)
@@ -207,10 +253,22 @@ impl Connection {
     /// o caminho v1.1; sem recursos, o fio plano.
     fn encode_frame(&self, msg: &Message) -> Result<Vec<u8>, TransportError> {
         if self.negotiated_caps & schema::caps::DICT != 0 && self.dict_ready {
-            if let Some(dict) = &self.dict {
-                let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
-                schema::encode_with_compression_dict(msg, dict, &mut f)?;
-                return Ok(f);
+            match &self.dict {
+                // v1.3 §4.8: zstd treinado (id 3) tem precedência quando
+                // negociado — razão maior com os mesmos bytes de gatilho.
+                Some(schema::compress::DictConexao::Zstd(dict))
+                    if self.negotiated_caps & schema::caps::ZSTD != 0 =>
+                {
+                    let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
+                    schema::encode_with_zstd_dict(msg, dict, &mut f)?;
+                    return Ok(f);
+                }
+                Some(schema::compress::DictConexao::Lz4(dict)) => {
+                    let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
+                    schema::encode_with_compression_dict(msg, dict, &mut f)?;
+                    return Ok(f);
+                }
+                _ => {}
             }
         }
         if self.negotiated_caps & schema::caps::LZ4 != 0 {
@@ -259,18 +317,14 @@ impl Connection {
         while n_read < total {
             n_read += read(&mut frame[n_read..])?;
         }
-        let (msg, _) = schema::decode_with_dict(&frame, self.dict.as_deref())?;
+        let (msg, _) = schema::decode_with_conexao(&frame, self.dict.as_ref())?;
         Ok(msg)
     }
 
     /// Pedido-resposta: envia e espera o ack com o **mesmo seq** (§5).
     /// Resposta com seq divergente ⇒ conexão dessincronizada (erro, nunca
     /// ack trocado entre comandos).
-    pub fn request(
-        &mut self,
-        msg: &Message,
-        timeout: Duration,
-    ) -> Result<Message, TransportError> {
+    pub fn request(&mut self, msg: &Message, timeout: Duration) -> Result<Message, TransportError> {
         self.enviar(msg)?;
         let resp = self.receive(timeout)?;
         if resp.seq != msg.seq {
@@ -289,10 +343,28 @@ impl Connection {
     /// Handshake `CAPS` → `CAPS_OK`: pede `wanted` e guarda a **interseção**
     /// concedida pelo peer. `wanted = 0` é no-op no fio (zera o estado local).
     /// Resposta que não seja `CAPS_OK` ⇒ conexão dessincronizada (erro).
+    /// v1.3 §7: com o CAPS já adiantado como 0-RTT, só espera o `CAPS_OK`.
     pub fn negotiate(&mut self, wanted: u16, timeout: Duration) -> Result<u16, TransportError> {
         if wanted == 0 {
             self.negotiated_caps = 0;
             return Ok(0);
+        }
+        if std::mem::take(&mut self.caps_adiantado) {
+            self.neg_seq = 1; // o frame adiantado saiu com seq 1
+            let resp = self.receive(timeout)?;
+            if resp.seq != self.neg_seq {
+                return Err(TransportError::Broken(format!(
+                    "seq dessincronizado: enviado {}, recebido {}",
+                    self.neg_seq, resp.seq
+                )));
+            }
+            let Body::Caps { capabilities } = resp.body else {
+                return Err(TransportError::Broken(
+                    "resposta à negociação não é CAPS_OK (§4.5)".into(),
+                ));
+            };
+            self.negotiated_caps = capabilities;
+            return Ok(capabilities);
         }
         self.neg_seq = self.neg_seq.wrapping_add(1);
         let req = Message::caps(wanted, self.neg_seq);
@@ -311,14 +383,40 @@ impl Connection {
         self.negotiated_caps
     }
 
+    /// Tipo do handshake TLS desta conexão (v1.3 §7 — observação para
+    /// testes/probe): `Resumed` na retomada de sessão; `None` fora de TLS.
+    pub fn tls_handshake_kind(&self) -> Option<rustls::HandshakeKind> {
+        match &self.current {
+            Current::TlsClient(s) => s.conn.handshake_kind(),
+            Current::TlsServer(s) => s.conn.handshake_kind(),
+            _ => None,
+        }
+    }
+
+    /// 0-RTT aceito pelo servidor nesta conexão TLS (v1.3 §7): `Some(true)`
+    /// quando um frame adiantado partiu e foi processado; `Some(false)` sem
+    /// early data; `None` fora de TLS.
+    pub fn tls_0rtt_aceito(&self) -> Option<bool> {
+        self.tls_0rtt
+    }
+
     // -----------------------------------------------------------------
     // v1.2 — Dicionário de compressão compartilhado (§4.8)
     // -----------------------------------------------------------------
 
-    /// Instala o dicionário derivado do registro do PEER e marca pronto —
-    /// chamado pelo bus imediatamente após o [`Self::exchange_hello`].
+    /// Instala o dicionário derivado do registro do PEER (id 2, v1.2) e
+    /// marca pronto — chamado pelo bus imediatamente após o
+    /// [`Self::exchange_hello`].
     pub fn set_dict(&mut self, dict: Vec<u8>) {
-        self.dict = Some(dict);
+        self.dict = Some(schema::compress::DictConexao::Lz4(dict));
+        self.dict_ready = true;
+    }
+
+    /// Instala o dicionário TREINADO (id 3, v1.3 §4.8) e marca pronto —
+    /// exige `caps::ZSTD` negociado; frames acima do threshold partem com o
+    /// algoritmo 3.
+    pub fn set_zstd_dict(&mut self, dict: Vec<u8>) {
+        self.dict = Some(schema::compress::DictConexao::Zstd(dict));
         self.dict_ready = true;
     }
 
@@ -345,7 +443,9 @@ impl Connection {
             ));
         }
         let Body::Hello { devices } = resp.body else {
-            return Err(TransportError::Broken("corpo do HELLO inválido (§4.4)".into()));
+            return Err(TransportError::Broken(
+                "corpo do HELLO inválido (§4.4)".into(),
+            ));
         };
         Ok(devices)
     }
@@ -372,7 +472,10 @@ impl Connection {
         let nonce_cliente =
             crate::auth::nonce().map_err(|e| TransportError::Broken(format!("RNG: {e}")))?;
         let mac = crate::auth::mac(key, &nonce_cliente, &nonce);
-        let resp = self.request(&Message::auth_response(nonce_cliente, mac, challenge.seq), timeout)?;
+        let resp = self.request(
+            &Message::auth_response(nonce_cliente, mac, challenge.seq),
+            timeout,
+        )?;
         if resp.opcode != schema::op::AUTH_OK {
             return Err(TransportError::Broken(
                 "handshake PSK recusado pelo peer (chave errada?)".into(),
@@ -408,7 +511,11 @@ impl Server {
         desligar: Arc<AtomicBool>,
         handle: Option<std::thread::JoinHandle<()>>,
     ) -> Self {
-        Self { identifier, desligar, handle }
+        Self {
+            identifier,
+            desligar,
+            handle,
+        }
     }
 }
 
@@ -457,7 +564,11 @@ where
         }
         let _ = std::fs::remove_file(&path);
     });
-    Ok(Server { identifier, desligar, handle: Some(handle) })
+    Ok(Server {
+        identifier,
+        desligar,
+        handle: Some(handle),
+    })
 }
 
 /// Servidor TCP em porta efêmera; devolve a porta sorteada. Thread por
@@ -466,8 +577,8 @@ pub fn serve_tcp<F>(handler: F) -> Result<(Server, u16), TransportError>
 where
     F: Fn(Message) -> Option<Message> + Clone + Send + 'static,
 {
-    let listener =
-        TcpListener::bind("127.0.0.1:0").map_err(|e| TransportError::ConnectionFailed(format!("{e}")))?;
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .map_err(|e| TransportError::ConnectionFailed(format!("{e}")))?;
     let port = listener
         .local_addr()
         .map_err(|e| TransportError::ConnectionFailed(format!("{e}")))?
@@ -495,7 +606,14 @@ where
             }
         }
     });
-    Ok((Server { identifier, desligar, handle: Some(handle) }, port))
+    Ok((
+        Server {
+            identifier,
+            desligar,
+            handle: Some(handle),
+        },
+        port,
+    ))
 }
 
 fn serve_connection<F>(mut flow: Current, handler: &F, flag: &AtomicBool)
@@ -532,11 +650,14 @@ where
 }
 
 /// Extrai um frame de `rest` (buffer acumulado); devolve `None` se ainda
-/// incompleto. Os bytes consumidos são removidos do buffer.
+/// incompleto. Os bytes consumidos são removidos do buffer. O dicionário é
+/// TIPADO (v1.3 §4.8): id 2 decodifica só com `DictConexao::Lz4`, id 3 só
+/// com `DictConexao::Zstd` (o contrário é `UnknownCompression` — fail
+/// closed por construção).
 pub(crate) fn read_frame(
     flow: &mut Current,
     rest: &mut Vec<u8>,
-    dict: Option<&[u8]>,
+    dict: Option<&schema::compress::DictConexao>,
 ) -> Result<Option<Message>, TransportError> {
     if rest.len() >= 4 {
         let total = schema::peek_frame_len(rest)?;
@@ -562,7 +683,7 @@ pub(crate) fn read_frame(
     if rest.len() >= 4 {
         let total = schema::peek_frame_len(rest)?;
         if rest.len() >= total {
-            let (msg, _) = schema::decode_with_dict(rest, dict)?;
+            let (msg, _) = schema::decode_with_conexao(rest, dict)?;
             rest.drain(..total);
             return Ok(Some(msg));
         }

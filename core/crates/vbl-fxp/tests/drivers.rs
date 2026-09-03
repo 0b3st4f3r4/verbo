@@ -80,9 +80,9 @@ fn hwmon_temp_converts_millicelsius_to_celsius() {
 fn rapl_energy_deterministic_series_with_wrap() {
     let dir = tmpdir("rapl2");
     let queue: Vec<(f64, u64)> = vec![
-        (0.0, 1_000_000),     // aquecimento
-        (2.0, 3_000_000),     // ΔE = 2 J em 2 s → 1 W
-        (4.0, 500_000),       // wrap: range 4 J → ΔE = range − e0 + e1 = 1.5 J em 2 s → 0.75 W
+        (0.0, 1_000_000), // aquecimento
+        (2.0, 3_000_000), // ΔE = 2 J em 2 s → 1 W
+        (4.0, 500_000),   // wrap: range 4 J → ΔE = range − e0 + e1 = 1.5 J em 2 s → 0.75 W
     ];
     let rest = queue.clone();
     let idx = AtomicUsize::new(0);
@@ -105,7 +105,10 @@ fn rapl_energy_deterministic_series_with_wrap() {
     // Wrap do contador.
     fs::write(dir.join("energy_uj"), "500000").unwrap();
     let w = s.read().unwrap();
-    assert!((w - 0.75).abs() < 1e-9, "esperado 0.75 W no wrap, obtido {w}");
+    assert!(
+        (w - 0.75).abs() < 1e-9,
+        "esperado 0.75 W no wrap, obtido {w}"
+    );
 }
 
 /// Re-leitura degenerada (Δt < 1 ms, auditoria × avaliação no mesmo tick):
@@ -115,9 +118,9 @@ fn rapl_energy_deterministic_series_with_wrap() {
 fn rapl_energy_degenerate_pair_does_not_corrupt_power() {
     let dir = tmpdir("rapl3");
     let queue: Vec<(f64, u64)> = vec![
-        (0.0, 1_000_000),        // aquecimento
-        (0.000_001, 1_000_500),  // Δt = 1 µs — degenerado (ΔE = 500 µJ aqui NÃO vira W)
-        (1.0, 1_020_000),        // par válido: Δt = 1 s desde a AQUECIMENTO, ΔE = 20 000 µJ
+        (0.0, 1_000_000),       // aquecimento
+        (0.000_001, 1_000_500), // Δt = 1 µs — degenerado (ΔE = 500 µJ aqui NÃO vira W)
+        (1.0, 1_020_000),       // par válido: Δt = 1 s desde a AQUECIMENTO, ΔE = 20 000 µJ
     ];
     let rest = queue.clone();
     let idx = AtomicUsize::new(0);
@@ -137,7 +140,10 @@ fn rapl_energy_degenerate_pair_does_not_corrupt_power() {
 
     fs::write(dir.join("energy_uj"), "1020000").unwrap();
     let w = s.read().unwrap();
-    assert!((w - 0.02).abs() < 1e-9, "esperado 0.02 W (janela inteira), obtido {w}");
+    assert!(
+        (w - 0.02).abs() < 1e-9,
+        "esperado 0.02 W (janela inteira), obtido {w}"
+    );
 }
 
 /// Relógio de parede: monotônico com resolução útil (regressão do bug do
@@ -150,7 +156,11 @@ fn wall_clock_advances() {
     std::thread::sleep(std::time::Duration::from_millis(5));
     let t1 = clock();
     assert!(t1 > t0, "relógio deve avançar ({t0} → {t1})");
-    assert!(t1 - t0 >= 0.004, "avanço deve refletir a parede: {}", t1 - t0);
+    assert!(
+        t1 - t0 >= 0.004,
+        "avanço deve refletir a parede: {}",
+        t1 - t0
+    );
 }
 
 /// CpuPowerCap: comando em W → µW no sysfs.
@@ -294,7 +304,11 @@ fn fabrication_and_discovery_are_consistent() {
     fs::create_dir_all(pc.join("intel-rapl:0")).unwrap();
     fs::create_dir_all(pc.join("intel-rapl:1")).unwrap();
     fs::write(pc.join("intel-rapl:1/energy_uj"), "1000").unwrap();
-    fs::write(pc.join("intel-rapl:0/constraint_0_power_limit_uw"), "50000000").unwrap();
+    fs::write(
+        pc.join("intel-rapl:0/constraint_0_power_limit_uw"),
+        "50000000",
+    )
+    .unwrap();
     // hwmon: hwmon0 sem pwm (varre n=1..=4 sem achar); hwmon1 com pwm2.
     let hw = class.join("hwmon");
     fs::create_dir_all(hw.join("hwmon0")).unwrap();
@@ -309,16 +323,24 @@ fn fabrication_and_discovery_are_consistent() {
     fs::create_dir_all(leds.join(OsStr::from_bytes(b"\xffled"))).unwrap();
 
     if let Some(Endpoint::ThermalZone { dir }) = vbl_fxp::drivers::discover_at(&sys, "cpu_temp") {
-        assert!(dir.ends_with("thermal_zone2"), "deve casar x86_pkg_temp: {dir:?}");
+        assert!(
+            dir.ends_with("thermal_zone2"),
+            "deve casar x86_pkg_temp: {dir:?}"
+        );
     } else {
         panic!("cpu_temp deve descobrir a thermal_zone2 sintética");
     }
     if let Some(Endpoint::RaplEnergy { dir }) = vbl_fxp::drivers::discover_at(&sys, "cpu_power") {
-        assert!(dir.ends_with("intel-rapl:1"), "deve achar o domínio com energy_uj: {dir:?}");
+        assert!(
+            dir.ends_with("intel-rapl:1"),
+            "deve achar o domínio com energy_uj: {dir:?}"
+        );
     } else {
         panic!("cpu_power deve descobrir o intel-rapl:1 sintético");
     }
-    if let Some(Endpoint::RaplConstraint { file }) = vbl_fxp::drivers::discover_at(&sys, "CpuPowerCap") {
+    if let Some(Endpoint::RaplConstraint { file }) =
+        vbl_fxp::drivers::discover_at(&sys, "CpuPowerCap")
+    {
         assert!(file.ends_with("constraint_0_power_limit_uw"), "{file:?}");
     } else {
         panic!("CpuPowerCap deve descobrir o constraint sintético");
@@ -372,8 +394,14 @@ use vbl_fxp::drivers::ActorError;
 
 #[test]
 fn display_de_actor_error() {
-    assert_eq!(ActorError::WriteFailed("permissão".into()).to_string(), "escrita falhou: permissão");
-    assert_eq!(ActorError::InvalidValue("fora".into()).to_string(), "valor inválido: fora");
+    assert_eq!(
+        ActorError::WriteFailed("permissão".into()).to_string(),
+        "escrita falhou: permissão"
+    );
+    assert_eq!(
+        ActorError::InvalidValue("fora".into()).to_string(),
+        "valor inválido: fora"
+    );
 }
 
 #[test]
@@ -398,7 +426,10 @@ fn led_com_mapa_custom_dominio_fracionario_e_teto() {
     assert!(led.apply(&Value::Str("roxo".into())).is_err());
     // brilho válido abaixo do teto grava
     assert!(led.apply(&Value::Num(30.0)).is_ok());
-    assert_eq!(std::fs::read_to_string(dir.join("brightness")).unwrap(), "30");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("brightness")).unwrap(),
+        "30"
+    );
     // acima do max_brightness → recusa
     assert!(matches!(
         led.apply(&Value::Num(101.0)),
@@ -432,35 +463,58 @@ fn descricoes_dos_drivers_reais() {
     std::fs::create_dir_all(&base).unwrap();
     let rotas: Vec<(vbl_fxp::registry::Endpoint, &str)> = vec![
         (
-            vbl_fxp::registry::Endpoint::ThermalZone { dir: base.join("tz") },
+            vbl_fxp::registry::Endpoint::ThermalZone {
+                dir: base.join("tz"),
+            },
             "thermal_zone",
         ),
         (
-            vbl_fxp::registry::Endpoint::HwmonTemp { file: base.join("temp") },
+            vbl_fxp::registry::Endpoint::HwmonTemp {
+                file: base.join("temp"),
+            },
             "hwmon_temp",
         ),
         (
-            vbl_fxp::registry::Endpoint::RaplEnergy { dir: base.join("rapl") },
+            vbl_fxp::registry::Endpoint::RaplEnergy {
+                dir: base.join("rapl"),
+            },
             "rapl_energy",
         ),
     ];
     for (endpoint, prefixo) in rotas {
         let driver = sensor_from(&endpoint).expect("driver de leitura");
-        assert!(driver.description().starts_with(prefixo), "{}", driver.description());
+        assert!(
+            driver.description().starts_with(prefixo),
+            "{}",
+            driver.description()
+        );
     }
     let atores: Vec<(vbl_fxp::registry::Endpoint, &str)> = vec![
         (
-            vbl_fxp::registry::Endpoint::RaplConstraint { file: base.join("cap") },
+            vbl_fxp::registry::Endpoint::RaplConstraint {
+                file: base.join("cap"),
+            },
             "rapl_constraint",
         ),
         (
-            vbl_fxp::registry::Endpoint::HwmonPwm { file: base.join("pwm") },
+            vbl_fxp::registry::Endpoint::HwmonPwm {
+                file: base.join("pwm"),
+            },
             "hwmon_pwm",
         ),
-        (vbl_fxp::registry::Endpoint::LedClass { dir: base.join("led") }, "led:"),
+        (
+            vbl_fxp::registry::Endpoint::LedClass {
+                dir: base.join("led"),
+            },
+            "led:",
+        ),
     ];
     for (endpoint, prefixo) in atores {
         let driver = actor_from(&endpoint).expect("driver de atuação");
-        assert!(driver.description().starts_with(prefixo), "{}", driver.description());
+        assert!(
+            driver.description().starts_with(prefixo),
+            "{}",
+            driver.description()
+        );
     }
 }

@@ -111,13 +111,17 @@ pub mod caps {
     pub const BATCH: u16 = 1 << 1;
     /// Frames com `FLAG_TIMESTAMP` (§5).
     pub const TIMESTAMP: u16 = 1 << 2;
-    /// Dicionário LZ4 compartilhado derivado do registro (v1.2 §4.8). Quando
-    /// concedido, o `HELLO` (§4.4) integra o handshake e ambos os lados
-    /// derivam o mesmo dicionário do registro do servidor.
+    /// Dicionário de compressão compartilhado do registro (v1.2/v1.3 §4.8).
+    /// Quando concedido, o `HELLO` (§4.4) integra o handshake e ambos os
+    /// lados derivam o mesmo dicionário do registro do servidor.
     pub const DICT: u16 = 1 << 3;
-    /// Bits reservados: `0` no encode; ignorados no decode (4–15 desde a
-    /// v1.2 — o bit 3 virou `DICT`; peers v1.1 o ignoram no decode).
-    pub const RESERVED: u16 = !0b1111;
+    /// zstd com dicionário TREINADO (v1.3 §4.8) — habilita o algoritmo 3.
+    /// Sempre negociado JUNTO com `DICT` (o gatilho do `HELLO` é o mesmo);
+    /// quem pede zstd pede os dois bits. Bits reservados: 5–15.
+    pub const ZSTD: u16 = 1 << 4;
+    /// Bits reservados: `0` no encode; ignorados no decode (5–15 desde a
+    /// v1.3 — o bit 4 virou `ZSTD`; peers v1.2 o ignoram no decode).
+    pub const RESERVED: u16 = !0b11111;
 }
 
 /// Algoritmos e política de compressão do corpo (v1.1 §4.8).
@@ -131,12 +135,27 @@ pub mod compress {
     /// `HELLO`). Peer sem o bit `DICT` negociado vê id desconhecido ⇒
     /// `UnknownCompression` (princípio 7 — fail closed).
     pub const ALGO_LZ4_DICT: u8 = 2;
+    /// zstd + dicionário TREINADO do registro (v1.3 §4.8) — o dicionário é
+    /// treinado (`zstd::dict::from_samples`, COVER) sobre os MESMOS nomes
+    /// canônicos nos dois lados; zero bytes de dicionário no fio. Exige os
+    /// bits `DICT` + `ZSTD` negociados; divergência de dicionário (ex.:
+    /// versões de zstd diferentes nas pontas) ⇒ `DecompressionFailed`
+    /// (fail closed — nunca lixo silencioso).
+    pub const ALGO_ZSTD_DICT: u8 = 3;
     /// Só comprime quando a região plana excede este tamanho (bytes).
     pub const THRESHOLD: usize = 512;
     /// Teto determinístico do dicionário derivado (64 KiB — acima disso o
     /// LZ4 block praticamente não ganha nada; truncar em ordem ordenada
     /// mantém os dois lados com os MESMOS bytes).
     pub const DICT_MAX: usize = 64 * 1024;
+    /// Nível zstd do fio (v1.3 §4.8) — constante da especificação: ambas as
+    /// pontas codificam no mesmo nível (a decodificação independe, mas o
+    /// determinismo do bench e do "nunca inflar" apreciam).
+    pub const ZSTD_LEVEL: i32 = 3;
+    /// Teto do dicionário TREINADO (16 KiB): o COVER converte o excedente em
+    /// estatística, não em matéria crua — com nomes de registro, 16 KiB de
+    /// dicionário já cobre o frame-teto (8 KiB) com folga.
+    pub const ZSTD_DICT_MAX: usize = 16 * 1024;
 
     /// Dicionário compartilhado (v1.2 §4.8): nomes canônicos **ordenados**,
     /// concatenados com `\n`, truncados em [`DICT_MAX`] bytes — a mesma
@@ -154,6 +173,39 @@ pub mod compress {
         }
         out.truncate(DICT_MAX);
         out
+    }
+
+    /// Dicionário TREINADO (v1.3 §4.8): COVER sobre os nomes canônicos
+    /// **ordenados** (mesma matéria do id 2, agora como amostras). Treino é
+    /// determinístico para (nomes, versão do zstd) — pontas com versões
+    /// diferentes podem divergir ⇒ `DecompressionFailed` (honesto). Registro
+    /// pequeno demais para treinar ⇒ `None` (o servidor não concede `ZSTD`).
+    pub fn zstd_dict_from_registry(names: &[String]) -> Option<Vec<u8>> {
+        let mut sorted: Vec<&String> = names.iter().collect();
+        sorted.sort();
+        let total: usize = sorted.iter().map(|n| n.len()).sum();
+        if sorted.is_empty() || total == 0 {
+            return None;
+        }
+        // Pede o teto; COVER trunca no que dá. Com corpus curto, pedir menos
+        // que o corpus falha ("Destination buffer is too small") — a segunda
+        // tentativa com o tamanho do corpus resolve; sem isso, sem zstd.
+        match zstd::dict::from_samples(&sorted, ZSTD_DICT_MAX) {
+            Ok(d) => Some(d),
+            Err(_) => zstd::dict::from_samples(&sorted, total).ok(),
+        }
+    }
+
+    /// Dicionário da conexão (v1.2/v1.3 §4.8): matéria + algoritmo — o id no
+    /// fio só decodifica com o dicionário DO SEU algoritmo (id 2 exige a
+    /// matéria concatenada; id 3 exige a treinada; o contrário é
+    /// `UnknownCompression` — fail closed por construção).
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum DictConexao {
+        /// LZ4 block + concatenação dos nomes (id 2, v1.2).
+        Lz4(Vec<u8>),
+        /// zstd + dicionário treinado (id 3, v1.3).
+        Zstd(Vec<u8>),
     }
 }
 
@@ -201,6 +253,9 @@ pub enum SchemaError {
     /// Blob LZ4 corrupto ou região descomprimida acima do teto — bomba de
     /// descompressão (v1.1 §4.8).
     DecompressionFailed,
+    /// A compressão do corpo falhou no encode (v1.3 §4.8 — ex.: zstd com
+    /// dicionário inválido). Nunca vira frame plano silencioso.
+    CompressionFailed,
     /// Bits reservados de capacidades ≠ 0 (v1.1 §4.5).
     ReservedCaps,
 }
@@ -209,15 +264,20 @@ impl std::fmt::Display for SchemaError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SchemaError::FrameExceeded { length } => {
-                write!(f, "frame de {length} bytes excede o máximo de {MAX_PAYLOAD}")
+                write!(
+                    f,
+                    "frame de {length} bytes excede o máximo de {MAX_PAYLOAD}"
+                )
             }
             SchemaError::PayloadTooShort { length } => {
-                write!(f, "payload de {length} bytes é menor que o header de {HEADER_LEN}")
+                write!(
+                    f,
+                    "payload de {length} bytes é menor que o header de {HEADER_LEN}"
+                )
             }
             SchemaError::InvalidMagic => write!(f, "magic inválido (esperado \"FXP\")"),
             SchemaError::UnknownVersion { received } => {
-                write!(f, "versão de schema desconhecida: {received} (v1)"
-                )
+                write!(f, "versão de schema desconhecida: {received} (v1)")
             }
             SchemaError::UnknownOpcode { received } => {
                 write!(f, "opcode desconhecido: 0x{received:02X}")
@@ -225,13 +285,18 @@ impl std::fmt::Display for SchemaError {
             SchemaError::InvalidName => write!(f, "opcode exige nome simbólico ausente/truncado"),
             SchemaError::MissingField => write!(f, "corpo da mensagem truncado"),
             SchemaError::PayloadTooLong => write!(f, "bytes excedentes após o corpo"),
-            SchemaError::ReservedFlag => write!(f, "bits reservados de flags devem ser 0 no encode"),
+            SchemaError::ReservedFlag => {
+                write!(f, "bits reservados de flags devem ser 0 no encode")
+            }
             SchemaError::StringTooLong => write!(
                 f,
                 "string excede o limite (nome ≤ {MAX_NAME}, texto ≤ {MAX_STRING})"
             ),
             SchemaError::NonFiniteValue => {
-                write!(f, "valor NaN/infinito não é leitura física válida (FORMAL §4.7)")
+                write!(
+                    f,
+                    "valor NaN/infinito não é leitura física válida (FORMAL §4.7)"
+                )
             }
             SchemaError::InvalidUtf8 => write!(f, "campo de texto com UTF-8 inválido"),
             SchemaError::BatchTooLarge => {
@@ -249,10 +314,16 @@ impl std::fmt::Display for SchemaError {
             }
             SchemaError::DecompressionFailed => write!(
                 f,
-                "blob LZ4 corrupto ou região descomprimida acima de {MAX_PAYLOAD} bytes (bomba)"
+                "blob corrupto ou região descomprimida acima de {MAX_PAYLOAD} bytes (bomba)"
             ),
+            SchemaError::CompressionFailed => {
+                write!(f, "compressão do corpo falhou no encode (§4.8)")
+            }
             SchemaError::ReservedCaps => {
-                write!(f, "bits reservados de capacidades devem ser 0 (v1.1: 0..=2)")
+                write!(
+                    f,
+                    "bits reservados de capacidades devem ser 0 (v1.1: 0..=2)"
+                )
             }
         }
     }
@@ -321,22 +392,47 @@ impl DeviceDesc {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Body {
     Empty,
-    ReadOk { value: f64, canonical: String },
-    ReadErr { reason: u8 },
-    Act { value: WireValue },
-    ActAck { status: AckAct },
-    HeartbeatAck { ok: bool },
-    Hello { devices: Vec<DeviceDesc> },
+    ReadOk {
+        value: f64,
+        canonical: String,
+    },
+    ReadErr {
+        reason: u8,
+    },
+    Act {
+        value: WireValue,
+    },
+    ActAck {
+        status: AckAct,
+    },
+    HeartbeatAck {
+        ok: bool,
+    },
+    Hello {
+        devices: Vec<DeviceDesc>,
+    },
     /// Capacidades pedidas (`CAPS`) ou concedidas (`CAPS_OK`) — v1.1 §4.5.
-    Caps { capabilities: u16 },
+    Caps {
+        capabilities: u16,
+    },
     /// Lote de leituras — v1.1 §4.7.
-    ReadBatch { names: Vec<String> },
+    ReadBatch {
+        names: Vec<String>,
+    },
     /// Resposta do lote — v1.1 §4.7.
-    ReadBatchOk { results: Vec<BatchResult> },
+    ReadBatchOk {
+        results: Vec<BatchResult>,
+    },
     /// Desafio PSK — v1.1 §4.6.
-    AuthChallenge { scheme: u16, nonce: [u8; AUTH_NONCE_LEN] },
+    AuthChallenge {
+        scheme: u16,
+        nonce: [u8; AUTH_NONCE_LEN],
+    },
     /// Resposta PSK — v1.1 §4.6.
-    AuthResponse { nonce: [u8; AUTH_NONCE_LEN], mac: [u8; AUTH_NONCE_LEN] },
+    AuthResponse {
+        nonce: [u8; AUTH_NONCE_LEN],
+        mac: [u8; AUTH_NONCE_LEN],
+    },
     // `AUTH_OK` usa `Body::Empty` — o opcode distingue.
 }
 
@@ -376,7 +472,10 @@ impl Message {
             seq,
             name: String::new(),
             timestamp_us: None,
-            body: Body::ReadOk { value, canonical: canonical.into() },
+            body: Body::ReadOk {
+                value,
+                canonical: canonical.into(),
+            },
         }
     }
 
@@ -604,7 +703,11 @@ fn put_len_string(
 
 /// Empurra os f64 opcionais para `buf` (fora de ordem) marcando os bits em
 /// `flags`; quem chama escreve `flags` ANTES de anexar `buf` no corpo.
-fn push_opts(buf: &mut Vec<u8>, flags: &mut u8, pares: &[(u8, Option<f64>)]) -> Result<(), SchemaError> {
+fn push_opts(
+    buf: &mut Vec<u8>,
+    flags: &mut u8,
+    pares: &[(u8, Option<f64>)],
+) -> Result<(), SchemaError> {
     for (bit, v) in pares {
         if let Some(x) = v {
             *flags |= bit;
@@ -625,7 +728,9 @@ fn push_opts(buf: &mut Vec<u8>, flags: &mut u8, pares: &[(u8, Option<f64>)]) -> 
 /// da verdade — nunca contradição header × campo).
 pub fn encode(msg: &Message, out: &mut Vec<u8>) -> Result<(), SchemaError> {
     if op::name(msg.opcode).is_none() {
-        return Err(SchemaError::UnknownOpcode { received: msg.opcode });
+        return Err(SchemaError::UnknownOpcode {
+            received: msg.opcode,
+        });
     }
     // Bits de recurso derivados não podem vir setados no Message.
     if msg.flags & (flag::TIMESTAMP | flag::COMPRESSED) != 0 || msg.flags & flag::RESERVED != 0 {
@@ -684,7 +789,14 @@ pub fn encode(msg: &Message, out: &mut Vec<u8>) -> Result<(), SchemaError> {
             put_u16(&mut body, devices.len() as u16);
             for d in devices {
                 match d {
-                    DeviceDesc::Sensor { name, min, max, quantity, unit, precision_pct } => {
+                    DeviceDesc::Sensor {
+                        name,
+                        min,
+                        max,
+                        quantity,
+                        unit,
+                        precision_pct,
+                    } => {
                         body.push(0);
                         put_len_string(&mut body, 1, MAX_NAME, name)?;
                         let mut flags = 0u8;
@@ -696,7 +808,12 @@ pub fn encode(msg: &Message, out: &mut Vec<u8>) -> Result<(), SchemaError> {
                         put_len_string(&mut body, 1, MAX_NAME, unit)?;
                         put_f64(&mut body, *precision_pct)?;
                     }
-                    DeviceDesc::Actor { name, min, max, safety } => {
+                    DeviceDesc::Actor {
+                        name,
+                        min,
+                        max,
+                        safety,
+                    } => {
                         body.push(1);
                         put_len_string(&mut body, 1, MAX_NAME, name)?;
                         let mut flags = 0u8;
@@ -761,8 +878,12 @@ pub fn encode(msg: &Message, out: &mut Vec<u8>) -> Result<(), SchemaError> {
     }
 
     // FLAG_TIMESTAMP é derivado do campo (fonte única — §5).
-    let effective_flags =
-        msg.flags | if msg.timestamp_us.is_some() { flag::TIMESTAMP } else { 0 };
+    let effective_flags = msg.flags
+        | if msg.timestamp_us.is_some() {
+            flag::TIMESTAMP
+        } else {
+            0
+        };
     let ts_len = if msg.timestamp_us.is_some() { 8 } else { 0 };
     let length = HEADER_LEN + ts_len + msg.name.len() + body.len();
     if length > MAX_PAYLOAD {
@@ -862,6 +983,49 @@ pub fn encode_with_compression_dict(
     Ok(())
 }
 
+/// Encode com o dicionário TREINADO (v1.3 §4.8): mesmas regras dos demais
+/// (threshold, nunca inflar, teto), com o algoritmo `ALGO_ZSTD_DICT` no byte
+/// reservado. O dicionário é treinado sobre os nomes canônicos do registro do
+/// servidor em AMBOS os lados ([`compress::zstd_dict_from_registry`]) — só
+/// quem negociou `caps::DICT + caps::ZSTD` e já completou o `HELLO` consegue
+/// decodificar; os demais falham fechado.
+pub fn encode_with_zstd_dict(
+    msg: &Message,
+    dict: &[u8],
+    out: &mut Vec<u8>,
+) -> Result<(), SchemaError> {
+    let mut plain = Vec::with_capacity(HEADER_LEN + msg.name.len() + 64);
+    encode(msg, &mut plain)?;
+    let ts_len = usize::from(msg.timestamp_us.is_some());
+    let prefix = HEADER_LEN + 8 * ts_len;
+    let region = &plain[4 + prefix..];
+    if region.len() <= compress::THRESHOLD {
+        out.extend_from_slice(&plain);
+        return Ok(());
+    }
+    // Teto do compressBound zstd (src + src/255 + 16): blob nunca estoura o
+    // buffer por conta da API; o "nunca inflar" segue valendo.
+    let mut blob = vec![0u8; region.len() + region.len() / 255 + 16];
+    let n = zstd::bulk::Compressor::with_dictionary(compress::ZSTD_LEVEL, dict)
+        .and_then(|mut c| c.compress_to_buffer(region, &mut blob))
+        .map_err(|_| SchemaError::CompressionFailed)?;
+    blob.truncate(n);
+    if blob.len() >= region.len() {
+        out.extend_from_slice(&plain);
+        return Ok(());
+    }
+    let length = prefix + blob.len();
+    if length > MAX_PAYLOAD {
+        return Err(SchemaError::FrameExceeded { length });
+    }
+    out.extend_from_slice(&plain[..4 + prefix]);
+    out[0..4].copy_from_slice(&(length as u32).to_le_bytes());
+    out[4 + 5] |= flag::COMPRESSED;
+    out[4 + 6] = compress::ALGO_ZSTD_DICT;
+    out.extend_from_slice(&blob);
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Decode
 // ---------------------------------------------------------------------------
@@ -948,14 +1112,30 @@ pub fn decode(buf: &[u8]) -> Result<(Message, usize), SchemaError> {
     decode_with_dict(buf, None)
 }
 
-/// Decode com o dicionário da conexão (v1.2 §4.8): `dict = None` é o
-/// comportamento v1.1 exato (id 2 ⇒ `UnknownCompression`, princípio 7);
-/// com `dict = Some`, frames `ALGO_LZ4_DICT` descomprimem contra o
-/// dicionário derivado (blob corrupto ou dicionário divergente ⇒
-/// `DecompressionFailed`, nunca lixo silencioso).
-pub fn decode_with_dict(
+/// Decode com o dicionário LZ4 da conexão (v1.2 §4.8): `dict = None` é o
+/// comportamento v1.1 exato (id 2 ⇒ `UnknownCompression`, princípio 7).
+/// Desbloqueia SOMENTE o id 2 — o id 3 (zstd treinado, v1.3) sem o
+/// dicionário tipado certo é `UnknownCompression{3}`, exatamente o que um
+/// codec v1.2 faz (fail closed).
+pub fn decode_with_dict(buf: &[u8], dict: Option<&[u8]>) -> Result<(Message, usize), SchemaError> {
+    let dict = dict.map(|d| compress::DictConexao::Lz4(d.to_vec()));
+    decode_com(buf, dict.as_ref())
+}
+
+/// Decode com o dicionário TIPADO da conexão (v1.2/v1.3 §4.8): id 2 exige a
+/// matéria concatenada ([`compress::DictConexao::Lz4`]); id 3 exige a
+/// treinada ([`compress::DictConexao::Zstd`]) — o contrário é
+/// `UnknownCompression` (fail closed por construção).
+pub fn decode_with_conexao(
     buf: &[u8],
-    dict: Option<&[u8]>,
+    dict: Option<&compress::DictConexao>,
+) -> Result<(Message, usize), SchemaError> {
+    decode_com(buf, dict)
+}
+
+fn decode_com(
+    buf: &[u8],
+    dict: Option<&compress::DictConexao>,
 ) -> Result<(Message, usize), SchemaError> {
     let total = peek_frame_len(buf)?;
     if total == 0 || buf.len() < total {
@@ -963,13 +1143,17 @@ pub fn decode_with_dict(
     }
     let payload = &buf[4..total];
     if payload.len() < HEADER_LEN {
-        return Err(SchemaError::PayloadTooShort { length: payload.len() });
+        return Err(SchemaError::PayloadTooShort {
+            length: payload.len(),
+        });
     }
     if payload[0..3] != MAGIC {
         return Err(SchemaError::InvalidMagic);
     }
     if payload[3] != VERSION {
-        return Err(SchemaError::UnknownVersion { received: payload[3] });
+        return Err(SchemaError::UnknownVersion {
+            received: payload[3],
+        });
     }
     let opcode = payload[4];
     let flags = payload[5];
@@ -995,7 +1179,7 @@ pub fn decode_with_dict(
         rest = &rest[8..];
     }
     if flags & flag::COMPRESSED != 0 {
-        // §4.8/v1.2: algoritmo no byte reservado; guarda de bomba = teto
+        // §4.8/v1.2/v1.3: algoritmo no byte reservado; guarda de bomba = teto
         // da região descomprimida (blob corrupto/grande demais ⇒ erro).
         match reservado {
             compress::ALGO_LZ4 => {
@@ -1008,10 +1192,12 @@ pub fn decode_with_dict(
                 rest = &region_owned;
             }
             compress::ALGO_LZ4_DICT => {
-                // v1.2: sem o dicionário da conexão, id 2 é desconhecido —
+                // v1.2: sem o dicionário LZ4 da conexão, id 2 é desconhecido —
                 // exatamente o que um codec v1.1 faz (fail closed).
-                let Some(dict) = dict else {
-                    return Err(SchemaError::UnknownCompression { received: reservado });
+                let Some(compress::DictConexao::Lz4(dict)) = dict else {
+                    return Err(SchemaError::UnknownCompression {
+                        received: reservado,
+                    });
                 };
                 region_owned = vec![0u8; MAX_PAYLOAD];
                 let n = lz4_flex::block::decompress_into_with_dict(rest, &mut region_owned, dict)
@@ -1019,7 +1205,26 @@ pub fn decode_with_dict(
                 region_owned.truncate(n);
                 rest = &region_owned;
             }
-            _ => return Err(SchemaError::UnknownCompression { received: reservado }),
+            compress::ALGO_ZSTD_DICT => {
+                // v1.3: id 3 exige o dicionário TREINADO — com a matéria do
+                // id 2 (ou sem dict) é desconhecido (fail closed).
+                let Some(compress::DictConexao::Zstd(dict)) = dict else {
+                    return Err(SchemaError::UnknownCompression {
+                        received: reservado,
+                    });
+                };
+                region_owned = vec![0u8; MAX_PAYLOAD];
+                let n = zstd::bulk::Decompressor::with_dictionary(dict)
+                    .and_then(|mut d| d.decompress_to_buffer(rest, &mut region_owned))
+                    .map_err(|_| SchemaError::DecompressionFailed)?;
+                region_owned.truncate(n);
+                rest = &region_owned;
+            }
+            _ => {
+                return Err(SchemaError::UnknownCompression {
+                    received: reservado,
+                })
+            }
         }
     }
 
@@ -1064,9 +1269,13 @@ pub fn decode_with_dict(
                 }
                 2 => AckAct::MissingActor,
                 3 => AckAct::Unavailable,
-                4 => AckAct::FallbackExecuted { alternativo: r.len_string(1, MAX_NAME)? },
+                4 => AckAct::FallbackExecuted {
+                    alternativo: r.len_string(1, MAX_NAME)?,
+                },
                 5 => AckAct::FallbackExhausted,
-                6 => AckAct::InvalidValue { reason: r.len_string(1, MAX_STRING)? },
+                6 => AckAct::InvalidValue {
+                    reason: r.len_string(1, MAX_STRING)?,
+                },
                 _ => return Err(SchemaError::MissingField),
             };
             r.end()?;
@@ -1091,14 +1300,26 @@ pub fn decode_with_dict(
                         let quantity = r.len_string(1, MAX_NAME)?;
                         let unit = r.len_string(1, MAX_NAME)?;
                         let precision_pct = r.f64()?;
-                        DeviceDesc::Sensor { name, min, max, quantity, unit, precision_pct }
+                        DeviceDesc::Sensor {
+                            name,
+                            min,
+                            max,
+                            quantity,
+                            unit,
+                            precision_pct,
+                        }
                     }
                     1 => {
                         let flags = r.u8()?;
                         let min = r.opt_f64(flags, 1)?;
                         let max = r.opt_f64(flags, 2)?;
                         let safety = r.opt_f64(flags, 4)?;
-                        DeviceDesc::Actor { name, min, max, safety }
+                        DeviceDesc::Actor {
+                            name,
+                            min,
+                            max,
+                            safety,
+                        }
                     }
                     _ => return Err(SchemaError::MissingField),
                 });
@@ -1138,7 +1359,9 @@ pub fn decode_with_dict(
                     },
                     s @ 1..=3 => BatchResult::Err { reason: s },
                     // 4 = nao_registrado (§4.1 valor 0; o byte 0 pertence a Ok).
-                    4 => BatchResult::Err { reason: reason::NOT_REGISTERED },
+                    4 => BatchResult::Err {
+                        reason: reason::NOT_REGISTERED,
+                    },
                     _ => return Err(SchemaError::MissingField),
                 });
             }
@@ -1178,5 +1401,15 @@ pub fn decode_with_dict(
     // mensagem decodificada carrega a semântica (`timestamp_us`), não a flag;
     // assim `decode(encode(m)) == m` vale também para frames carimbados.
     let semantic_flags = flags & !(flag::TIMESTAMP | flag::COMPRESSED);
-    Ok((Message { opcode, flags: semantic_flags, seq, name, timestamp_us, body }, total))
+    Ok((
+        Message {
+            opcode,
+            flags: semantic_flags,
+            seq,
+            name,
+            timestamp_us,
+            body,
+        },
+        total,
+    ))
 }

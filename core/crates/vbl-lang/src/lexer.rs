@@ -59,7 +59,10 @@ impl Lexer {
                     self.bump();
                     if self.peek() == Some(&'C') {
                         self.bump();
-                        tokens.push(Token { kind: TokenKind::DegC, span });
+                        tokens.push(Token {
+                            kind: TokenKind::DegC,
+                            span,
+                        });
                     } else {
                         self.diags.error(
                             "lexema_invalido",
@@ -70,7 +73,10 @@ impl Lexer {
                 }
                 '%' => {
                     self.bump();
-                    tokens.push(Token { kind: TokenKind::Percent, span });
+                    tokens.push(Token {
+                        kind: TokenKind::Percent,
+                        span,
+                    });
                 }
                 ':' => self.punc(&mut tokens, span, TokenKind::Colon),
                 ',' => self.punc(&mut tokens, span, TokenKind::Comma),
@@ -81,18 +87,29 @@ impl Lexer {
                 ')' => self.punc(&mut tokens, span, TokenKind::RParen),
                 '<' => {
                     self.bump();
-                    let kind = if self.consume('=') { TokenKind::Le } else { TokenKind::Lt };
+                    let kind = if self.consume('=') {
+                        TokenKind::Le
+                    } else {
+                        TokenKind::Lt
+                    };
                     tokens.push(Token { kind, span });
                 }
                 '>' => {
                     self.bump();
-                    let kind = if self.consume('=') { TokenKind::Ge } else { TokenKind::Gt };
+                    let kind = if self.consume('=') {
+                        TokenKind::Ge
+                    } else {
+                        TokenKind::Gt
+                    };
                     tokens.push(Token { kind, span });
                 }
                 '=' => {
                     self.bump();
                     if self.consume('=') {
-                        tokens.push(Token { kind: TokenKind::EqEq, span });
+                        tokens.push(Token {
+                            kind: TokenKind::EqEq,
+                            span,
+                        });
                     } else {
                         self.diags.error(
                             "lexema_invalido",
@@ -104,16 +121,25 @@ impl Lexer {
                 '!' => {
                     self.bump();
                     if self.consume('=') {
-                        tokens.push(Token { kind: TokenKind::NotEq, span });
+                        tokens.push(Token {
+                            kind: TokenKind::NotEq,
+                            span,
+                        });
                     } else {
-                        self.diags
-                            .error("lexema_invalido", span, "lexema '!' não existe na linguagem");
+                        self.diags.error(
+                            "lexema_invalido",
+                            span,
+                            "lexema '!' não existe na linguagem",
+                        );
                     }
                 }
                 '-' => {
                     self.bump();
                     if self.consume('>') {
-                        tokens.push(Token { kind: TokenKind::Arrow, span });
+                        tokens.push(Token {
+                            kind: TokenKind::Arrow,
+                            span,
+                        });
                     } else {
                         self.diags.error(
                             "lexema_invalido",
@@ -124,7 +150,10 @@ impl Lexer {
                 }
                 c if c.is_ascii_alphabetic() || *c == '_' => {
                     let name = self.identifier();
-                    tokens.push(Token { kind: TokenKind::Ident(name), span });
+                    tokens.push(Token {
+                        kind: TokenKind::Ident(name),
+                        span,
+                    });
                 }
                 _ => {
                     let other = *c;
@@ -203,7 +232,11 @@ impl Lexer {
             }
             self.bump();
         }
-        self.diags.error("comentario_nao_fechado", start, "comentário de bloco sem '*/'");
+        self.diags.error(
+            "comentario_nao_fechado",
+            start,
+            "comentário de bloco sem '*/'",
+        );
     }
 
     fn identifier(&mut self) -> String {
@@ -261,8 +294,11 @@ impl Lexer {
         loop {
             match self.bump() {
                 None => {
-                    self.diags
-                        .error("string_nao_terminada", span, "string sem aspas de fechamento");
+                    self.diags.error(
+                        "string_nao_terminada",
+                        span,
+                        "string sem aspas de fechamento",
+                    );
                     return None;
                 }
                 Some('"') => break,

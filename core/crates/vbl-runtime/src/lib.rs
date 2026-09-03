@@ -11,17 +11,17 @@
 //! - [`persist`]: `equilibrium` em suporte estável (.vl canônico + SHA-256);
 //! - [`json`]: serialização JSON determinística (auditoria do Caderno).
 
-pub mod ledger;
-pub mod production_ledger;
 pub mod engine;
 pub mod form;
 pub mod fxp;
 #[cfg(feature = "heap-audit")]
 pub mod heap_auditor;
 pub mod json;
+pub mod ledger;
 pub mod loader;
 pub mod main_interp;
 pub mod persist;
+pub mod production_ledger;
 pub mod scheduler;
 pub mod sim;
 
@@ -32,14 +32,14 @@ pub mod sim;
 #[global_allocator]
 static HEAP_AUDITOR: heap_auditor::AuditorAlloc = heap_auditor::AuditorAlloc;
 
-pub use ledger::{Ledger, ChainLedger, LedgerEvent};
-pub use production_ledger::{
-    jsonl_from_binary, verify, verify_binary, verify_jsonl, ProductionLedger, VerificationReport,
-    Summary,
-};
 pub use engine::Engine;
 pub use form::{ActionRt, Form, Maintenance, RuleRt, CANONICAL_POETIC_VALUE};
-pub use fxp::{ActOutcome, ActorLimits, SensorFailure, Fxp, Limit, Registry, SensorInfo, Value};
+pub use fxp::{ActOutcome, ActorLimits, Fxp, Limit, Registry, SensorFailure, SensorInfo, Value};
+pub use ledger::{ChainLedger, Ledger, LedgerEvent};
 pub use loader::{load, validate};
 pub use main_interp::{MainInterpreter, StmtRt};
+pub use production_ledger::{
+    jsonl_from_binary, verify, verify_binary, verify_jsonl, ProductionLedger, Summary,
+    VerificationReport,
+};
 pub use sim::FxpSimulator;

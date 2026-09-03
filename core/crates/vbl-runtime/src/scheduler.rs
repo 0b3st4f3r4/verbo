@@ -102,8 +102,13 @@ impl Scheduler {
     /// renova a versão); entradas obsoletas são descartadas pelo engine.
     pub fn schedule(&mut self, form: &str, deadline: Deadline, em: f64, version: u64) {
         self.sequence += 1;
-        let entry =
-            Entry { em: VirtualInstant::de(em), form: form.into(), deadline, version, seq: self.sequence };
+        let entry = Entry {
+            em: VirtualInstant::de(em),
+            form: form.into(),
+            deadline,
+            version,
+            seq: self.sequence,
+        };
         self.heap.push(Reverse(entry));
     }
 
@@ -123,8 +128,11 @@ impl Scheduler {
 
     /// Remove todas as entradas de uma forma (dissolução explícita).
     pub fn remove_form(&mut self, form: &str) {
-        let remaining: Vec<Reverse<Entry>> =
-            self.heap.drain().filter(|Reverse(e)| e.form != form).collect();
+        let remaining: Vec<Reverse<Entry>> = self
+            .heap
+            .drain()
+            .filter(|Reverse(e)| e.form != form)
+            .collect();
         self.heap = remaining.into_iter().collect();
     }
 
