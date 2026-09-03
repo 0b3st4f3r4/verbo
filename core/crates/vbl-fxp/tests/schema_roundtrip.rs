@@ -635,10 +635,11 @@ fn auth_scheme_e_nonce_sao_validados() {
 
 #[test]
 fn caps_reservados_sao_rejeitados_no_encode() {
-    // v1.2: o bit 3 virou `caps::DICT`; v1.3: o bit 4 virou `caps::ZSTD`
-    // (promovido do reservado) — o primeiro reservado é agora o bit 5, e o
-    // encode segue rejeitando 5..=15 (promotion-safe por construção).
-    let msg = Message::caps(0b0000_0000_0010_0000, 1); // bit 5 é reservado
+    // v1.2: o bit 3 virou `caps::DICT`; v1.3: o bit 4 virou `caps::ZSTD`;
+    // v1.4: o bit 5 virou `caps::ZSTD_V` (todos promovidos do reservado) —
+    // o primeiro reservado é agora o bit 6, e o encode segue rejeitando
+    // 6..=15 (promotion-safe por construção).
+    let msg = Message::caps(0b0000_0000_0100_0000, 1); // bit 6 é reservado
     assert!(matches!(
         encode_to_vec(&msg),
         Err(SchemaError::ReservedCaps)
@@ -648,11 +649,13 @@ fn caps_reservados_sao_rejeitados_no_encode() {
         encode_to_vec(&msg),
         Err(SchemaError::ReservedCaps)
     ));
-    // Os bits promovidos encodam limpos: quem anuncia DICT (v1.2) ou ZSTD
-    // (v1.3) não é rejeitado.
+    // Os bits promovidos encodam limpos: quem anuncia DICT (v1.2), ZSTD
+    // (v1.3) ou ZSTD_V (v1.4) não é rejeitado.
     let msg = Message::caps(0b0000_0000_0000_1000, 1); // caps::DICT
     assert!(encode_to_vec(&msg).is_ok());
     let msg = Message::caps(0b0000_0000_0001_0000, 1); // caps::ZSTD
+    assert!(encode_to_vec(&msg).is_ok());
+    let msg = Message::caps(0b0000_0000_0010_0000, 1); // caps::ZSTD_V
     assert!(encode_to_vec(&msg).is_ok());
 }
 

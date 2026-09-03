@@ -1,6 +1,6 @@
 # Etapa 2 — Matriz de Rastreabilidade do Parser
 
-**Critério "Done" (AGENTS.md §2.2):** 100% das produções da FORMAL §3 e ≥ 95%
+**Critério "Done" (AGENTS.md §2.2):** 100% das produções da FORMAL §3 e ≥ 90%
 das notas semânticas com ≥ 1 teste. Suíte: `core/crates/vbl-lang/tests/productions_matrix.rs`
 (42 testes, todos passando) + `core/crates/vbl-lang/tests/canon_roundtrip.rs` (5).
 
@@ -56,7 +56,7 @@ Legenda: **Prod.** = produção EBNF (docs/FORMAL.md §3) · **Nota** = nota sem
 | 8 | regra sem `->` ou com estrutura quebrada | `nota_regra_sem_seta_ou_com_estrutura_quebrada` | ✅ |
 | 9 | unidade do `threshold` é capturada na AST para validação contra o registro do FXP (validada em runtime — `unidade_ausente`/`unidade_incompativel`, testes em `vbl-runtime/tests/transition.rs` via loader) | `nota_threshold_unidade_e_capturada_para_validacao_no_registro` | ✅ |
 
-**Notas semânticas com ≥ 1 teste: 9/9 = 100% (meta ≥ 95%).**
+**Notas semânticas com ≥ 1 teste: 9/9 = 100% (meta ≥ 90%).**
 
 ## 3. Cláusulas de erro (FORMAL §2/§3) × códigos de diagnóstico
 

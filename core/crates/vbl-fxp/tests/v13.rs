@@ -146,6 +146,7 @@ fn certificados() -> (TlsAccept, [u8; 32], String) {
         TlsAccept {
             certs_pem: ck.cert.pem(),
             key_pem: ck.signing_key.serialize_pem(),
+            sessoes: None,
         },
         fp,
         tls::hex32(&fp),
@@ -244,7 +245,7 @@ fn tls_segunda_conexao_retoma_sessao_e_negocia() {
     let mut c1 = Connection::tcp_tls(
         "127.0.0.1",
         porta,
-        &ConfiancaCliente::Pin(fp),
+        &ConfiancaCliente::Pin(vec![fp]),
         DEADLINE,
         None,
     )
@@ -268,7 +269,7 @@ fn tls_segunda_conexao_retoma_sessao_e_negocia() {
     let mut c2 = Connection::tcp_tls(
         "127.0.0.1",
         porta,
-        &ConfiancaCliente::Pin(fp),
+        &ConfiancaCliente::Pin(vec![fp]),
         DEADLINE,
         Some(caps::LZ4),
     )
@@ -309,7 +310,7 @@ fn tls_sem_negociacao_0rtt_nao_parte_e_conexao_segue_honesta() {
     Connection::tcp_tls(
         "127.0.0.1",
         porta,
-        &ConfiancaCliente::Pin(fp),
+        &ConfiancaCliente::Pin(vec![fp]),
         DEADLINE,
         None,
     )
@@ -318,7 +319,7 @@ fn tls_sem_negociacao_0rtt_nao_parte_e_conexao_segue_honesta() {
     let mut c = Connection::tcp_tls(
         "127.0.0.1",
         porta,
-        &ConfiancaCliente::Pin(fp),
+        &ConfiancaCliente::Pin(vec![fp]),
         DEADLINE,
         None,
     )
@@ -521,7 +522,7 @@ fn registry_tcps_aceita_tofu_e_mantem_pin() {
         Endpoint::Remote {
             addr: vbl_fxp::RemoteAddr::TcpTls { trust, .. },
         } => {
-            assert_eq!(*trust, Trust::Pin([0xabu8; 32]));
+            assert_eq!(*trust, Trust::Pin(vec![[0xabu8; 32]]));
         }
         _ => panic!("endpoint remoto esperado"),
     }

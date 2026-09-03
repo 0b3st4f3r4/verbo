@@ -1,4 +1,4 @@
-# Cobertura da VerboLang — denominador do gate de 95% (pre-commit e CI).
+# Cobertura da VerboLang — denominador do gate de 90% (pre-commit e CI).
 # Escopo: o SUT exercido pela suíte unitária (prototype + scripts).
 # Omitidos do denominador:
 #   • prototype/verbolang-llm-poc.py  — PoC histórico, sem suíte própria

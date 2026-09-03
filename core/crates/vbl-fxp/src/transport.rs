@@ -254,10 +254,21 @@ impl Connection {
     fn encode_frame(&self, msg: &Message) -> Result<Vec<u8>, TransportError> {
         if self.negotiated_caps & schema::caps::DICT != 0 && self.dict_ready {
             match &self.dict {
-                // v1.3 §4.8: zstd treinado (id 3) tem precedência quando
-                // negociado — razão maior com os mesmos bytes de gatilho.
+                // v1.4 §4.8: zstd treinado VERIFICADO (id 4) tem precedência
+                // — só existe aqui depois do DICT_SYNC com hash casado.
+                Some(schema::compress::DictConexao::ZstdV(dict))
+                    if self.negotiated_caps & schema::caps::ZSTD_V != 0 =>
+                {
+                    let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
+                    schema::encode_with_zstd_dict_v(msg, dict, &mut f)?;
+                    return Ok(f);
+                }
+                // v1.3 §4.8: zstd treinado (id 3) quando o bit 5 NÃO foi
+                // concedido — com ZSTD_V concedido o par usa id 4 ou degrada
+                // para o id 2; o id 3 fica no caminho v1.3 intocado.
                 Some(schema::compress::DictConexao::Zstd(dict))
-                    if self.negotiated_caps & schema::caps::ZSTD != 0 =>
+                    if self.negotiated_caps & schema::caps::ZSTD != 0
+                        && self.negotiated_caps & schema::caps::ZSTD_V == 0 =>
                 {
                     let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
                     schema::encode_with_zstd_dict(msg, dict, &mut f)?;
@@ -420,9 +431,56 @@ impl Connection {
         self.dict_ready = true;
     }
 
+    /// Instala o dicionário treinado VERIFICADO (id 4, v1.4 §4.8) e marca
+    /// pronto — chamar só após [`Self::dict_sync`] com hash casado; frames
+    /// acima do threshold partem com o algoritmo 4 (e o id 3 fica
+    /// desativado nesta conexão).
+    pub fn set_zstd_dict_v(&mut self, dict: Vec<u8>) {
+        self.dict = Some(schema::compress::DictConexao::ZstdV(dict));
+        self.dict_ready = true;
+    }
+
     /// Dicionário pronto para o envio (negociado + HELLO completo).
     pub fn dict_ready(&self) -> bool {
         self.dict_ready
+    }
+
+    /// Dicionário treinado VERIFICADO no fio (id 4, v1.4 §4.8): `true` só
+    /// após `DICT_SYNC` com hash casado nas pontas.
+    pub fn dict_verificado(&self) -> bool {
+        matches!(self.dict, Some(schema::compress::DictConexao::ZstdV(_)))
+    }
+
+    /// Verificação do dicionário no fio (v1.4 §4.8): envia o par
+    /// `(versão do zstd, hash do dict derivado localmente)` e devolve o par
+    /// do PEER. Quem chama compara os hashes: casado ⇒ [`Self::
+    /// set_zstd_dict_v`]; divergente ⇒ degradação honesta para o id 2
+    /// ([`Self::set_dict`]) com registro no Caderno. Resposta que não seja
+    /// `DICT_SYNC_OK` ⇒ conexão dessincronizada (erro).
+    pub fn dict_sync(
+        &mut self,
+        zstd_version: u32,
+        dict_hash: [u8; 32],
+        timeout: Duration,
+    ) -> Result<(u32, [u8; 32]), TransportError> {
+        self.neg_seq = self.neg_seq.wrapping_add(1);
+        let req = Message::dict_sync(zstd_version, dict_hash, self.neg_seq);
+        let resp = self.request(&req, timeout)?;
+        if resp.opcode != schema::op::DICT_SYNC_OK {
+            return Err(TransportError::Broken(
+                "resposta ao DICT_SYNC não é DICT_SYNC_OK (§4.8 v1.4)".into(),
+            ));
+        }
+        let Body::DictSync {
+            zstd_version,
+            dict_hash,
+        } = resp.body
+        else {
+            return Err(TransportError::Broken(
+                "corpo do DICT_SYNC_OK inválido (§4.8 v1.4)".into(),
+            ));
+        };
+        Ok((zstd_version, dict_hash))
     }
 
     /// Publica o registro local (`HELLO`, §4.4) e devolve o registro do

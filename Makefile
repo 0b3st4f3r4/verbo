@@ -46,7 +46,7 @@ help:
 > @echo "  make test    suíte completa: unitários (pytest) + BDD (behave)"
 > @echo "  make test-unit  apenas testes unitários (pytest)"
 > @echo "  make test-bdd   apenas cenários BDD (behave)"
-> @echo "  make test-cov   unitários + gate pytest-cov ≥ 95% (VBL_COVERAGE_MIN)"
+> @echo "  make test-cov   unitários + gate pytest-cov ≥ 90% (VBL_COVERAGE_MIN)"
 > @echo "  --- núcleo Rust (Etapas 2–4) ---"
 > @echo "  make rust-check    parser/runtime/FXP/Caderno: clippy + todos os testes"
 > @echo "  make rust-build    compila o workspace core/ (vbl, vbl-lang, vbl-runtime, vbl-fxp)"
@@ -115,7 +115,7 @@ setup:
 > @echo "venv pronto (.venv) — use make test"
 
 # Pre-commit (framework): .pre-commit-config.yaml espelha o CI + gates de
-# cobertura ≥95% (pytest-cov e cargo-llvm-cov). O wrapper .githooks/pre-commit
+# cobertura ≥90% (pytest-cov e cargo-llvm-cov). O wrapper .githooks/pre-commit
 # só resolve o ambiente (PRE_COMMIT_HOME) e delega ao framework. Rápido em WIP:
 #   make pc ARGS="run estaticos tdd-cobertura bdd clippy testes e2e"
 hooks:

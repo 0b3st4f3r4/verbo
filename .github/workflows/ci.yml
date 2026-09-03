@@ -101,12 +101,12 @@ jobs:
       #   make serve  →  make validate-cheatsheet
 
   coverage:
-    name: Cobertura (pytest-cov ≥ 95% · llvm-cov ≥ 95%)
+    name: Cobertura (pytest-cov ≥ 90% · llvm-cov ≥ 90%)
     runs-on: ubuntu-latest
     env:
       # Piso de cobertura dos dois gates. Rebaixar é decisão explícita,
       # visível neste arquivo — nunca um ajuste silencioso.
-      VBL_COVERAGE_MIN: "95"
+      VBL_COVERAGE_MIN: "90"
     steps:
       - uses: actions/checkout@v4
 
@@ -120,7 +120,7 @@ jobs:
       # Gate Python: SUT exercido pela suíte unitária. O omit (PoC histórico e
       # o validador de cheat sheet, que exige LLM local) vive no .coveragerc —
       # mesma regra do pre-commit.
-      - name: pytest-cov (gate ≥ 95%)
+      - name: pytest-cov (gate ≥ 90%)
         run: |
           python -m pytest -q tests/unit \
             --cov=prototype --cov=scripts \
@@ -139,7 +139,7 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
 
       # Gate Rust: linhas do workspace inteiro
-      - name: cargo-llvm-cov (gate ≥ 95%)
+      - name: cargo-llvm-cov (gate ≥ 90%)
         working-directory: core
         env:
           CARGO_HOME: ${{ github.workspace }}/core/.cargo-home

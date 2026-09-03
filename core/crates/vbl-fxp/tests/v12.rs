@@ -28,6 +28,7 @@ fn certificados() -> (TlsAccept, [u8; 32], String) {
         TlsAccept {
             certs_pem: ck.cert.pem(),
             key_pem: ck.signing_key.serialize_pem(),
+            sessoes: None,
         },
         fp,
         tls::hex32(&fp),
@@ -160,7 +161,7 @@ fn e2e_cliente_tls_contra_servidor_plano_falha() {
     let (_srv, porta) = vbl_fxp::peer::serve_tcp_peer(&peer).expect("servidor plano");
 
     let (_a, fp, _hex) = certificados();
-    let confianca = vbl_fxp::tls::ConfiancaCliente::Pin(fp);
+    let confianca = vbl_fxp::tls::ConfiancaCliente::Pin(vec![fp]);
     let r = Connection::tcp_tls(
         "127.0.0.1",
         porta,

@@ -471,6 +471,7 @@ fn v12_tls_e_dict(c: &mut Criterion) {
     let accept = TlsAccept {
         certs_pem: cert.cert.pem(),
         key_pem: cert.signing_key.serialize_pem(),
+        sessoes: None,
     };
     let peer_tls = PeerServer::new(
         FxpBus::build(
@@ -511,7 +512,7 @@ fn v12_tls_e_dict(c: &mut Criterion) {
     // FXP-V1.2-REPORT.md; o grupo v13_tls_0rtt isola 0-RTT e sem-0-RTT).
     group.bench_function("tls_handshake_resumido_ler", |b| {
         b.iter(|| {
-            let confianca = vbl_fxp::tls::ConfiancaCliente::Pin(fingerprint);
+            let confianca = vbl_fxp::tls::ConfiancaCliente::Pin(vec![fingerprint]);
             let mut conn =
                 Connection::tcp_tls("127.0.0.1", porta, &confianca, Duration::from_secs(2), None)
                     .expect("tls con");
@@ -608,6 +609,7 @@ fn v13_tls_0rtt_e_zstd(c: &mut Criterion) {
     let accept = TlsAccept {
         certs_pem: cert.cert.pem(),
         key_pem: cert.signing_key.serialize_pem(),
+        sessoes: None,
     };
     let peer_tls = PeerServer::new(
         FxpBus::build(
@@ -634,7 +636,7 @@ fn v13_tls_0rtt_e_zstd(c: &mut Criterion) {
     let quente = Connection::tcp_tls(
         "127.0.0.1",
         porta,
-        &vbl_fxp::tls::ConfiancaCliente::Pin(fingerprint),
+        &vbl_fxp::tls::ConfiancaCliente::Pin(vec![fingerprint]),
         Duration::from_secs(2),
         None,
     )
@@ -647,7 +649,7 @@ fn v13_tls_0rtt_e_zstd(c: &mut Criterion) {
             let mut conn = Connection::tcp_tls(
                 "127.0.0.1",
                 porta,
-                &vbl_fxp::tls::ConfiancaCliente::Pin(fingerprint),
+                &vbl_fxp::tls::ConfiancaCliente::Pin(vec![fingerprint]),
                 Duration::from_secs(2),
                 None,
             )
@@ -665,7 +667,7 @@ fn v13_tls_0rtt_e_zstd(c: &mut Criterion) {
             let mut conn = Connection::tcp_tls(
                 "127.0.0.1",
                 porta,
-                &vbl_fxp::tls::ConfiancaCliente::Pin(fingerprint),
+                &vbl_fxp::tls::ConfiancaCliente::Pin(vec![fingerprint]),
                 Duration::from_secs(2),
                 Some(caps::LZ4),
             )
@@ -724,6 +726,175 @@ fn v13_tls_0rtt_e_zstd(c: &mut Criterion) {
     group.finish();
 }
 
+/// v1.4 §9: 0-RTT em rede com RTT REAL (> 1 ms) — quantifica o ganho FORA do
+/// loopback. Um proxy TCP injeta atraso unilateral por VOO (chunk lido):
+/// cada travessia paga +atraso, como a rede cobra. Default 3000 µs (= RTT
+/// de 6 ms) — sobrescreva com `FXP_BENCH_RTT_US`.
+fn v14_tls_0rtt_rtt(c: &mut Criterion) {
+    use std::io::{Read, Write};
+    use std::path::Path;
+    use vbl_fxp::transport::Connection;
+
+    let atraso = Duration::from_micros(
+        std::env::var("FXP_BENCH_RTT_US")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3000),
+    );
+
+    // Proxy: aceita em porta efêmera e encaminha ao alvo com atraso por
+    // chunk — cada chunk é um "voo" aproximado (registros TLS ≤ 16 KiB).
+    fn cano_com_atraso(mut de: std::net::TcpStream, mut para: std::net::TcpStream, atraso: Duration) {
+        let mut buf = [0u8; 16384];
+        loop {
+            match de.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    std::thread::sleep(atraso);
+                    if para.write_all(&buf[..n]).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+        let _ = para.shutdown(std::net::Shutdown::Write);
+    }
+    let proxy = |alvo: u16| -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("proxy bind");
+        let porta = listener.local_addr().expect("addr").port();
+        std::thread::spawn(move || {
+            for cliente in listener.incoming() {
+                let Ok(cliente) = cliente else { continue };
+                let Ok(remoto) = std::net::TcpStream::connect(("127.0.0.1", alvo)) else {
+                    continue;
+                };
+                let Ok(cliente_le) = cliente.try_clone() else { continue };
+                let Ok(remoto_es) = remoto.try_clone() else { continue };
+                std::thread::spawn(move || cano_com_atraso(cliente_le, remoto_es, atraso));
+                std::thread::spawn(move || cano_com_atraso(remoto, cliente, atraso));
+            }
+        });
+        porta
+    };
+
+    let mut group = c.benchmark_group("v14_tls_0rtt_rtt");
+    group.throughput(criterion::Throughput::Elements(1));
+
+    // Peer TLS COM store de sessões em disco (v1.4 §7 — o mesmo desenho do
+    // fxpd --tls-sessions) e LZ4 anunciado.
+    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).expect("cert");
+    let dir = std::env::temp_dir().join(format!("vbl-bench-v14-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let accept = TlsAccept {
+        certs_pem: cert.cert.pem(),
+        key_pem: cert.signing_key.serialize_pem(),
+        sessoes: Some(dir.join("sessoes.json")),
+    };
+    let peer_tls = PeerServer::new(
+        FxpBus::build(
+            registry_n_sensores(1),
+            BusConfig {
+                mode: OperationMode::Simulated,
+                ..Default::default()
+            },
+            vbl_runtime::FxpSimulator::new(),
+        ),
+        ChainLedger::new(),
+        PeerConfig {
+            tls: Some(accept),
+            caps: caps::LZ4,
+            ..Default::default()
+        },
+    );
+    let (_srv, porta_real) =
+        vbl_fxp::peer::serve_tcp_peer_port(&peer_tls, 0).expect("srv tls");
+    std::thread::sleep(Duration::from_millis(20));
+    let fingerprint = vbl_fxp::tls::fingerprint(cert.cert.der());
+    let porta = proxy(porta_real);
+
+    // Peer PLANO por trás do MESMO atraso (baseline honesto).
+    let peer_plano = PeerServer::new(
+        FxpBus::build(
+            registry_n_sensores(1),
+            BusConfig {
+                mode: OperationMode::Simulated,
+                ..Default::default()
+            },
+            vbl_runtime::FxpSimulator::new(),
+        ),
+        ChainLedger::new(),
+        PeerConfig::default(),
+    );
+    let (_srv2, porta_plana_real) =
+        vbl_fxp::peer::serve_tcp_peer_port(&peer_plano, 0).expect("srv plano");
+    std::thread::sleep(Duration::from_millis(20));
+    let porta_plana = proxy(porta_plana_real);
+
+    // Aquecimento: a primeira conexão com o pin é FULL — fora do bench.
+    let quente = Connection::tcp_tls(
+        "127.0.0.1",
+        porta,
+        &vbl_fxp::tls::ConfiancaCliente::Pin(vec![fingerprint]),
+        Duration::from_secs(5),
+        None,
+    )
+    .and_then(|mut c| c.negotiate(caps::LZ4, Duration::from_secs(2)).map(|_| ()));
+    quente.expect("aquecimento da sessão");
+
+    group.bench_function("tls_0rtt_sobre_rtt", |b| {
+        // Retomada com CAPS adiantado: ClientHello + CAPS partem JUNTOS —
+        // 1 RTT até a resposta (o voo do 0-RTT não espera o handshake).
+        b.iter(|| {
+            let mut conn = Connection::tcp_tls(
+                "127.0.0.1",
+                porta,
+                &vbl_fxp::tls::ConfiancaCliente::Pin(vec![fingerprint]),
+                Duration::from_secs(5),
+                Some(caps::LZ4),
+            )
+            .expect("tls con");
+            let r = conn
+                .request(&Message::read("temp_0", 1, true), Duration::from_secs(2))
+                .expect("r");
+            black_box(r)
+        })
+    });
+    group.bench_function("tls_retomado_sem_0rtt_sobre_rtt", |b| {
+        // Retomada SEM 0-RTT: handshake curto (1 RTT) + CAPS + request — o
+        // custo da negociação pós-handshake aparece no RTT real.
+        b.iter(|| {
+            let mut conn = Connection::tcp_tls(
+                "127.0.0.1",
+                porta,
+                &vbl_fxp::tls::ConfiancaCliente::Pin(vec![fingerprint]),
+                Duration::from_secs(5),
+                None,
+            )
+            .expect("tls con");
+            let r = conn
+                .request(&Message::read("temp_0", 1, true), Duration::from_secs(2))
+                .expect("r");
+            black_box(r)
+        })
+    });
+    group.bench_function("tcp_plano_sobre_rtt", |b| {
+        // Sem TLS: conecta + request — o piso do transporte (o que o 0-RTT
+        // aproxima: conexão e primeiro pedido no mesmo voo).
+        b.iter(|| {
+            let mut conn = Connection::tcp("127.0.0.1", porta_plana, Duration::from_secs(5))
+                .expect("con");
+            let r = conn
+                .request(&Message::read("temp_0", 1, true), Duration::from_secs(2))
+                .expect("r");
+            black_box(r)
+        })
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = Path::new(&dir);
+    group.finish();
+}
+
 criterion_group!(
     benches,
     schema_v1,
@@ -734,6 +905,7 @@ criterion_group!(
     v11_timestamp_and_compression,
     v11_auth,
     v12_tls_e_dict,
-    v13_tls_0rtt_e_zstd
+    v13_tls_0rtt_e_zstd,
+    v14_tls_0rtt_rtt
 );
 criterion_main!(benches);

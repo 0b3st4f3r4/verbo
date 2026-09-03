@@ -31,6 +31,9 @@ pub mod peer;
 pub mod queue;
 pub mod registry;
 pub mod schema;
+/// Cache de sessões TLS do servidor em disco (v1.4 §7) — retomada entre
+/// renascimentos do peer.
+pub mod sessoes;
 pub mod tls;
 pub mod transport;
 

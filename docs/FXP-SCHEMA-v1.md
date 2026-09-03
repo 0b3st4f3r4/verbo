@@ -1,4 +1,4 @@
-# FXP — Schema de Mensagem v1.3
+# FXP — Schema de Mensagem v1.4
 
 **Status:** canônico. v1 definido **antes** dos drivers (PLAN §3.5) e canônico
 da Etapa 3; **v1.1** (janela `v2027.0.0-alpha.1` — PLAN §8 item 8) implementou
@@ -7,18 +7,27 @@ multicast, autenticação do canal remoto e timestamps absolutos no fio.
 **v1.2** (PLAN §8 item 9) implementou as quatro extensões registradas na §9 da
 v1.1: **TLS 1.3 com pinning** (§7, `tcps`), **dicionário de compressão
 compartilhado** (§4.8), **beacon IPv6 + SSM IPv4** (§4.9) e **mDNS/DNS-SD**
-(§4.10). **v1.3** (esta revisão — PLAN §8 item 10) implementa as quatro
-extensões que ficaram registradas na §9 da v1.2: **SSM IPv6** para o beacon
-(§4.9, `MCAST_JOIN_SOURCE_GROUP` da RFC 3678), **TOFU** como alternativa
+(§4.10). **v1.3** (PLAN §8 item 10) implementou as quatro extensões que
+ficaram registradas na §9 da v1.2: **SSM IPv6** para o beacon (§4.9,
+`MCAST_JOIN_SOURCE_GROUP` da RFC 3678), **TOFU** como alternativa
 operacional ao pinning (§7), **zstd com dicionário treinado** (§4.8, id 3,
 bit `ZSTD`) e **resumo de sessão + 0-RTT TLS** (§7 — o frame `CAPS` pode
-partir junto do `ClientHello`). O fio default (sem recursos negociados)
-permanece **bit a bit v1.0**; todo recurso novo segue o princípio 7
-(negociado, opt-in, fail-closed). Implementação de referência:
+partir junto do `ClientHello`). **v1.4** (esta revisão — PLAN §8 item 11)
+implementa as cinco extensões registradas na §9 da v1.3: **TOFU estrito**
+(`accept-new`, §7 — allow-list que nunca aprende), **rotação de pins com
+sobreposição** (§7 — multi-pin `@sha256:H1,H2`), **verificação de
+dicionário no fio** (`DICT_SYNC`, §4.8 — id 4, bit `ZSTD_V`; pontas com
+versões de zstd diferentes negociam compatibilidade em vez de quebrar),
+**sessão retomada entre processos** (§7 — cache de tickets do SERVIDOR em
+disco, `--tls-sessions`) e o **benchmark de 0-RTT com RTT real** (§9 —
+proxy que injeta atraso; números no relatório v1.4). O fio default (sem
+recursos negociados) permanece **bit a bit v1.0**; todo recurso novo segue
+o princípio 7 (negociado, opt-in, fail-closed). Implementação de referência:
 `core/crates/vbl-fxp/src/schema.rs` (roundtrip em `tests/schema_roundtrip.rs`),
 máquina de estado de conexão em `src/transport.rs`, lado servidor em
 `src/peer.rs`, beacon em `src/discover.rs`, mDNS em `src/mdns.rs`
-(feature `mdns`), TLS/TOFU em `src/tls.rs`; cenários v1.3 em `tests/v13.rs`.
+(feature `mdns`), TLS/TOFU/sessões em `src/tls.rs` e `src/sessoes.rs`;
+cenários v1.4 em `tests/v14.rs`.
 
 ---
 
@@ -116,6 +125,8 @@ antes de parsear `name_len` + `name` + corpo.
 | 0x08  | `AUTH_CHALLENGE`   | FXP→consumidor | `u16 LE scheme` + nonce 32 B (§4.6)                      |
 | 0x09  | `AUTH_RESPONSE`    | consumidor→FXP | nonce 32 B + HMAC 32 B (§4.6)                            |
 | 0x8A  | `AUTH_OK`          | FXP→consumidor | — (handshake aceito; falha = fechamento sem AUTH_OK)     |
+| 0x0A  | `DICT_SYNC`        | consumidor→FXP | `zstd_version u32 LE` + `dict_hash 32 B` (§4.8) — v1.4   |
+| 0x8B  | `DICT_SYNC_OK`     | FXP→consumidor | `zstd_version u32 LE` + `dict_hash 32 B` (§4.8) — v1.4   |
 
 ### 4.1 `READ_ERR.reason`
 
@@ -189,15 +200,18 @@ u16 LE  bitmask de capacidades pedidas
 | 2   | `TIMESTAMP`     | frames com `FLAG_TIMESTAMP` (§5)                           |
 | 3   | `DICT` (v1.2)   | algoritmo id 2 com dicionário do registro (§4.8); o `HELLO` passa a integrar o handshake |
 | 4   | `ZSTD` (v1.3)   | algoritmo id 3 com dicionário **treinado** (§4.8); negociado sempre JUNTO com `DICT` — o gatilho do `HELLO` é o mesmo |
+| 5   | `ZSTD_V` (v1.4) | algoritmo id 4 com dicionário treinado **verificado no fio** (§4.8 — `DICT_SYNC`); negociado sempre JUNTO com `ZSTD + DICT` |
 
 `CAPS_OK` devolve a **interseção** pedidos × suportados. Ordem obrigatória na
 conexão: **AUTH (§4.6, se política exigir) → CAPS → HELLO → trabalho** — com
 0-RTT TLS (§7) o `CAPS` pode partir JUNTO do `ClientHello`, mas a ordem
 lógica é a mesma e a resposta `CAPS_OK` continua obrigatória. Nenhum frame
 com recurso novo parte sem `CAPS_OK` confirmando a capacidade — o estado da
-conexão impõe (cliente e servidor); codec é stateless. Bits 5–15 reservados:
-`0` no encode; ignorados no decode (o bit 3 era reservado na v1.1 e o bit 4
-na v1.2 — as promoções são compatíveis, ver princípio 7).
+conexão impõe (cliente e servidor); codec é stateless. Com `ZSTD_V`
+concedido, entra na ordem, após o `HELLO`, o `DICT_SYNC` (§4.8) — o id 4 só
+trafega depois do hash casado. Bits 6–15 reservados: `0` no encode; ignorados
+no decode (o bit 3 era reservado na v1.1, o bit 4 na v1.2 e o bit 5 na
+v1.3 — as promoções são compatíveis, ver princípio 7).
 
 ### 4.6 `AUTH_*` — autenticação do canal remoto (v1.1)
 
@@ -249,19 +263,23 @@ READ_BATCH_OK: u16 LE count (igual ao pedido)
   diagnóstico `fxp_batch`. Falha pré-buscada de sensor que o programa não
   pediu **não** gera alerta — o alerta continua pertencendo à pergunta feita.
 
-### 4.8 Compressão do corpo (v1.1; id 2 v1.2; id 3 v1.3)
+### 4.8 Compressão do corpo (v1.1; id 2 v1.2; id 3 v1.3; id 4 v1.4)
 
 - Algoritmos no byte `reservado` do header: `id 1` = **LZ4 block** (v1.1);
   `id 2` = **LZ4 block + dicionário compartilhado do registro** (v1.2);
-  `id 3` = **zstd + dicionário TREINADO do registro** (v1.3).
+  `id 3` = **zstd + dicionário TREINADO do registro** (v1.3);
+  `id 4` = **zstd + dicionário treinado VERIFICADO no fio** (v1.4).
   Threshold de encode: só comprime quando a região plana (ts+nome+corpo)
   excede **512 B** e o resultado não excede a região plana (nunca inflar o fio).
 - `FLAG_COMPRESSED` marca o frame; `CAPS` bit 0 autoriza o id 1; bit `DICT`
-  (§4.5) autoriza o id 2; bits `DICT + ZSTD` autorizam o id 3. Sem negociação,
-  o estado da conexão **proíbe o envio** (nunca depende de o outro lado
-  "tolerar" flag desconhecida). Com id 3 concedido, o encoder prefere o id 3
-  ao id 2 (razão maior com o mesmo gatilho `HELLO`); a degradação inversa
-  (peer sem `ZSTD`) cai no id 2 pela interseção de `CAPS_OK`.
+  (§4.5) autoriza o id 2; bits `DICT + ZSTD` autorizam o id 3; bits
+  `DICT + ZSTD + ZSTD_V` autorizam o id 4 — mas o id 4 SÓ trafega depois do
+  `DICT_SYNC` com hash casado (abaixo). Sem negociação, o estado da conexão
+  **proíbe o envio** (nunca depende de o outro lado "tolerar" flag
+  desconhecida). Com id 3 concedido, o encoder prefere o id 3 ao id 2
+  (razão maior com o mesmo gatilho `HELLO`); com id 4 liberado, prefere o
+  id 4; a degradação inversa (peer v1.3 sem `ZSTD_V`) cai no id 3 pela
+  interseção de `CAPS_OK`.
 - **Dicionário (v1.2):** derivado deterministicamente do registro do
   SERVIDOR — nomes canônicos **ordenados**, concatenados com `\n`, teto
   **64 KiB** (truncado em ordem; mesmos bytes dos dois lados). O servidor
@@ -286,13 +304,38 @@ READ_BATCH_OK: u16 LE count (igual ao pedido)
   fio (5,6×), id 3 = 298 B (6,8×); dicionários derivados: concatenação
   1639 B × treinado 1321 B. Custo do treino: ~5 ms **uma vez por
   derivação** (handshake), não por frame (bench `zstd_treino_dict_41_nomes`).
+- **Verificação de dicionário no fio (v1.4, id 4 + `DICT_SYNC`):** o §9 da
+  v1.3 registrava o problema real — o treino COVER é determinístico por
+  (nomes, VERSÃO DO ZSTD), então pontas com libzstd diferentes derivam
+  dicionários diferentes e o id 3 quebra com `DecompressionFailed` DEPOIS
+  do handshake. A v1.4 torna a compatibilidade NEGOCIÁVEL: concedido o bit
+  `ZSTD_V` (§4.5), após o `HELLO` o cliente envia `DICT_SYNC
+  {zstd_version: u32 LE, dict_hash: 32 B}` — a versão da sua libzstd
+  (`zstd_safe::version_number()`) e o `SHA-256` do dict treinado que
+  derivou. O servidor responde `DICT_SYNC_OK` com O SEU par
+  (versão, hash). Hashes iguais ⇒ o id 4 fica habilitado NOS DOIS SENTIDOS
+  (as respostas partem com id 4; frames id 4 do cliente decodificam).
+  Hashes diferentes (ou versões de zstd diferentes) ⇒ o cliente se mantém
+  no id 3 **só se o peer o concedeu**; peer v1.3 (sem `ZSTD_V`) nem
+  chega ao `DICT_SYNC` — conexão fica no id 3 normal. Degradar do id 4 ⇒
+  evento honesto `fxp_dict_divergente` no Caderno com as duas versões.
+  `DICT_SYNC` sem `ZSTD_V` concedido é violação de estado (ignorado —
+  mesmo tratamento de recurso não negociado, §4.5). Fail-closed por
+  construção do TIPO: o codec só decodifica id 4 diante do dicionário
+  treinado VERIFICADO (`DictConexao::ZstdV`) — id 4 com a matéria dos ids
+  2/3 ⇒ `UnknownCompression { received: 4 }`; divergência pós-liberação ⇒
+  `DecompressionFailed`. O treino em si é idêntico ao do id 3 (COVER,
+  teto 16 KiB, nível 3).
 - Fail-closed: decoder sem dicionário diante do id 2 ⇒ `UnknownCompression
   { received: 2 }` — **idêntico ao comportamento v1.1** (o codec é stateless
   e desconhece o id); diante do id 3 sem dicionário treinado (ou com a
   matéria do id 2) ⇒ `UnknownCompression { received: 3 }` — **idêntico ao
   comportamento v1.2** (o tipo do dicionário na conexão casa com o algoritmo:
-  id 2 exige a matéria concatenada, id 3 exige a treinada); dicionário
-  divergente ou blob corrupto ⇒ `DecompressionFailed`. Nunca lixo silencioso.
+  id 2 exige a matéria concatenada, id 3 exige a treinada); diante do id 4
+  sem o dicionário treinado VERIFICADO (ou com matéria dos ids 2/3) ⇒
+  `UnknownCompression { received: 4 }` — **idêntico ao comportamento v1.3**;
+  dicionário divergente ou blob corrupto ⇒ `DecompressionFailed`. Nunca lixo
+  silencioso.
 - Guarda de bomba: a região descomprimida ≤ 8192; excedeu ou blob corrupto ⇒
   erro de decodificação (`DecompressionFailed`), nunca execução parcial.
 
@@ -404,7 +447,7 @@ Prioridade da fila: `0` = máxima (comandos associados a `subvert` — FORMAL
 | `in-process` | chamada direta (sem fio) | modo local; orçamento ≤ 10 µs/mensagem |
 | `unix`     | frames §2 sobre `UnixStream` (SOCK_STREAM) | local entre processos (`fxpd`) |
 | `tcp`      | frames §2 sobre `TcpStream` | remoto — mesma semântica, timeouts maiores |
-| `tcps` (v1.2) | frames §2 sobre **TLS 1.3** (rustls, provedor `ring`) | remoto com confidencialidade + MAC; **nunca degrada** para texto plano; v1.3: TOFU, resumo de sessão e 0-RTT (§7) |
+| `tcps` (v1.2) | frames §2 sobre **TLS 1.3** (rustls, provedor `ring`) | remoto com confidencialidade + MAC; **nunca degrada** para texto plano; v1.3: TOFU, resumo de sessão e 0-RTT (§7); v1.4: TOFU estrito, multi-pin com sobreposição e sessões do servidor em disco (§7) |
 | `udp-beacon` (v1.1) | datagrama FXPD §4.9 (sem ack) | descoberta multicast, anúncio only; v1.2: grupos IPv6 e SSM IPv4 (§4.9); v1.3: SSM IPv6 (§4.9) |
 | `mdns` (v1.2, feature) | DNS-SD §4.10 | descoberta alternativa ao beacon |
 
@@ -422,11 +465,54 @@ digital vista na PRIMEIRA conexão é gravada num store local
 determinístico `{"host:porta":"sha256:hex"}`, escrito atomicamente via
 rename) e as conexões seguintes verificam contra ela. Divergência (outro
 certificado no mesmo host:porta) ⇒ falha fechada com motivo TOFU no Caderno
-— a semântica de segurança é a do `known_hosts` do SSH, com a diferença
-honestidade: NÃO há TOFU estrito (`accept-new`) nem prompt interativo: o
-operador que quer pin imutável usa `@sha256:HEX`. Store ausente ou corrupto
-⇒ falha fechada da conexão (nunca confiar sem poder registrar). Unix + TLS é
-recusado honestamente no arranque (não faz sentido empilhar camadas).
+— a semântica de segurança é a do `known_hosts` do SSH. Store ausente ou
+corrupto ⇒ falha fechada da conexão (nunca confiar sem poder registrar).
+Unix + TLS é recusado honestamente no arranque (não faz sentido empilhar
+camadas).
+
+**v1.4 — TOFU estrito (`accept-new`) e rotação de pins (§7):**
+
+1. **TOFU estrito** (`tcps:host:porta@tofu-estrito`): o modo v1.3 aprende a
+   primeira impressão digital; o estrito NUNCA aprende — o alvo precisa já
+   existir no store (allow-list operacional: o dono do endpoint registra o
+   pin ANTES da primeira conexão, exatamente o `accept-new` recusado do SSH).
+   Alvo ausente no store ⇒ `TofuFalha::Desconhecida` e conexão recusada;
+   presente ⇒ qualquer pin registrado da entrada vale (o store aceita as
+   três formas de entrada: legada `"host:porta":"sha256:hex"`, nova
+   `{"pins":["sha256:h1","sha256:h2"]}` e a mistura — carga honesta das
+   duas gerações).
+2. **Rotação de certificado com sobreposição** (`tcps:host:porta@sha256:H1,H2`):
+   a lista de pins existe para a JANELA de rotação — o operador adiciona o
+   pin do certificado NOVO mantendo o VELHO, troca o certificado no
+   servidor (clientes com pin duplo continuam conectando DURANTE a troca) e
+   remove o pin velho DEPOIS (API `adicionar_pin`/`remover_pin` no store;
+   teto de 8 pins por endpoint — sobreposição de rotação, não lista de
+   confiança). Reparse: `description()` do endpoint devolve
+   `tcps:host:porta@sha256:H1,H2` (roundtrip de config).
+3. **Formato do store:** entrada com um pin só continua sendo escrita no
+   formato legado `{"host:porta":"sha256:hex"}` (bit a bit compatível com a
+   v1.3); dois ou mais pins ⇒ `{"host:porta":{"pins":["sha256:h1",…]}}`.
+   Parser aceita as duas formas e a mistura.
+
+**Sessão retomada entre PROCESSOS (v1.4 §7):** o §9 da v1.3 registrava que
+o cache de tickets era só em memória — o `fxpd` que renasce (deploy, crash,
+restart) perdia as sessões e todo cliente pagava handshake completo. A
+v1.4 persiste o storage de sessões do SERVIDOR em disco
+(`fxpd --tls-sessions ARQUIVO`): o rustls 0.23 trafega o estado de sessão
+do servidor como bytes crus (trait `StoresServerSessions`), então o cache
+(`src/sessoes.rs`, `CacheSessoesDisco`) grava cada `put`/`take`
+atomicamente (`.tmp` + rename, permissão `0600` — blob de sessão é material
+de retomada: quem lê o arquivo pode retomar), com evicção do mais velho
+acima do teto (1024, a mesma ordem do cache em memória do rustls) e poda
+por idade (7 dias, teto do TLS para tickets). O cliente que renasce NÃO
+retoma (ticket do cliente em disco não é possível no rustls 0.23 —
+`Tls13ClientSessionValue` é opaco, rustls/rustls#2287; a API que falta só
+entra na 0.24 — PR rustls#2907; registrado como trabalho futuro na §9).
+Store de sessões corrompido no arranque ⇒ falha honesta do `fxpd` (nunca
+recomeçar silencioso material de sessão). O 0-RTT da v1.3 segue intacto:
+storage stateful é justamente o que o rustls EXIGE para early data (um
+ticketer stateless desligaria o 0-RTT — server/tls13.rs) — persistir em
+disco mantém os DOIS ganhos: retomada entre processos E 0-RTT.
 
 **Resumo de sessão e 0-RTT (v1.3):** o `ClientConfig` do cliente é cacheado
 por chave de confiança (pin ou `host:porta@tofu`) — com o cache em memória
@@ -487,8 +573,20 @@ dono canônico único da máquina de estados — os loops genéricos
 | dict treinado determinístico; id 3 roundtrip; threshold e nunca inflar (§4.8, v1.3) | id 3 | `tests/v13.rs` |
 | id 3 sem dict treinado falha como v1.2; id 2 com dict treinado falha (§4.8, v1.3) | `UnknownCompression{3}/{2}` | `tests/v13.rs` |
 | zstd negociado com DICT; sem treino/bit sai da interseção; degrada no id 2 (§4.8, v1.3) | `CAPS` bits 3+4 | `tests/v13.rs` |
+| id 4 roundtrip fail-closed tipado; bit 5 vira ZSTD_V, reservados 6–15 (§4.5/§4.8, v1.4) | id 4 / `caps::ZSTD_V` | `tests/v14.rs` + `tests/schema_roundtrip.rs` |
+| `DICT_SYNC` no fio; hash casado libera id 4 nos dois sentidos (§4.8, v1.4) | `DICT_SYNC`/`DICT_SYNC_OK` | `tests/v14.rs` |
+| hash divergente ⇒ degrada honesta para id 3, sem frame id 4 (§4.8, v1.4) | `DICT_SYNC_OK` divergente | `tests/v14.rs` |
+| peer v1.3 não concede bit 5; caminho id 3 permanece intacto (§4.5, v1.4) | interseção `CAPS_OK` | `tests/v14.rs` |
+| multi-pin parse/reparse; pins malformados recusados (§7, v1.4) | `@sha256:H1,H2` | `tests/v14.rs` |
+| TOFU estrito: endpoint e store (legado/novo/misto); sem entrada falha com motivo (§7, v1.4) | `@tofu-estrito` | `tests/v14.rs` |
+| aprendizagem v1.3 intacta com múltiplos pins no store (§7, v1.4) | store multi-pin | `tests/v14.rs` |
+| rotação de certificado com sobreposição de pins, e2e (§7, v1.4) | pins duplos | `tests/v14.rs` |
+| e2e estrito: sem entrada falha fechado; semeado conecta (§7, v1.4) | bus + `@tofu-estrito` | `tests/v14.rs` |
+| sessão retoma entre RENASCIMENTOS do processo; 0-RTT aceito (§7, v1.4) | `--tls-sessions` | `tests/v14.rs` |
+| cache de sessões em disco: put/take/persistência/evicção; corrupto falha (§7, v1.4) | `CacheSessoesDisco` | `tests/v14.rs` |
+| 0-RTT quantificado com RTT real > 1 ms (§9, v1.4) | proxy de atraso | `benches/fxp.rs` (`v14_tls_0rtt_rtt`) |
 
-## 9. Extensões (estado da v1.3)
+## 9. Extensões (estado da v1.4)
 
 **Implementado na v1.1** (antes listadas como trabalho futuro na antiga §9):
 compressão (§4.8), batching de leituras (§4.7), descoberta multicast (§4.9),
@@ -534,10 +632,50 @@ da v1.2, todas opt-in, com o fio default bit a bit v1.0/v1.1/v1.2):
    normal. `ACT`/`READ` nunca viajam adiantados (replay); com AUTH+PSK a
    ordem do §4.6 preserva o servidor-fala-primeiro.
 
-**Fica registrado como trabalho futuro (fora da v1.3):** TOFU estrito
-(`accept-new`) e rotação de pins com sobreposição; `zstd` com dicionário
-versionado no fio (id 4+, para pontas com versões de zstd diferentes
-negociarem compatibilidade); key rotation do certificado do servidor com
-overlap de pin; sessão retomada entre PROCESSOS (cache de tickets em disco
-— hoje o cache é em memória por processo); benchmark de 0-RTT em rede com
-RTT real (> 1 ms) para quantificar o ganho fora do loopback.
+**Implementado na v1.4** (as cinco extensões que ficaram registradas na §9
+da v1.3, todas opt-in, com o fio default bit a bit v1.0/v1.1/v1.2/v1.3):
+
+1. **TOFU estrito (`accept-new`)** (§7): endpoint `@tofu-estrito`; o alvo
+   precisa preexistir no store — nunca aprende, nunca pergunta. Store lê
+   legado/novo/misto; entrada só com o pin desconhecido ⇒ falha fechada com
+   motivo (§7).
+2. **Rotação de pins com sobreposição** (§7): multi-pin
+   `@sha256:H1,H2` (teto 8), store multi-pino com
+   `adicionar_pin`/`remover_pin`, e2e de rotação com certificado novo
+   aceito durante a janela de sobreposição.
+3. **zstd com dicionário versionado no fio (id 4 + `DICT_SYNC`)** (§4.8):
+   bit `ZSTD_V` (5, sempre com `ZSTD + DICT`); troca de
+   `(zstd_version, hash do dict)` após o `HELLO`; hash casado libera o id
+   4 nos dois sentidos; divergente ⇒ degradação honesta para o id 3 com
+   evento `fxp_dict_divergente` no Caderno — pontas com libzstd diferentes
+   agora NEGOCIAM compatibilidade em vez de quebrar no primeiro frame.
+4. **Sessão retomada entre processos** (§7): storage de sessões do
+   SERVIDOR em disco (`--tls-sessions`, `CacheSessoesDisco`) — write-through
+   atômico `0600`, evicção LRU-por-idade (teto 1024), poda de 7 dias;
+   retomada `Resumed` + 0-RTT aceito contra um servidor RECOMEÇADO (e2e).
+   Ticket do cliente em disco segue bloqueado no rustls 0.23 (§7 —
+   rustls/rustls#2287, resolvido na 0.24).
+5. **Benchmark de 0-RTT com RTT real** (§9): proxy TCP que injeta atraso
+   unilateral por voo (`FXP_BENCH_RTT_US`, default 3000 µs ⇒ RTT 6 ms);
+   0-RTT ≈ 22,4 ms × retomado sem 0-RTT ≈ 25,5 ms × plano ≈ 6,8 ms — o
+   0-RTT poupa ~1 voo por conexão no RTT medido (números completos e
+   método em [FXP-V1.4-REPORT](reports/FXP-V1.4-REPORT.md)).
+
+**Fica registrado como trabalho futuro (fora da v1.4):**
+
+1. **Ticket de sessão do CLIENTE em disco** — desbloqueado quando o
+   workspace adotar rustls ≥ 0.24 (PR rustls#2907 expõe a serialização de
+   `Tls13ClientSessionValue`; hoje o cliente retoma só dentro do mesmo
+   processo). Com ele, o mesmo desenho do `CacheSessoesDisco` cobre a
+   ponta cliente (arquivo `0600` no state dir do usuário).
+2. **Prompt interativo de TOFU** (estilo `known_hosts` do SSH com
+   confirmação humana) — segue fora do escopo do FXP (o bus não tem TTY);
+   o TOFU estrito da v1.4 cobre o caso operacional por allow-list.
+3. **`DICT_SYNC` com rollback de dicionário** — hoje o hash casado libera o
+   id 4 para a CONEXÃO; uma renegociação de registro (HELLO novo) com dict
+   diferente já é coberta pela re-derivação na conexão seguinte; sincronizar
+   o dict no MEIO da conexão (sem reabrir) continuaria exigindo estado de
+   compressão por conexão no codec — fora do princípio "codec stateless".
+4. **Beacon autenticado** — o anúncio multicast segue sem MAC (o pin/TOFU
+   do `tcps` é a raiz de confiança); assinar o beacon (ed25519 no TXT)
+   continua registrado como ideia, não agendado.

@@ -95,6 +95,11 @@ pub enum DeviceKind {
     },
 }
 
+/// Teto de pins por endpoint `tcps:` (v1.4 §7): a lista existe para a
+/// janela de ROTAÇÃO (velho+novo com sobreposição), não para virar lista de
+/// confiança — mais que isso é cheiro operacional, o parse recusa.
+const MAX_PINS: usize = 8;
+
 /// Endereço de transporte remoto (schema v1 sobre stream).
 #[derive(Debug, Clone, PartialEq)]
 pub enum RemoteAddr {
@@ -202,28 +207,43 @@ impl Endpoint {
                 })
             }
             "tcps" => {
-                // v1.2/v1.3 §7: tcps:host:porta@CONFIANÇA — o slot final é
-                // `sha256:HEX` (pin declarado) ou `tofu` (confiança na
-                // primeira conexão, gravada no store). Sem slot não há
-                // confiança declarada e a construção falha.
+                // v1.2/v1.3/v1.4 §7: tcps:host:porta@CONFIANÇA — o slot final
+                // é `sha256:HEX` (pin v1.2), `sha256:H1,H2,…` (v1.4 —
+                // rotação com sobreposição), `tofu` (v1.3) ou
+                // `tofu-estrito` (v1.4 — exige entrada no store). Sem slot
+                // não há confiança declarada e a construção falha.
                 let (target, confianca_txt) = rest.rsplit_once('@').ok_or_else(|| {
                     RegistryError::InvalidEndpoint(format!(
-                        "{s} (tcps exige @sha256:HEX ou @tofu — sem confiança declarada não há conexão)"
+                        "{s} (tcps exige @sha256:HEX[,HEX2,…], @tofu ou @tofu-estrito — sem confiança declarada não há conexão)"
                     ))
                 })?;
                 let trust = if confianca_txt == "tofu" {
                     crate::tls::Trust::Tofu
+                } else if confianca_txt == "tofu-estrito" {
+                    crate::tls::Trust::TofuEstrito
                 } else {
-                    let hex = confianca_txt.strip_prefix("sha256:").ok_or_else(|| {
+                    let pins_txt = confianca_txt.strip_prefix("sha256:").ok_or_else(|| {
                         RegistryError::InvalidEndpoint(format!(
-                            "{s} (confiança deve ser sha256:HEX de 64 dígitos ou tofu)"
+                            "{s} (confiança deve ser sha256:HEX[,HEX2,…], tofu ou tofu-estrito)"
                         ))
                     })?;
-                    crate::tls::Trust::Pin(crate::tls::unhex32(hex).ok_or_else(|| {
-                        RegistryError::InvalidEndpoint(format!(
-                            "{s} (pin sha256 precisa de 64 dígitos hex)"
-                        ))
-                    })?)
+                    let mut pins = Vec::new();
+                    for hex in pins_txt.split(',') {
+                        let fp = crate::tls::unhex32(hex).ok_or_else(|| {
+                            RegistryError::InvalidEndpoint(format!(
+                                "{s} (pin sha256 precisa de 64 dígitos hex; multi-pin separa por vírgula)"
+                            ))
+                        })?;
+                        if !pins.contains(&fp) {
+                            pins.push(fp);
+                        }
+                    }
+                    if pins.len() > MAX_PINS {
+                        return Err(RegistryError::InvalidEndpoint(format!(
+                            "{s} (máximo de {MAX_PINS} pins por endpoint — sobreposição de rotação, não lista de confiança)"
+                        )));
+                    }
+                    crate::tls::Trust::Pin(pins)
                 };
                 let (host, port) = parse_tcp_target(s, target, "host:porta")?;
                 Ok(Endpoint::Remote {
@@ -250,11 +270,15 @@ impl Endpoint {
                 RemoteAddr::Unix(p) => format!("unix:{}", p.display()),
                 RemoteAddr::Tcp { host, port } => format!("tcp:{host}:{port}"),
                 RemoteAddr::TcpTls { host, port, trust } => match trust {
-                    crate::tls::Trust::Pin(fingerprint) => format!(
+                    crate::tls::Trust::Pin(pins) => format!(
                         "tcps:{host}:{port}@sha256:{}",
-                        crate::tls::hex32(fingerprint)
+                        pins.iter()
+                            .map(crate::tls::hex32)
+                            .collect::<Vec<_>>()
+                            .join(",")
                     ),
                     crate::tls::Trust::Tofu => format!("tcps:{host}:{port}@tofu"),
+                    crate::tls::Trust::TofuEstrito => format!("tcps:{host}:{port}@tofu-estrito"),
                 },
             },
             Endpoint::AutoRemote { identifier } => format!("discover:{identifier}"),

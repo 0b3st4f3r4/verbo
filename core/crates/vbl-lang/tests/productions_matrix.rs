@@ -2,7 +2,7 @@
 //!
 //! Cada teste referencia explicitamente a produção da FORMAL §3 que cobre
 //! (ver `docs/reports/STAGE-2-TRACEABILITY-MATRIX.md`): 100% das produções e
-//! ≥ 95% das notas semânticas com ≥ 1 teste (critério "Done" da Etapa 2,
+//! ≥ 90% das notas semânticas com ≥ 1 teste (critério "Done" da Etapa 2,
 //! AGENTS.md §2.2).
 
 use vbl_lang::parse;

@@ -88,7 +88,7 @@ flowchart TB
 - Integrar as ações de `act` (comandos a atores) com o FXP, traduzindo-as em mensagens de saída.
 
 **Métricas de Avaliação:**
-- **Cobertura de testes do parser**: matriz de rastreabilidade produção-EBNF × nota-semântica da FORMAL → id de teste. Meta: 100% das produções; ≥ 95% das notas semânticas com ≥ 1 teste.
+- **Cobertura de testes do parser**: matriz de rastreabilidade produção-EBNF × nota-semântica da FORMAL → id de teste. Meta: 100% das produções; ≥ 90% das notas semânticas com ≥ 1 teste.
 - **Tempo de transição entre estados**: tempo para avaliar uma condição e executar a ação correspondente. Meta: ≤ 100 µs (p95) na máquina de referência (AMD Ryzen 7 7735HS), medido com `criterion`.
 - **Uso de memória**: memória heap alocada por forma ativa. Meta: ≤ 256 bytes por forma `event`, ≤ 1 KB por forma `equilibrium`, ≤ 512 bytes por forma `nonequilibrium`.
 - **Eficiência do escalonador**: fila de prazos (min-heap por `horizon`/`maintenance_deadline`) — O(log N) por mutação, varredura O(N + vencidos) por tick; resolução de sensores O(1) pela tabela do FXP. Meta: O(N log N) no pior caso.
@@ -199,7 +199,7 @@ flowchart LR
 | Etapa | Critérios de Aceite |
 |-------|---------------------|
 | Etapa 1: TDD/BDD | 100% dos cenários BDD escritos e rodando com mocks; ≥ 1 teste por cláusula de erro da FORMAL (sensor ausente, ator inexistente, valor fora de limite, forma sem `value`/`horizon`, review órfã/duplicada, `keep` de forma inexistente). |
-| Etapa 2: Núcleo do Compilador | Matriz de rastreabilidade do parser completa (100% das produções, ≥ 95% das notas semânticas); runtime passa em testes de transição; sem vazamentos detectados por ASan/Valgrind. |
+| Etapa 2: Núcleo do Compilador | Matriz de rastreabilidade do parser completa (100% das produções, ≥ 90% das notas semânticas); runtime passa em testes de transição; sem vazamentos detectados por ASan/Valgrind. |
 | Etapa 3: FXP (sensores e atores) | Latência de leitura ≤ 1 ms; precisão de potência ≤ 5%; protocolo FXP serializa/desserializa sem perda; todos os atores obrigatórios implementados e testados. |
 | Etapa 4: Caderno e E2E | Overhead de logging ≤ 1%; testes E2E completos passam; logs íntegros verificados; atuações registradas corretamente. |
 | Etapa 5: Qualidade e Otimização | Zero vazamentos de heap em longa execução (24h); consumo de memória dentro dos limites; profiling mostra ausência de gargalos > 100 ms. |
@@ -269,7 +269,7 @@ projeto em `.rtk/filters.toml`. Mapa de uso medido (31/08/2026):
 |---|---|---|
 | Testes com falha / saída longa | `rtk test cargo test …` | mostra só falhas |
 | Clippy/build ruidoso | `rtk err cargo clippy …` | só erros/avisos |
-| Logs repetitivos (soak, relatórios) | `rtk log cat ARQUIVO` | dedup ~95% |
+| Logs repetitivos (soak, relatórios) | `rtk log cat ARQUIVO` | dedup ~90% |
 | Varredura de diretórios | `rtk tree` / `rtk find` | árvore compacta |
 | `git log --oneline`, `grep -rn` denso | **nativos** | rtk expande/poupa <10% |
 

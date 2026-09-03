@@ -260,6 +260,10 @@ fn serve_connection(
     // prova de que o outro lado já derivou os mesmos bytes.
     let mut dict_local: Option<schema::compress::DictConexao> = None;
     let mut dict_ready = false;
+    // v1.4 §4.8: o dicionário TREINADO fica reservado quando `ZSTD_V` é
+    // concedido — só vira `DictConexao::ZstdV` (id 4) após o `DICT_SYNC`
+    // com hash casado; até lá as respostas saem no id 2/LZ4/plano.
+    let mut dict_treinado: Option<Vec<u8>> = None;
     loop {
         if shutdown.load(Ordering::SeqCst) {
             return;
@@ -290,6 +294,7 @@ fn serve_connection(
                     config,
                     &mut caps_negociadas,
                     &mut dict_local,
+                    &mut dict_treinado,
                 ) {
                     // O HELLO de resposta nunca sai com dict (o cliente só
                     // terá o dicionário depois de recebê-lo).
@@ -346,6 +351,7 @@ fn dispatch(
     config: &PeerConfig,
     caps_negociadas: &mut u16,
     dict_local: &mut Option<schema::compress::DictConexao>,
+    dict_treinado: &mut Option<Vec<u8>>,
 ) -> Option<Message> {
     match msg.opcode {
         op::CAPS => {
@@ -354,7 +360,7 @@ fn dispatch(
             };
             // Interseção pedidos × anunciados; bits reservados ignorados
             // (peers antigos ignoram bits novos no decode ⇒ interseção sem
-            // eles — a promoção v1.2/v1.3 é segura por construção).
+            // eles — a promoção v1.2/v1.3/v1.4 é segura por construção).
             *caps_negociadas = capabilities & config.caps & !caps::RESERVED;
             let nomes: Vec<String> = bus
                 .lock()
@@ -365,10 +371,30 @@ fn dispatch(
                         .collect()
                 })
                 .unwrap_or_default();
-            // v1.3 §4.8: ZSTD concedido SÓ com DICT também concedido (o
-            // gatilho do HELLO é o mesmo) e SÓ quando o dicionário TREINA —
-            // sem treino, degradação honesta: o bit sai da interseção.
-            if *caps_negociadas & caps::ZSTD != 0 {
+            // v1.4 §4.8: ZSTD_V (id 4) concedido SÓ com DICT também
+            // concedido e SÓ quando o dicionário TREINA. O treinado fica
+            // RESERVADO até o `DICT_SYNC` (hash casado) — até lá o servidor
+            // fala id 2/LZ4/plano. Treino impossível ⇒ ZSTD_V e ZSTD saem
+            // da interseção (o id 3 sem verificação não combina com cliente
+            // que pediu verificação).
+            if *caps_negociadas & caps::ZSTD_V != 0 {
+                match (*caps_negociadas & caps::DICT != 0)
+                    .then(|| schema::compress::zstd_dict_from_registry(&nomes))
+                    .flatten()
+                {
+                    Some(treinado) => {
+                        *dict_treinado = Some(treinado);
+                        *dict_local = Some(schema::compress::DictConexao::Lz4(
+                            schema::compress::dict_from_registry(&nomes),
+                        ));
+                    }
+                    None => *caps_negociadas &= !(caps::ZSTD_V | caps::ZSTD),
+                }
+            } else if *caps_negociadas & caps::ZSTD != 0 {
+                // v1.3 §4.8: ZSTD concedido SÓ com DICT também concedido (o
+                // gatilho do HELLO é o mesmo) e SÓ quando o dicionário
+                // TREINA — sem treino, degradação honesta: o bit sai da
+                // interseção.
                 match (*caps_negociadas & caps::DICT != 0)
                     .then(|| schema::compress::zstd_dict_from_registry(&nomes))
                     .flatten()
@@ -385,6 +411,27 @@ fn dispatch(
                 ));
             }
             Some(Message::caps_ok(*caps_negociadas, msg.seq))
+        }
+        op::DICT_SYNC => {
+            // v1.4 §4.8: hash casado ⇒ id 4 liberado nos DOIS sentidos
+            // (respostas partem com id 4 e frames id 4 do cliente decodificam);
+            // divergente ⇒ resposta honesta com o par do servidor — o cliente
+            // degrada para o id 2 SEM tentar frame que falharia.
+            let Body::DictSync { dict_hash, .. } = &msg.body else {
+                return None;
+            };
+            let Some(treinado) = dict_treinado.as_ref() else {
+                return None; // sem ZSTD_V concedido, DICT_SYNC é violação
+            };
+            let meu_hash = schema::compress::hash_dict(treinado);
+            if meu_hash == *dict_hash {
+                *dict_local = Some(schema::compress::DictConexao::ZstdV(treinado.clone()));
+            }
+            Some(Message::dict_sync_ok(
+                schema::compress::zstd_version(),
+                meu_hash,
+                msg.seq,
+            ))
         }
         op::READ => {
             let mut resp = handle_read(bus, ledger, &msg.name, msg.seq);
@@ -447,6 +494,13 @@ fn write_frame(
     dict: Option<&schema::compress::DictConexao>,
 ) -> Result<(), TransportError> {
     let frame = match dict {
+        // v1.4 §4.8: dicionário treinado VERIFICADO (id 4) tem precedência —
+        // só existe aqui depois do DICT_SYNC com hash casado.
+        Some(schema::compress::DictConexao::ZstdV(dict)) => {
+            let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
+            schema::encode_with_zstd_dict_v(msg, dict, &mut f).map_err(TransportError::from)?;
+            f
+        }
         Some(schema::compress::DictConexao::Zstd(dict)) => {
             let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
             schema::encode_with_zstd_dict(msg, dict, &mut f).map_err(TransportError::from)?;

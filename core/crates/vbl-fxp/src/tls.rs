@@ -57,24 +57,38 @@ pub(crate) const EARLY_DATA_MAX: u32 = 512;
 /// Impressão digital SHA-256 do DER do certificado folha (`tcps:`).
 pub type Fingerprint = [u8; 32];
 
-/// Confiança declarada do endpoint `tcps:` (v1.3 §7) — a única pergunta
+/// Confiança declarada do endpoint `tcps:` (v1.3/v1.4 §7) — a única pergunta
 /// feita ao certificado do servidor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Trust {
-    /// `@sha256:HEX` (v1.2): o pin É a confiança declarada.
-    Pin(Fingerprint),
+    /// `@sha256:HEX` (v1.2) ou `@sha256:H1,H2,…` (v1.4 — rotação com
+    /// sobreposição): o pin É a confiança declarada; QUALQUER um dos
+    /// declarados autentica o servidor (o novo entra ANTES da troca do
+    /// certificado, o velho sai DEPOIS).
+    Pin(Vec<Fingerprint>),
     /// `@tofu` (v1.3): grava na primeira conexão, verifica nas seguintes.
     Tofu,
+    /// `@tofu-estrito` (v1.4): exige entrada PRÉVIA no store
+    /// ([`TofuStore`] como allow-list operacional) — nunca aprende sozinho;
+    /// desconhecido ⇒ falha fechada com motivo `Desconhecida`. Aceita
+    /// qualquer pin da entrada (rotação pela mesma porta da v1.3).
+    TofuEstrito,
 }
 
 /// Confiança do cliente JÁ RESOLVIDA para a conexão (o TOFU carrega o store
 /// aberto; o pin é autossuficiente) — parâmetro de [`client_stream`].
 #[derive(Debug, Clone)]
 pub enum ConfiancaCliente {
-    /// Pin fixo (v1.2).
-    Pin(Fingerprint),
+    /// Pin(s) fixo(s) (v1.2/v1.4 — qualquer um autentica).
+    Pin(Vec<Fingerprint>),
     /// TOFU (v1.3): store compartilhado + alvo (`host:porta`).
     Tofu {
+        store: Arc<Mutex<TofuStore>>,
+        host: String,
+        port: u16,
+    },
+    /// TOFU estrito (v1.4): o alvo DEVE estar no store (allow-list).
+    TofuEstrito {
         store: Arc<Mutex<TofuStore>>,
         host: String,
         port: u16,
@@ -85,8 +99,13 @@ pub enum ConfiancaCliente {
 /// MESMO `ClientConfig` entre conexões (o cache de tickets mora nele).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum ChaveConfianca {
-    Pin(Fingerprint),
+    Pin(Vec<Fingerprint>),
     Tofu {
+        host: String,
+        port: u16,
+        store: PathBuf,
+    },
+    TofuEstrito {
         host: String,
         port: u16,
         store: PathBuf,
@@ -96,8 +115,13 @@ pub(crate) enum ChaveConfianca {
 impl From<&ConfiancaCliente> for ChaveConfianca {
     fn from(c: &ConfiancaCliente) -> Self {
         match c {
-            ConfiancaCliente::Pin(fp) => ChaveConfianca::Pin(*fp),
+            ConfiancaCliente::Pin(fp) => ChaveConfianca::Pin(fp.clone()),
             ConfiancaCliente::Tofu { store, host, port } => ChaveConfianca::Tofu {
+                host: host.clone(),
+                port: *port,
+                store: store.lock().map(|s| s.path.clone()).unwrap_or_default(),
+            },
+            ConfiancaCliente::TofuEstrito { store, host, port } => ChaveConfianca::TofuEstrito {
                 host: host.clone(),
                 port: *port,
                 store: store.lock().map(|s| s.path.clone()).unwrap_or_default(),
@@ -114,6 +138,14 @@ pub struct TlsAccept {
     pub certs_pem: String,
     /// PEM da chave privada correspondente.
     pub key_pem: String,
+    /// Cache de sessões TLS em DISCO (v1.4 §7 — sessão retomada entre
+    /// renascimentos do PEER): o storage stateful do rustls persiste no
+    /// arquivo (atômico, 0600 — blob de sessão é material de retomada).
+    /// `None` ⇒ cache em memória (comportamento v1.3, por processo).
+    /// Nota honesta: o lado CLIENTE do rustls 0.23 não expõe serialização
+    /// de tickets (`Tls13ClientSessionValue` opaco — rustls#2287, resolvido
+    /// só na 0.24), então o cache em disco é do lado do daemon.
+    pub sessoes: Option<PathBuf>,
 }
 
 /// Falha de TLS — distinta de falha de schema/transporte puro.
@@ -137,7 +169,8 @@ impl std::fmt::Display for TlsError {
 
 impl std::error::Error for TlsError {}
 
-/// Falha de TOFU (v1.3 §7) — distinta de falha de config/handshake comum.
+/// Falha de TOFU (v1.3 §7; estrito v1.4) — distinta de falha de
+/// config/handshake comum.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TofuFalha {
     /// Impressão digital vista ≠ gravada na primeira conexão.
@@ -145,6 +178,9 @@ pub enum TofuFalha {
         armazenada: Fingerprint,
         vista: Fingerprint,
     },
+    /// Modo ESTRITO (v1.4): o alvo não tem entrada no store — a confiança
+    /// nasce declarada (allow-list operacional), nunca aprendida.
+    Desconhecida { alvo: String },
     /// O store não pôde ser gravado — fail closed: permitir a conexão sem
     /// conseguir registrar a primeira use degradaria TOFU a "confiar em
     /// qualquer um", silenciosamente.
@@ -161,6 +197,11 @@ impl std::fmt::Display for TofuFalha {
                 hex32(armazenada),
                 hex32(vista)
             ),
+            TofuFalha::Desconhecida { alvo } => write!(
+                f,
+                "TOFU estrito: {alvo} não tem entrada no store (allow-list operacional — \
+                 registre o pin antes da primeira conexão, v1.4 §7)"
+            ),
             TofuFalha::Io(m) => write!(f, "store TOFU não pôde ser gravado: {m}"),
         }
     }
@@ -168,14 +209,17 @@ impl std::fmt::Display for TofuFalha {
 
 impl std::error::Error for TofuFalha {}
 
-/// Store TOFU (v1.3 §7): `"host:porta" → impressão digital` em arquivo JSON
-/// (`Json` do runtime — determinístico, chaves ordenadas). Primeira conexão
-/// GRAVA; seguintes VERIFICAM; divergência ou falha de persistência ⇒ falha
-/// fechada ([`TofuFalha`]).
+/// Store TOFU (v1.3 §7; multi-pin v1.4): `"host:porta" → [impressões
+/// digitais]` em arquivo JSON (`Json` do runtime — determinístico, chaves
+/// ordenadas). No modo aprendiz ([`Trust::Tofu`]) a primeira conexão GRAVA;
+/// as seguintes VERIFICAM; no estrito ([`Trust::TofuEstrito`], v1.4) o alvo
+/// DEVE já ter entrada (allow-list — nunca aprende). Entradas com MÚLTIPLAS
+/// pins são a janela de rotação: qualquer um dos declarados autentica.
+/// Divergência ou falha de persistência ⇒ falha fechada ([`TofuFalha`]).
 #[derive(Debug)]
 pub struct TofuStore {
     path: PathBuf,
-    entradas: BTreeMap<String, Fingerprint>,
+    entradas: BTreeMap<String, Vec<Fingerprint>>,
 }
 
 impl TofuStore {
@@ -211,22 +255,74 @@ impl TofuStore {
         &self.path
     }
 
-    /// Verifica a impressão digital do servidor contra o store. Primeira
-    /// use ⇒ grava (persistência atômica tmp+rename) e devolve `true`;
-    /// conhecida e igual ⇒ `false`; divergente/impossível gravar ⇒ falha.
+    /// Pins conhecidos do alvo (diagnóstico/CLI de rotação).
+    pub fn pins_de(&self, alvo: &str) -> Option<&[Fingerprint]> {
+        self.entradas.get(alvo).map(|v| v.as_slice())
+    }
+
+    /// Modo APRENDIZ (v1.3): verifica a impressão digital contra o store.
+    /// Primeira use ⇒ grava (persistência atômica tmp+rename) e devolve
+    /// `true`; conhecida e igual ⇒ `false`; divergente/impossível gravar ⇒
+    /// falha.
     pub fn verificar(&mut self, alvo: &str, fp: Fingerprint) -> Result<bool, TofuFalha> {
         match self.entradas.get(alvo) {
-            Some(armazenada) if *armazenada == fp => Ok(false),
-            Some(&armazenada) => Err(TofuFalha::Divergencia {
-                armazenada,
+            Some(pins) if pins.contains(&fp) => Ok(false),
+            Some(pins) => Err(TofuFalha::Divergencia {
+                armazenada: pins[0],
                 vista: fp,
             }),
             None => {
-                self.entradas.insert(alvo.to_string(), fp);
+                self.entradas.insert(alvo.to_string(), vec![fp]);
                 self.persistir().map_err(|e| TofuFalha::Io(e.to_string()))?;
                 Ok(true)
             }
         }
+    }
+
+    /// Modo ESTRITO (v1.4): o alvo DEVE ter entrada no store (allow-list
+    /// operacional); qualquer pin da entrada autentica; desconhecido ⇒
+    /// `Desconhecida` — o modo NUNCA aprende sozinho.
+    pub fn verificar_estrito(&mut self, alvo: &str, fp: Fingerprint) -> Result<bool, TofuFalha> {
+        match self.entradas.get(alvo) {
+            Some(pins) if pins.contains(&fp) => Ok(false),
+            Some(pins) => Err(TofuFalha::Divergencia {
+                armazenada: pins[0],
+                vista: fp,
+            }),
+            None => Err(TofuFalha::Desconhecida {
+                alvo: alvo.to_string(),
+            }),
+        }
+    }
+
+    /// Rotação (v1.4 §7): adiciona um pin à entrada do alvo (o NOVO
+    /// certificado entra ANTES do servidor trocar). Idempotente (`false`
+    /// quando já presente, sem escrita). Persistência atômica.
+    pub fn adicionar_pin(&mut self, alvo: &str, fp: Fingerprint) -> std::io::Result<bool> {
+        let pins = self.entradas.entry(alvo.to_string()).or_default();
+        if pins.contains(&fp) {
+            return Ok(false);
+        }
+        pins.push(fp);
+        self.persistir()?;
+        Ok(true)
+    }
+
+    /// Rotação (v1.4 §7): remove um pin da entrada (o cert VELHO sai DEPOIS
+    /// da troca). Entrada que esvazia é removida por inteiro. Idempotente.
+    pub fn remover_pin(&mut self, alvo: &str, fp: Fingerprint) -> std::io::Result<bool> {
+        let Some(pins) = self.entradas.get_mut(alvo) else {
+            return Ok(false);
+        };
+        let Some(pos) = pins.iter().position(|p| *p == fp) else {
+            return Ok(false);
+        };
+        pins.remove(pos);
+        if pins.is_empty() {
+            self.entradas.remove(alvo);
+        }
+        self.persistir()?;
+        Ok(true)
     }
 
     /// Persistência atômica: escreve em `.tmp` e renomea por cima.
@@ -239,18 +335,29 @@ impl TofuStore {
         std::fs::rename(&tmp, &self.path)
     }
 
-    /// JSON determinístico (chaves ordenadas pelo `BTreeMap`); valores são
-    /// `"sha256:<hex64>"` — autodescritivos (o algoritmo vai no arquivo;
-    /// trocar de hash no futuro não ambiguiza entradas antigas).
+    /// JSON determinístico (chaves ordenadas pelo `BTreeMap`). Entrada com
+    /// um só pin segue no formato v1.3 (`"sha256:<hex64>"` — arquivos
+    /// antigos não mudam à toa); entrada multi-pin usa o objeto v1.4
+    /// `{"pins":["sha256:…",…]}`. Valores autodescritivos: o algoritmo vai
+    /// no arquivo (trocar de hash no futuro não ambiguiza entradas antigas).
     fn serializar(&self) -> String {
+        let pin = |fp: &Fingerprint| vbl_runtime::json::Json::Str(format!("sha256:{}", hex32(fp)));
         vbl_runtime::json::Json::Obj(
             self.entradas
                 .iter()
-                .map(|(alvo, fp)| {
-                    (
-                        alvo.clone(),
-                        vbl_runtime::json::Json::Str(format!("sha256:{}", hex32(fp))),
-                    )
+                .map(|(alvo, pins)| {
+                    let valor = if pins.len() == 1 {
+                        pin(&pins[0])
+                    } else {
+                        let lista: Vec<vbl_runtime::json::Json> = pins.iter().map(pin).collect();
+                        debug_assert!(!lista.is_empty());
+                        vbl_runtime::json::Json::Obj(
+                            [("pins".to_string(), vbl_runtime::json::Json::Arr(lista))]
+                                .into_iter()
+                                .collect(),
+                        )
+                    };
+                    (alvo.clone(), valor)
                 })
                 .collect(),
         )
@@ -258,22 +365,44 @@ impl TofuStore {
     }
 }
 
-/// Store JSON (`{"alvo":"sha256:hex64",…}`) → mapa; hex puro (v1.3.0
-/// inicial) também é aceito. Qualquer violação ⇒ erro com motivo (nunca
-/// lixo parcial).
-fn json_para_store(txt: &str) -> Result<BTreeMap<String, Fingerprint>, &'static str> {
+/// Store JSON (`{"alvo":"sha256:hex64",…}` v1.3; `{"alvo":{"pins":[…]}}`
+/// v1.4; mistos são aceitos) → mapa. Hex puro do formato inicial também é
+/// aceito. Qualquer violação ⇒ erro com motivo (nunca lixo parcial).
+fn json_para_store(txt: &str) -> Result<BTreeMap<String, Vec<Fingerprint>>, &'static str> {
     let parsed = vbl_runtime::json::Json::parse(txt).ok_or("JSON inválido")?;
     let vbl_runtime::json::Json::Obj(map) = parsed else {
         return Err("store TOFU não é um objeto JSON");
     };
     let mut out = BTreeMap::new();
     for (alvo, v) in map {
-        let vbl_runtime::json::Json::Str(hex) = v else {
-            return Err("valor do store TOFU não é string");
+        let fp_de = |hex: &str| -> Result<Fingerprint, &'static str> {
+            let hex = hex.strip_prefix("sha256:").unwrap_or(hex);
+            unhex32(hex).ok_or("impressão digital do store não é sha256 hex de 64 dígitos")
         };
-        let hex = hex.strip_prefix("sha256:").unwrap_or(&hex);
-        let fp = unhex32(hex).ok_or("impressão digital do store não é sha256 hex de 64 dígitos")?;
-        out.insert(alvo, fp);
+        match v {
+            // Formato v1.3 (string única).
+            vbl_runtime::json::Json::Str(hex) => {
+                out.insert(alvo, vec![fp_de(&hex)?]);
+            }
+            // Formato v1.4 (objeto multi-pin).
+            vbl_runtime::json::Json::Obj(campos) => {
+                let Some(vbl_runtime::json::Json::Arr(pins)) = campos.get("pins") else {
+                    return Err("entrada multi-pin do store TOFU sem campo \"pins\" (lista)");
+                };
+                if pins.is_empty() {
+                    return Err("entrada multi-pin do store TOFU com lista vazia");
+                }
+                let mut fps = Vec::with_capacity(pins.len());
+                for p in pins {
+                    let vbl_runtime::json::Json::Str(hex) = p else {
+                        return Err("pin do store TOFU não é string");
+                    };
+                    fps.push(fp_de(hex)?);
+                }
+                out.insert(alvo, fps);
+            }
+            _ => return Err("valor do store TOFU não é string nem objeto de pins"),
+        }
     }
     Ok(out)
 }
@@ -344,6 +473,25 @@ pub(crate) fn server_config(accept: &TlsAccept) -> Result<rustls::ServerConfig, 
     .with_single_cert(certs, key)
     .map_err(|e| TlsError::Config(format!("certificado e chave não casam: {e}")))?;
     cfg.max_early_data_size = EARLY_DATA_MAX;
+    if let Some(p) = &accept.sessoes {
+        // v1.4 §7: storage stateful em DISCO — a sessão sobrevive ao
+        // renascimento do processo do peer. Ticketer stateless NÃO é o
+        // caminho: o rustls desliga early data (0-RTT) quando o servidor é
+        // stateless (server/tls13.rs — early_data_configured exige storage
+        // stateful); em disco mantemos os DOIS: retomada entre processos E
+        // 0-RTT. Store corrupto ⇒ arranque falha honesto.
+        let cache = crate::sessoes::CacheSessoesDisco::open(
+            p,
+            crate::sessoes::SESSOES_TETO,
+        )
+        .map_err(|e| {
+            TlsError::Config(format!(
+                "store de sessões TLS {}: {e}",
+                p.display()
+            ))
+        })?;
+        cfg.session_storage = Arc::new(cache);
+    }
     Ok(cfg)
 }
 
@@ -368,9 +516,12 @@ pub(crate) fn client_config_cached(
         return Ok(cfg.clone());
     }
     let cfg = match confianca {
-        ConfiancaCliente::Pin(fp) => client_config(*fp)?,
+        ConfiancaCliente::Pin(pins) => client_config(pins.clone())?,
         ConfiancaCliente::Tofu { store, host, port } => {
-            client_config_tofu(store.clone(), host.clone(), *port)?
+            client_config_tofu(store.clone(), host.clone(), *port, false)?
+        }
+        ConfiancaCliente::TofuEstrito { store, host, port } => {
+            client_config_tofu(store.clone(), host.clone(), *port, true)?
         }
     };
     let cfg = Arc::new(cfg);
@@ -379,13 +530,14 @@ pub(crate) fn client_config_cached(
 }
 
 /// `ClientConfig` com o verificador de **pin**: a única pergunta feita ao
-/// certificado do servidor é "sua impressão digital é a que eu declarei?".
+/// certificado do servidor é "sua impressão digital é UMA das que declarei?"
+/// (v1.4: múltiplos pins = janela de rotação com sobreposição).
 /// v1.3 §7: early data habilitado — na conexão retomada o frame `CAPS` parte
 /// como 0-RTT (o replay é inofensivo: CAPS idempotente por conexão).
-pub(crate) fn client_config(pin: Fingerprint) -> Result<rustls::ClientConfig, TlsError> {
+pub(crate) fn client_config(pins: Vec<Fingerprint>) -> Result<rustls::ClientConfig, TlsError> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let algs = provider.signature_verification_algorithms;
-    let verifier = Arc::new(VerificadorPin { pin, algs });
+    let verifier = Arc::new(VerificadorPin { pins, algs });
     let mut cfg = rustls::ClientConfig::builder_with_provider(provider)
         .with_protocol_versions(&[&rustls::version::TLS13])
         .map_err(|e| TlsError::Config(e.to_string()))?
@@ -396,18 +548,22 @@ pub(crate) fn client_config(pin: Fingerprint) -> Result<rustls::ClientConfig, Tl
     Ok(cfg)
 }
 
-/// `ClientConfig` com o verificador **TOFU** (v1.3 §7): a primeira conexão
-/// grava a impressão digital no store; as seguintes verificam contra ela.
+/// `ClientConfig` com o verificador **TOFU** (v1.3 §7; estrito v1.4): a
+/// primeira conexão grava a impressão digital no store e as seguintes
+/// verificam contra ela; no modo ESTRITO o alvo DEVE já ter entrada
+/// (allow-list — nunca aprende).
 pub(crate) fn client_config_tofu(
     store: Arc<Mutex<TofuStore>>,
     host: String,
     port: u16,
+    estrito: bool,
 ) -> Result<rustls::ClientConfig, TlsError> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let algs = provider.signature_verification_algorithms;
     let verifier = Arc::new(VerificadorTofu {
         store,
         alvo: format!("{host}:{port}"),
+        estrito,
         algs,
     });
     let mut cfg = rustls::ClientConfig::builder_with_provider(provider)
@@ -421,11 +577,13 @@ pub(crate) fn client_config_tofu(
 }
 
 /// Verificador por impressão digital: sem CA, sem nome de host — o pin É a
-/// confiança declarada. Assinaturas de handshake seguem verificadas pelos
-/// algoritmos do provider (a MAC do TLS 1.3 protege o canal).
+/// confiança declarada (v1.4: QUALQUER um dos pins declarados; a lista é a
+/// janela de rotação com sobreposição). Assinaturas de handshake seguem
+/// verificadas pelos algoritmos do provider (a MAC do TLS 1.3 protege o
+/// canal).
 #[derive(Debug)]
 struct VerificadorPin {
-    pin: Fingerprint,
+    pins: Vec<Fingerprint>,
     algs: WebPkiSupportedAlgorithms,
 }
 
@@ -438,12 +596,12 @@ impl ServerCertVerifier for VerificadorPin {
         _ocsp_response: &[u8],
         _now: UnixTime,
     ) -> Result<ServerCertVerified, Error> {
-        if fingerprint(end_entity) == self.pin {
+        if self.pins.contains(&fingerprint(end_entity)) {
             Ok(ServerCertVerified::assertion())
         } else {
             Err(Error::General(
-                "impressão digital do certificado do servidor diverge do pin do endpoint \
-                 (tcps:...@sha256:HEX) — conexão recusada (fail closed, v1.2 §7)"
+                "impressão digital do certificado do servidor diverge dos pins do endpoint \
+                 (tcps:...@sha256:HEX[,HEX2,…]) — conexão recusada (fail closed, v1.2/v1.4 §7)"
                     .into(),
             ))
         }
@@ -472,14 +630,17 @@ impl ServerCertVerifier for VerificadorPin {
     }
 }
 
-/// Verificador **TOFU** (v1.3 §7): a impressão digital vista é verificada
-/// contra o store (gravada na primeira use; divergência ⇒ handshake morto).
-/// Assinaturas de handshake seguem verificadas pelos algoritmos do provider
-/// (a MAC do TLS 1.3 protege o canal).
+/// Verificador **TOFU** (v1.3 §7; estrito v1.4): a impressão digital vista é
+/// verificada contra o store — aprendiz: grava na primeira use; estrito: o
+/// alvo DEVE ter entrada (allow-list; desconhecido ⇒ handshake morto com
+/// motivo `Desconhecida`). Divergência ⇒ handshake morto. Assinaturas de
+/// handshake seguem verificadas pelos algoritmos do provider (a MAC do TLS
+/// 1.3 protege o canal).
 #[derive(Debug)]
 struct VerificadorTofu {
     store: Arc<Mutex<TofuStore>>,
     alvo: String,
+    estrito: bool,
     algs: WebPkiSupportedAlgorithms,
 }
 
@@ -497,10 +658,16 @@ impl ServerCertVerifier for VerificadorTofu {
             .store
             .lock()
             .map_err(|_| Error::General("store TOFU envenenado — conexão recusada".into()))?;
-        match store.verificar(&self.alvo, fp) {
-            Ok(_primeira_uso) => Ok(ServerCertVerified::assertion()),
+        let resultado = if self.estrito {
+            store.verificar_estrito(&self.alvo, fp)
+        } else {
+            store.verificar(&self.alvo, fp)
+        };
+        match resultado {
+            Ok(_registrada) => Ok(ServerCertVerified::assertion()),
             Err(falha) => Err(Error::General(format!(
-                "TOFU ({alvo}): {falha} — conexão recusada (fail closed, v1.3 §7)",
+                "TOFU{} ({alvo}): {falha} — conexão recusada (fail closed, v1.3/v1.4 §7)",
+                if self.estrito { " estrito" } else { "" },
                 alvo = self.alvo
             ))),
         }
@@ -635,12 +802,14 @@ mod tests {
         let ok = TlsAccept {
             certs_pem: ck.cert.pem(),
             key_pem: ck.signing_key.serialize_pem(),
+            sessoes: None,
         };
         assert!(server_config(&ok).is_ok());
 
         let sem_cert = TlsAccept {
             certs_pem: String::new(),
             key_pem: ok.key_pem.clone(),
+            sessoes: None,
         };
         assert!(matches!(server_config(&sem_cert), Err(TlsError::Config(_))));
 
@@ -648,6 +817,7 @@ mod tests {
         let chave_trocada = TlsAccept {
             certs_pem: ok.certs_pem.clone(),
             key_pem: outra.signing_key.serialize_pem(),
+            sessoes: None,
         };
         assert!(matches!(
             server_config(&chave_trocada),

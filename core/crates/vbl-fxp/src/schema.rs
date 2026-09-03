@@ -47,6 +47,10 @@ pub mod op {
     pub const AUTH_CHALLENGE: u8 = 0x08;
     /// Resposta de autenticação PSK (v1.1 §4.6).
     pub const AUTH_RESPONSE: u8 = 0x09;
+    /// Verificação do dicionário treinado no fio (v1.4 §4.8): o cliente
+    /// envia `(versão do zstd, hash do dict derivado)` e o servidor responde
+    /// com o par DELE — hash casado libera o id 4 nos dois sentidos.
+    pub const DICT_SYNC: u8 = 0x0A;
     pub const READ_OK: u8 = 0x81;
     pub const READ_ERR: u8 = 0x82;
     pub const HEARTBEAT_ACK: u8 = 0x83;
@@ -57,6 +61,8 @@ pub mod op {
     pub const READ_BATCH_OK: u8 = 0x87;
     /// Handshake de autenticação aceito (v1.1 §4.6).
     pub const AUTH_OK: u8 = 0x8A;
+    /// Resposta da verificação de dicionário (v1.4 §4.8).
+    pub const DICT_SYNC_OK: u8 = 0x8B;
 
     /// Nome canônico do opcode (diagnósticos e Caderno).
     pub fn name(opcode: u8) -> Option<&'static str> {
@@ -70,6 +76,7 @@ pub mod op {
             READ_BATCH => "READ_BATCH",
             AUTH_CHALLENGE => "AUTH_CHALLENGE",
             AUTH_RESPONSE => "AUTH_RESPONSE",
+            DICT_SYNC => "DICT_SYNC",
             READ_OK => "READ_OK",
             READ_ERR => "READ_ERR",
             HEARTBEAT_ACK => "HEARTBEAT_ACK",
@@ -77,6 +84,7 @@ pub mod op {
             CAPS_OK => "CAPS_OK",
             READ_BATCH_OK => "READ_BATCH_OK",
             AUTH_OK => "AUTH_OK",
+            DICT_SYNC_OK => "DICT_SYNC_OK",
             _ => return None,
         })
     }
@@ -117,11 +125,18 @@ pub mod caps {
     pub const DICT: u16 = 1 << 3;
     /// zstd com dicionário TREINADO (v1.3 §4.8) — habilita o algoritmo 3.
     /// Sempre negociado JUNTO com `DICT` (o gatilho do `HELLO` é o mesmo);
-    /// quem pede zstd pede os dois bits. Bits reservados: 5–15.
+    /// quem pede zstd pede os dois bits.
     pub const ZSTD: u16 = 1 << 4;
-    /// Bits reservados: `0` no encode; ignorados no decode (5–15 desde a
-    /// v1.3 — o bit 4 virou `ZSTD`; peers v1.2 o ignoram no decode).
-    pub const RESERVED: u16 = !0b11111;
+    /// zstd com dicionário VERIFICADO no fio (v1.4 §4.8) — habilita o
+    /// algoritmo 4: após o `HELLO`, o par troca `(versão do zstd, hash do
+    /// dicionário treinado)` via `DICT_SYNC`; hash casado ⇒ id 4, hash
+    /// divergente (pontas com versões de zstd diferentes) ⇒ degradação
+    /// honesta para o id 2. Sempre JUNTO com `ZSTD`+`DICT` (implica os
+    /// dois). Bits reservados: 6–15 desde a v1.4.
+    pub const ZSTD_V: u16 = 1 << 5;
+    /// Bits reservados: `0` no encode; ignorados no decode (6–15 desde a
+    /// v1.4 — o bit 5 virou `ZSTD_V`; peers v1.3 o ignoram no decode).
+    pub const RESERVED: u16 = !0b111111;
 }
 
 /// Algoritmos e política de compressão do corpo (v1.1 §4.8).
@@ -142,6 +157,13 @@ pub mod compress {
     /// versões de zstd diferentes nas pontas) ⇒ `DecompressionFailed`
     /// (fail closed — nunca lixo silencioso).
     pub const ALGO_ZSTD_DICT: u8 = 3;
+    /// zstd + dicionário TREINADO **verificado no fio** (v1.4 §4.8) — mesmo
+    /// codec do id 3, liberado SÓ depois do aperto de mãos `DICT_SYNC`
+    /// (versão do zstd + hash do dicionário casando nas pontas): pontas com
+    /// versões de zstd diferentes degradam honestamente para o id 2 em vez
+    /// de descobrir a divergência por `DecompressionFailed`. O id decodifica
+    /// apenas com `DictConexao::ZstdV` (fail closed como os demais).
+    pub const ALGO_ZSTD_DICT_V: u8 = 4;
     /// Só comprime quando a região plana excede este tamanho (bytes).
     pub const THRESHOLD: usize = 512;
     /// Teto determinístico do dicionário derivado (64 KiB — acima disso o
@@ -196,16 +218,34 @@ pub mod compress {
         }
     }
 
-    /// Dicionário da conexão (v1.2/v1.3 §4.8): matéria + algoritmo — o id no
-    /// fio só decodifica com o dicionário DO SEU algoritmo (id 2 exige a
-    /// matéria concatenada; id 3 exige a treinada; o contrário é
-    /// `UnknownCompression` — fail closed por construção).
+    /// Dicionário da conexão (v1.2/v1.3/v1.4 §4.8): matéria + algoritmo — o
+    /// id no fio só decodifica com o dicionário DO SEU algoritmo (id 2 exige
+    /// a matéria concatenada; id 3 a treinada; id 4 a treinada VERIFICADA
+    /// por `DICT_SYNC`; o contrário é `UnknownCompression` — fail closed
+    /// por construção).
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum DictConexao {
         /// LZ4 block + concatenação dos nomes (id 2, v1.2).
         Lz4(Vec<u8>),
         /// zstd + dicionário treinado (id 3, v1.3).
         Zstd(Vec<u8>),
+        /// zstd + dicionário treinado com hash verificado no fio (id 4,
+        /// v1.4) — instalado só após `DICT_SYNC` com hash casado.
+        ZstdV(Vec<u8>),
+    }
+
+    /// SHA-256 da matéria do dicionário — a identidade que viaja no fio
+    /// (`DICT_SYNC`, v1.4 §4.8): igual nas pontas ⇒ mesmos bytes ⇒ id 4
+    /// interoperável, INDEPENDENTE da versão do zstd (o hash é a autoridade;
+    /// a versão vai junto só como diagnóstico do motivo da divergência).
+    pub fn hash_dict(dict: &[u8]) -> [u8; 32] {
+        use sha2::Digest;
+        sha2::Sha256::digest(dict).into()
+    }
+
+    /// Versão da libzstd embutida (diagnóstico do `DICT_SYNC`, v1.4 §4.8).
+    pub fn zstd_version() -> u32 {
+        zstd::zstd_safe::version_number()
     }
 }
 
@@ -433,6 +473,16 @@ pub enum Body {
         nonce: [u8; AUTH_NONCE_LEN],
         mac: [u8; AUTH_NONCE_LEN],
     },
+    /// Verificação do dicionário treinado no fio — v1.4 §4.8. O MESMO corpo
+    /// serve ao pedido (`DICT_SYNC`, cliente) e à resposta (`DICT_SYNC_OK`,
+    /// servidor): cada ponta compara o hash RECEBIDO com o hash PRÓPRIO;
+    /// casado ⇒ id 4 liberado, divergente ⇒ id 2.
+    DictSync {
+        /// `zstd::version_number()` da ponta (diagnóstico da divergência).
+        zstd_version: u32,
+        /// SHA-256 da matéria do dicionário treinado (a autoridade).
+        dict_hash: [u8; 32],
+    },
     // `AUTH_OK` usa `Body::Empty` — o opcode distingue.
 }
 
@@ -648,6 +698,40 @@ impl Message {
             name: String::new(),
             timestamp_us: None,
             body: Body::Empty,
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // v1.4 (docs/FXP-SCHEMA-v1.md §4.8 — dicionário verificado no fio)
+    // ------------------------------------------------------------------
+
+    /// `DICT_SYNC` — par (versão do zstd, hash do dict) do CLIENTE.
+    pub fn dict_sync(zstd_version: u32, dict_hash: [u8; 32], seq: u32) -> Self {
+        Self {
+            opcode: op::DICT_SYNC,
+            flags: flag::ACK,
+            seq,
+            name: String::new(),
+            timestamp_us: None,
+            body: Body::DictSync {
+                zstd_version,
+                dict_hash,
+            },
+        }
+    }
+
+    /// `DICT_SYNC_OK` — par do SERVIDOR (o hash casado libera o id 4).
+    pub fn dict_sync_ok(zstd_version: u32, dict_hash: [u8; 32], seq: u32) -> Self {
+        Self {
+            opcode: op::DICT_SYNC_OK,
+            flags: flag::ACK,
+            seq,
+            name: String::new(),
+            timestamp_us: None,
+            body: Body::DictSync {
+                zstd_version,
+                dict_hash,
+            },
         }
     }
 
@@ -875,6 +959,13 @@ pub fn encode(msg: &Message, out: &mut Vec<u8>) -> Result<(), SchemaError> {
             body.extend_from_slice(nonce);
             body.extend_from_slice(mac);
         }
+        Body::DictSync {
+            zstd_version,
+            dict_hash,
+        } => {
+            put_u32(&mut body, *zstd_version);
+            body.extend_from_slice(dict_hash);
+        }
     }
 
     // FLAG_TIMESTAMP é derivado do campo (fonte única — §5).
@@ -994,6 +1085,30 @@ pub fn encode_with_zstd_dict(
     dict: &[u8],
     out: &mut Vec<u8>,
 ) -> Result<(), SchemaError> {
+    encode_zstd_com_id(msg, dict, compress::ALGO_ZSTD_DICT, out)
+}
+
+/// Encode com o dicionário treinado VERIFICADO (v1.4 §4.8): codec idêntico
+/// ao do id 3, com o algoritmo `ALGO_ZSTD_DICT_V` no byte reservado. Só
+/// parte após o `DICT_SYNC` com hash casado — a responsabilidade de gate é
+/// do transporte/`peer` (o codec é stateless); quem decodifica exige o
+/// `DictConexao::ZstdV` (fail closed).
+pub fn encode_with_zstd_dict_v(
+    msg: &Message,
+    dict: &[u8],
+    out: &mut Vec<u8>,
+) -> Result<(), SchemaError> {
+    encode_zstd_com_id(msg, dict, compress::ALGO_ZSTD_DICT_V, out)
+}
+
+/// Corpo comum dos ids 3/4: regras dos demais encodes (threshold, nunca
+/// inflar, teto compressBound) com o algoritmo no byte reservado.
+fn encode_zstd_com_id(
+    msg: &Message,
+    dict: &[u8],
+    algo: u8,
+    out: &mut Vec<u8>,
+) -> Result<(), SchemaError> {
     let mut plain = Vec::with_capacity(HEADER_LEN + msg.name.len() + 64);
     encode(msg, &mut plain)?;
     let ts_len = usize::from(msg.timestamp_us.is_some());
@@ -1021,7 +1136,7 @@ pub fn encode_with_zstd_dict(
     out.extend_from_slice(&plain[..4 + prefix]);
     out[0..4].copy_from_slice(&(length as u32).to_le_bytes());
     out[4 + 5] |= flag::COMPRESSED;
-    out[4 + 6] = compress::ALGO_ZSTD_DICT;
+    out[4 + 6] = algo;
     out.extend_from_slice(&blob);
     Ok(())
 }
@@ -1052,6 +1167,10 @@ impl<'a> Reader<'a> {
     fn u16(&mut self) -> Result<u16, SchemaError> {
         let b = self.take(2)?;
         Ok(u16::from_le_bytes([b[0], b[1]]))
+    }
+    fn u32(&mut self) -> Result<u32, SchemaError> {
+        let b = self.take(4)?;
+        Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     }
     fn f64(&mut self) -> Result<f64, SchemaError> {
         let b = self.take(8)?;
@@ -1209,6 +1328,23 @@ fn decode_com(
                 // v1.3: id 3 exige o dicionário TREINADO — com a matéria do
                 // id 2 (ou sem dict) é desconhecido (fail closed).
                 let Some(compress::DictConexao::Zstd(dict)) = dict else {
+                    return Err(SchemaError::UnknownCompression {
+                        received: reservado,
+                    });
+                };
+                region_owned = vec![0u8; MAX_PAYLOAD];
+                let n = zstd::bulk::Decompressor::with_dictionary(dict)
+                    .and_then(|mut d| d.decompress_to_buffer(rest, &mut region_owned))
+                    .map_err(|_| SchemaError::DecompressionFailed)?;
+                region_owned.truncate(n);
+                rest = &region_owned;
+            }
+            compress::ALGO_ZSTD_DICT_V => {
+                // v1.4: id 4 exige o dicionário treinado VERIFICADO (hash
+                // casado no `DICT_SYNC`) — com Zstd/Lz4/sem dict é
+                // desconhecido (fail closed; um codec v1.3 produz exatamente
+                // este erro diante do id 4).
+                let Some(compress::DictConexao::ZstdV(dict)) = dict else {
                     return Err(SchemaError::UnknownCompression {
                         received: reservado,
                     });
@@ -1385,6 +1521,16 @@ fn decode_com(
             mac.copy_from_slice(r.take(AUTH_NONCE_LEN)?);
             r.end()?;
             Body::AuthResponse { nonce, mac }
+        }
+        op::DICT_SYNC | op::DICT_SYNC_OK => {
+            let zstd_version = r.u32()?;
+            let mut dict_hash = [0u8; 32];
+            dict_hash.copy_from_slice(r.take(32)?);
+            r.end()?;
+            Body::DictSync {
+                zstd_version,
+                dict_hash,
+            }
         }
         // Corpos vazios por último (READ exige nome; HEARTBEAT/BYE/AUTH_OK não).
         op::READ | op::HEARTBEAT | op::BYE | op::AUTH_OK => {

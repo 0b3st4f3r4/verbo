@@ -48,6 +48,10 @@ pub mod kinds {
     /// Peer remoto não anunciou a capacidade pedida — segue em v1.0
     /// (degradação honesta e logada, nunca silenciosa).
     pub const FXP_PEER_V1: &str = "fxp_peer_v1";
+    /// Dicionário treinado divergiu no `DICT_SYNC` (v1.4 §4.8 — ex.: pontas
+    /// com versões de zstd diferentes): a conexão degrada para o id 2 com
+    /// registro honesto, nunca tenta frame que falharia.
+    pub const FXP_DICT_DIVERGENTE: &str = "fxp_dict_divergente";
 }
 
 /// Trilha de atuação com a latência medida (Etapa 4 — PLAN §4.1): o Caderno
@@ -100,6 +104,12 @@ pub struct BusConfig {
     /// zstd, a degradação segue a ordem id 3 → id 2 → plano (o que a
     /// interseção `CAPS_OK` trouxer).
     pub compression_zstd: bool,
+    /// zstd com dicionário VERIFICADO no fio (v1.4 §4.8) — pede
+    /// `caps::ZSTD_V + ZSTD + DICT`: após o `HELLO` o par troca
+    /// `(versão do zstd, hash do dict)` via `DICT_SYNC`; hash casado ⇒ id 4,
+    /// divergente (pontas com versões de zstd diferentes) ⇒ id 2 com
+    /// registro no Caderno (nunca `DecompressionFailed` por descuido).
+    pub compression_zstd_v: bool,
     /// Pedir `FLAG_TIMESTAMP` ao peer e propagar como `fio_us` (§5).
     pub wire_timestamp: bool,
     /// PSK de autenticação do canal remoto (§4.6) — bytes da chave; o CLI
@@ -133,6 +143,7 @@ impl Default for BusConfig {
             compression: false,
             compression_dict: false,
             compression_zstd: false,
+            compression_zstd_v: false,
             wire_timestamp: false,
             psk: None,
             discover_window: Duration::from_millis(500),
@@ -310,7 +321,7 @@ impl FxpBus {
                                                 Some(pin) => RemoteAddr::TcpTls {
                                                     host: p.host.to_string(),
                                                     port: p.port,
-                                                    trust: crate::tls::Trust::Pin(pin),
+                                                    trust: crate::tls::Trust::Pin(vec![pin]),
                                                 },
                                                 None => RemoteAddr::Tcp {
                                                     host: p.host.to_string(),
@@ -691,7 +702,55 @@ impl FxpBus {
                 .exchange_hello(&local, hs)
                 .map_err(|e| TransportError::Broken(format!("handshake dict (HELLO): {e}")))?;
             let nomes: Vec<String> = remoto.iter().map(|d| d.name().to_string()).collect();
-            if concedidas & caps::ZSTD != 0 {
+            let concatenado = crate::schema::compress::dict_from_registry(&nomes);
+            if concedidas & caps::ZSTD_V != 0 {
+                // v1.4 §4.8: verificação no fio — hash casado ⇒ id 4;
+                // divergente (ex.: pontas com versões de zstd diferentes) ⇒
+                // id 2 com registro honesto no Caderno, nunca tentativa de
+                // frame que falharia com DecompressionFailed.
+                match crate::schema::compress::zstd_dict_from_registry(&nomes) {
+                    Some(treinado) => {
+                        let meu_hash = crate::schema::compress::hash_dict(&treinado);
+                        match c.dict_sync(crate::schema::compress::zstd_version(), meu_hash, hs) {
+                            Ok((_versao_peer, hash_peer)) if hash_peer == meu_hash => {
+                                c.set_zstd_dict_v(treinado);
+                            }
+                            Ok((versao_peer, _)) => {
+                                c.set_dict(concatenado);
+                                ledger.record(
+                                    kinds::FXP_DICT_DIVERGENTE,
+                                    &format!(
+                                        "Dicionário treinado divergiu no DICT_SYNC (peer zstd {versao_peer}, local zstd {local_zstd}) — conexão segue no id 2 (§4.8 v1.4).",
+                                        local_zstd = crate::schema::compress::zstd_version()
+                                    ),
+                                    Json::obj([
+                                        ("motivo", Json::str("fxp_dict_divergente")),
+                                        ("versao_zstd_local", Json::num(f64::from(crate::schema::compress::zstd_version()))),
+                                        ("versao_zstd_peer", Json::num(f64::from(versao_peer))),
+                                    ]),
+                                );
+                            }
+                            Err(e) => {
+                                return Err(TransportError::Broken(format!(
+                                    "handshake dict (DICT_SYNC): {e}"
+                                )))
+                            }
+                        }
+                    }
+                    None => {
+                        // Treino local impossível (registro curto na óTICA
+                        // desta ponta): id 2 honesto com registro — o peer
+                        // treinou com a versão DELE; sem verificação não há
+                        // id 4.
+                        c.set_dict(concatenado);
+                        ledger.record(
+                            kinds::FXP_DICT_DIVERGENTE,
+                            "Peer concedeu ZSTD_V mas o dicionário treinado não derivou localmente — conexão segue no id 2 (§4.8 v1.4).",
+                            Json::obj([("motivo", Json::str("treino_local_impossivel"))]),
+                        );
+                    }
+                }
+            } else if concedidas & caps::ZSTD != 0 {
                 match crate::schema::compress::zstd_dict_from_registry(&nomes) {
                     Some(d) => c.set_zstd_dict(d),
                     None => {
@@ -702,16 +761,17 @@ impl FxpBus {
                     }
                 }
             } else {
-                c.set_dict(crate::schema::compress::dict_from_registry(&nomes));
+                c.set_dict(concatenado);
             }
         }
         self.connections.insert(key, c);
         Ok(())
     }
 
-    /// Confiança do cliente TLS (v1.3 §7): pin é autossuficiente; TOFU
-    /// abre/compartilha o store (config → padrão do usuário). Falha de
-    /// abertura ⇒ falha fechada da conexão (nunca confiar sem registrar).
+    /// Confiança do cliente TLS (v1.3/v1.4 §7): pin é autossuficiente; TOFU
+    /// (aprendiz ou estrito) abre/compartilha o store (config → padrão do
+    /// usuário). Falha de abertura ⇒ falha fechada da conexão (nunca confiar
+    /// sem poder registrar/verificar).
     fn confianca_cliente(
         &mut self,
         host: &str,
@@ -719,8 +779,11 @@ impl FxpBus {
         trust: &crate::tls::Trust,
     ) -> Result<crate::tls::ConfiancaCliente, TransportError> {
         match trust {
-            crate::tls::Trust::Pin(fp) => Ok(crate::tls::ConfiancaCliente::Pin(*fp)),
-            crate::tls::Trust::Tofu => {
+            crate::tls::Trust::Pin(pins) => {
+                Ok(crate::tls::ConfiancaCliente::Pin(pins.clone()))
+            }
+            crate::tls::Trust::Tofu | crate::tls::Trust::TofuEstrito => {
+                let estrito = *trust == crate::tls::Trust::TofuEstrito;
                 if self.tofu.is_none() {
                     let caminho = self
                         .config
@@ -741,11 +804,20 @@ impl FxpBus {
                     })?;
                     self.tofu = Some(Arc::new(Mutex::new(store)));
                 }
-                Ok(crate::tls::ConfiancaCliente::Tofu {
-                    store: self.tofu.clone().expect("garantido acima"),
-                    host: host.to_string(),
-                    port,
-                })
+                let store = self.tofu.clone().expect("garantido acima");
+                if estrito {
+                    Ok(crate::tls::ConfiancaCliente::TofuEstrito {
+                        store,
+                        host: host.to_string(),
+                        port,
+                    })
+                } else {
+                    Ok(crate::tls::ConfiancaCliente::Tofu {
+                        store,
+                        host: host.to_string(),
+                        port,
+                    })
+                }
             }
         }
     }
@@ -763,6 +835,12 @@ impl FxpBus {
             // v1.3 §4.8: zstd anda SEMPRE com DICT — o gatilho do HELLO é o
             // mesmo e a degradação (sem treino/zstd no peer) cai no id 2.
             w |= caps::ZSTD | caps::DICT;
+        }
+        if self.config.compression_zstd_v {
+            // v1.4 §4.8: o id 4 implica o par v1.3 (DICT+ZSTD) — a ordem de
+            // degradação v1.4 é id 4 → id 2 (o id 3 fica para quem pediu
+            // exatamente a v1.3).
+            w |= caps::ZSTD_V | caps::ZSTD | caps::DICT;
         }
         if self.config.batch_prefetch {
             w |= caps::BATCH;
@@ -1362,13 +1440,15 @@ pub(crate) fn addr_key(addr: &RemoteAddr) -> String {
         RemoteAddr::Unix(p) => format!("unix:{}", p.display()),
         RemoteAddr::Tcp { host, port } => format!("tcp:{host}:{port}"),
         RemoteAddr::TcpTls { host, port, trust } => match trust {
-            crate::tls::Trust::Pin(fingerprint) => {
-                format!(
-                    "tcps:{host}:{port}@sha256:{}",
-                    crate::tls::hex32(fingerprint)
-                )
-            }
+            crate::tls::Trust::Pin(pins) => format!(
+                "tcps:{host}:{port}@sha256:{}",
+                pins.iter()
+                    .map(crate::tls::hex32)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
             crate::tls::Trust::Tofu => format!("tcps:{host}:{port}@tofu"),
+            crate::tls::Trust::TofuEstrito => format!("tcps:{host}:{port}@tofu-estrito"),
         },
     }
 }

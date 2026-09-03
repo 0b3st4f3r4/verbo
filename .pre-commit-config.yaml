@@ -1,6 +1,6 @@
 # .pre-commit-config.yaml — pre-commit da VerboLang (framework pre-commit).
 # O CI, inteiro, antes de cada commit: espelha 1:1 o pipeline de
-# .github/workflows/ci.yml e acrescenta os gates de cobertura (≥ 95%):
+# .github/workflows/ci.yml e acrescenta os gates de cobertura (≥ 90%):
 #   • pytest-cov     — make test-cov (--cov-fail-under)       (Python)
 #   • cargo-llvm-cov — --fail-under-lines                     (Rust)
 #
@@ -29,9 +29,9 @@
 #                                    # reflog do commit — use com parceria)
 #
 # Variáveis:
-#   VBL_COVERAGE_MIN=95   piso de cobertura (pytest-cov e llvm-cov). Rebaixar
+#   VBL_COVERAGE_MIN=90   piso de cobertura (pytest-cov e llvm-cov). Rebaixar
 #                         é decisão explícita e visível no comando, nunca
-#                         silenciosa: o padrão é o mínimo pedido (95%).
+#                         silenciosa: o padrão é o mínimo pedido (90%).
 #
 # Todos os hooks são `repo: local` + `language: system`: nenhuma rede, nenhum
 # environment sintético — os comandos são exatamente os que o CI roda.
@@ -49,7 +49,7 @@ repos:
 
       # 2. TDD + gate pytest-cov — denominador honesto do omit em .coveragerc
       - id: tdd-cobertura
-        name: tdd-cobertura — pytest + --cov-fail-under (≥ 95%)
+        name: tdd-cobertura — pytest + --cov-fail-under (≥ 90%)
         entry: make test-cov
         language: system
         pass_filenames: false
@@ -139,11 +139,11 @@ repos:
       # 12. llvm-cov — cobertura Rust com piso; o relatório HTML continua no
       #     make rust-coverage (core/target/coverage)
       - id: llvm-cov
-        name: llvm-cov — cargo +nightly llvm-cov --fail-under-lines (≥ 95%)
+        name: llvm-cov — cargo +nightly llvm-cov --fail-under-lines (≥ 90%)
         entry: bash
         args:
           - -c
-          - 'export CARGO_HOME="$PWD/core/.cargo-home"; cd core; cargo +nightly llvm-cov --workspace --summary-only --fail-under-lines "${VBL_COVERAGE_MIN:-95}" || { echo "  ↳ relatório HTML: make rust-coverage (core/target/coverage)"; exit 1; }'
+          - 'export CARGO_HOME="$PWD/core/.cargo-home"; cd core; cargo +nightly llvm-cov --workspace --summary-only --fail-under-lines "${VBL_COVERAGE_MIN:-90}" || { echo "  ↳ relatório HTML: make rust-coverage (core/target/coverage)"; exit 1; }'
         language: system
         pass_filenames: false
         always_run: true

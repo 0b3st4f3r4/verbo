@@ -30,6 +30,10 @@ pub enum Command {
         /// ao peer (o gatilho do `HELLO` é o mesmo); sem concessão, degrada
         /// para id 2/plano pela interseção de `CAPS_OK`.
         zstd: bool,
+        /// Pede também ZSTD_V (v1.4 §4.8): id 4 no fio, com verificação de
+        /// dicionário por DICT_SYNC; peer v1.3 não concede e a conexão fica
+        /// no id 3 (degradação honesta registrada no Caderno).
+        zstd_v: bool,
         /// Store TOFU (v1.3 §7) para endpoints `tcps:...@tofu` — arquivo
         /// JSON da primeira confiança; default: `$XDG_STATE_HOME` (ou
         /// `~/.local/state`)`/verbo/fxp-known-hosts.json`.
@@ -65,12 +69,18 @@ pub enum Command {
         /// Anuncia ZSTD (v1.3 §4.8) — zstd com dicionário TREINADO; implica
         /// `--dict` (o gatilho do `HELLO` é o mesmo).
         zstd: bool,
+        /// Anuncia ZSTD_V (v1.4 §4.8) — id 4 no fio (zstd treinado com
+        /// verificação de dicionário por DICT_SYNC); implica `--zstd`.
+        zstd_v: bool,
         /// Caderno do peer (produção); sem ele, o Caderno fica desligado
         /// (aviso honesto — §4.7 não registra eventos sem Caderno).
         ledger: Option<PathBuf>,
         /// TLS 1.3 (v1.2 §7): PEM da cadeia + chave; ambos ou nenhum.
         tls_cert: Option<PathBuf>,
         tls_key: Option<PathBuf>,
+        /// Cache de sessões TLS em DISCO (v1.4 §7): a retomada de sessão
+        /// (com 0-RTT) sobrevive ao renascimento do processo.
+        tls_sessions: Option<PathBuf>,
     },
     /// `vbl ledger-verify ARQUIVO` — verificação externa do log do Caderno
     /// (binário `.vcad` ou JSONL): recomputa a cadeia SHA-256 e emite o
@@ -108,9 +118,11 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
             let mut batch = false;
             let mut timestamp = false;
             let mut zstd = false;
+            let mut zstd_v = false;
             let mut ledger = None;
             let mut tls_cert = None;
             let mut tls_key = None;
+            let mut tls_sessions: Option<PathBuf> = None;
             while let Some(a) = args.next() {
                 match a.as_str() {
                     "--fxp-mode" => {
@@ -150,6 +162,12 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                     "--batch" => batch = true,
                     "--timestamp" => timestamp = true,
                     "--zstd" => zstd = true,
+                    "--zstd-v" => zstd_v = true,
+                    "--tls-sessions" => {
+                        tls_sessions = Some(PathBuf::from(
+                            args.next().ok_or("--tls-sessions exige ARQUIVO")?,
+                        ))
+                    }
                     "--ledger" => {
                         ledger = Some(PathBuf::from(args.next().ok_or("--ledger exige ARQUIVO")?))
                     }
@@ -159,6 +177,11 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
             if tls_cert.is_some() != tls_key.is_some() {
                 return Err(format!(
                     "fxpd: --tls-cert e --tls-key devem vir juntos (cadeia + chave)\n{USAGE}"
+                ));
+            }
+            if zstd_v && !zstd {
+                return Err(format!(
+                    "fxpd: --zstd-v implica --zstd (o id 4 é o zstd treinado VERIFICADO por DICT_SYNC; v1.4 §4.8)\n{USAGE}"
                 ));
             }
             Ok(Command::FxpDaemon {
@@ -173,9 +196,11 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                 batch,
                 timestamp,
                 zstd,
+                zstd_v,
                 ledger,
                 tls_cert,
                 tls_key,
+                tls_sessions,
             })
         }
         "run" => {
@@ -190,6 +215,7 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
             let mut fxp_config = None;
             let mut fxp_psk_env = None;
             let mut zstd = false;
+            let mut zstd_v = false;
             let mut tofu_store: Option<PathBuf> = None;
             while let Some(a) = args.next() {
                 match a.as_str() {
@@ -197,6 +223,7 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                         fxp_psk_env = Some(args.next().ok_or("--fxp-psk-env exige VAR")?)
                     }
                     "--zstd" => zstd = true,
+                    "--zstd-v" => zstd_v = true,
                     "--tofu-store" => {
                         tofu_store = Some(PathBuf::from(
                             args.next().ok_or("--tofu-store exige ARQUIVO")?,
@@ -291,6 +318,7 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                 fxp_config,
                 fxp_psk_env,
                 zstd,
+                zstd_v,
                 tofu_store,
             })
         }
@@ -359,6 +387,12 @@ opções de fxpd (schema v1.1/v1.2/v1.3 — docs/FXP-SCHEMA-v1.md §7/§4.5–§
   --timestamp                      anuncia FLAG_TIMESTAMP (§5 — carimbo físico)
   --zstd                           anuncia ZSTD (v1.3 §4.8): zstd com dicionário
                                    TREINADO; implica --dict (gatilho do HELLO é o mesmo)
+  --zstd-v                         anuncia ZSTD_V (v1.4 §4.8): id 4 no fio — zstd
+                                   treinado com verificação de dict (DICT_SYNC);
+                                   implica --zstd
+  --tls-sessions ARQUIVO           cache de sessões TLS em DISCO (v1.4 §7): a
+                                   retomada (com 0-RTT) sobrevive ao renascimento
+                                   do processo; arquivo 0600, material de sessão
   --ledger ARQUIVO                 Caderno do peer (produção .vcad); sem ele, desligado
 
 opções de run:
@@ -378,6 +412,9 @@ opções de run:
   --fxp-psk-env VAR                PSK do cliente remoto (§4.6): chave vem da env VAR
   --zstd                           pede ZSTD+DICT (v1.3 §4.8): compressão zstd com
                                    dicionário TREINADO derivado do registro do peer
+  --zstd-v                         pede também ZSTD_V (v1.4 §4.8): id 4 no fio com
+                                   verificação de dict (DICT_SYNC); peer v1.3 degrada
+                                   para id 3 (honesto, registrado no Caderno)
   --tofu-store ARQUIVO             store TOFU (v1.3 §7) p/ endpoints tcps:...@tofu;
                                    default: $XDG_STATE_HOME (ou ~/.local/state)/verbo/fxp-known-hosts.json
 
@@ -462,6 +499,7 @@ mod tests {
             fxp_config,
             fxp_psk_env: _,
             zstd: _,
+            zstd_v: _,
             tofu_store: _,
         } = parse_args(args(&[
             "run",
@@ -574,9 +612,11 @@ mod tests {
             batch,
             timestamp,
             zstd,
+            zstd_v,
             ledger,
             tls_cert,
             tls_key,
+            tls_sessions,
         } = parse_args(args(&[
             "fxpd",
             "--serve",
@@ -596,6 +636,9 @@ mod tests {
             "--batch",
             "--timestamp",
             "--zstd",
+            "--zstd-v",
+            "--tls-sessions",
+            "sessoes.json",
             "--ledger",
             "peer.vcad",
             "--tls-cert",
@@ -614,9 +657,15 @@ mod tests {
         assert_eq!(announce.as_deref(), Some("fxpd-lab"));
         assert_eq!(announce_mdns.as_deref(), Some("fxpd-lab-mdns"));
         assert!(compress && dict && batch && timestamp && zstd);
+        assert!(zstd_v, "--zstd-v chega como true");
+        assert_eq!(tls_sessions, Some(PathBuf::from("sessoes.json")));
         assert_eq!(ledger, Some(PathBuf::from("peer.vcad")));
         assert_eq!(tls_cert, Some(PathBuf::from("srv.pem")));
         assert_eq!(tls_key, Some(PathBuf::from("srv.key.pem")));
+
+        // v1.4: --zstd-v implica --zstd (id 4 é superset do id 3 — o
+        // anúncio dos três bits exige o treino do par v1.3).
+        assert!(parse_args(args(&["fxpd", "--serve", "tcp:0", "--zstd-v"])).is_err());
 
         // Cláusulas de erro: sem --serve, argumento estranho, flags que
         // exigem valor sem o valor.

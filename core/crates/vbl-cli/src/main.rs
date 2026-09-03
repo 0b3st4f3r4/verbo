@@ -100,6 +100,7 @@ where
             fxp_config,
             fxp_psk_env,
             zstd,
+            zstd_v,
             tofu_store,
         } => match build_fxp(&fxp_config, &fxp_mode) {
             Ok(Some((registry, mut config_bus))) => {
@@ -119,6 +120,12 @@ where
                 // v1.3 opt-in por flag (§4.8/§7): zstd treinado + store TOFU.
                 if zstd {
                     config_bus.compression_zstd = true;
+                }
+                // v1.4 §4.8: id 4 — zstd treinado com verificação de dict no
+                // fio (DICT_SYNC). Peer v1.3 não concede o bit 5 e a conexão
+                // fica no id 3 (degradação honesta, evento no Caderno).
+                if zstd_v {
+                    config_bus.compression_zstd_v = true;
                 }
                 if let Some(p) = &tofu_store {
                     config_bus.tofu_store = Some(p.clone());
@@ -170,9 +177,11 @@ where
             batch,
             timestamp,
             zstd,
+            zstd_v,
             ledger,
             tls_cert,
             tls_key,
+            tls_sessions,
         } => fxpd(FxpdArgs {
             fxp_mode,
             fxp_config,
@@ -185,9 +194,11 @@ where
             batch,
             timestamp,
             zstd,
+            zstd_v,
             ledger,
             tls_cert,
             tls_key,
+            tls_sessions,
         }),
         Command::FxpProbe {
             fxp_mode,
@@ -294,10 +305,14 @@ struct FxpdArgs {
     batch: bool,
     timestamp: bool,
     zstd: bool,
+    /// v1.4 §4.8: anuncia ZSTD_V (id 4 no fio, verificação de dict).
+    zstd_v: bool,
     ledger: Option<PathBuf>,
     /// TLS v1.2 (§7): PEMs da cadeia + chave do servidor (ambos ou nenhum).
     tls_cert: Option<PathBuf>,
     tls_key: Option<PathBuf>,
+    /// v1.4 §7: cache de sessões TLS em disco (retomada entre processos).
+    tls_sessions: Option<PathBuf>,
 }
 
 /// O peer FXP montado e pronto para servir (resultado de [`fxpd_preparar`]).
@@ -358,6 +373,12 @@ fn fxpd_preparar(args: &FxpdArgs) -> Result<FxpdRuntime, i32> {
         // mesmo; sem DICT o bit zstd nunca seria concedido (o dispatch
         // tira da interseção) — anunciar os dois é o honesto.
         caps_annunciadas |= caps::ZSTD | caps::DICT;
+    }
+    if args.zstd_v {
+        // v1.4 §4.8: ZSTD_V anda com ZSTD+DICT (id 4 superset do id 3 —
+        // mesmo treino, mais a verificação DICT_SYNC). O parser exige
+        // --zstd; anunciar os três é o honesto.
+        caps_annunciadas |= caps::ZSTD | caps::DICT | caps::ZSTD_V;
     }
     if args.batch {
         caps_annunciadas |= caps::BATCH;
@@ -432,7 +453,13 @@ fn fxpd_preparar(args: &FxpdArgs) -> Result<FxpdRuntime, i32> {
             };
             let certs_pem = carregar(c, "--tls-cert")?;
             let key_pem = carregar(k, "--tls-key")?;
-            Some(vbl_fxp::TlsAccept { certs_pem, key_pem })
+            Some(vbl_fxp::TlsAccept {
+                certs_pem,
+                key_pem,
+                // v1.4 §7: cache de sessões em disco (opt-in) — retomada
+                // entre renascimentos do daemon, com 0-RTT preservado.
+                sessoes: args.tls_sessions.clone(),
+            })
         }
         _ => unreachable!("o parser de args exige --tls-cert e --tls-key juntos"),
     };
@@ -1135,10 +1162,17 @@ fn actor_availability(endpoint: &Endpoint) -> String {
                 // confiança declarada (a validação do certificado é do
                 // handshake TLS; TOFU só grava na 1ª conexão do bus).
                 let confia = match trust {
-                    vbl_fxp::tls::Trust::Pin(fp) => {
-                        format!("pin sha256:{}", vbl_fxp::tls::hex32(fp))
-                    }
+                    vbl_fxp::tls::Trust::Pin(pins) => format!(
+                        "pin sha256:{}",
+                        pins.iter()
+                            .map(vbl_fxp::tls::hex32)
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    ),
                     vbl_fxp::tls::Trust::Tofu => "tofu (1ª conexão grava, demais verificam)".into(),
+                    vbl_fxp::tls::Trust::TofuEstrito => {
+                        "tofu-estrito (allow-list: só conecta com pin registrado; v1.4 §7)".into()
+                    }
                 };
                 match format!("{host}:{port}").parse::<std::net::SocketAddr>() {
                     Ok(alvo) => match std::net::TcpStream::connect_timeout(
@@ -1686,9 +1720,11 @@ mod fxpd_tests {
                 batch,
                 timestamp,
                 zstd,
+                zstd_v,
                 ledger,
                 tls_cert,
                 tls_key,
+                tls_sessions,
             } => FxpdArgs {
                 fxp_mode,
                 fxp_config,
@@ -1700,10 +1736,12 @@ mod fxpd_tests {
                 dict,
                 batch,
                 zstd,
+                zstd_v,
                 timestamp,
                 ledger,
                 tls_cert,
                 tls_key,
+                tls_sessions,
             },
             _ => panic!("esperava FxpDaemon"),
         }
@@ -1731,6 +1769,39 @@ mod fxpd_tests {
         assert!(rt.porta_tcp_real.unwrap_or(0) > 0);
         // bits: LZ4|BATCH|TIMESTAMP = 1|2|4
         assert_eq!(rt.caps_annunciadas, 0b111);
+    }
+
+    #[test]
+    fn serve_tcp_zstd_v_anuncia_os_tres_bits_e_monta_sessoes() {
+        // v1.4 §4.8: --zstd-v anuncia ZSTD|DICT|ZSTD_V (id 4 superset do
+        // id 3) e propaga o caminho do cache de sessões TLS em disco.
+        use vbl_fxp::schema::caps;
+        let dir = std::env::temp_dir().join(format!("fxpd-inproc-z4-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let cfg = dir.join("peer.cfg");
+        std::fs::write(&cfg, "mode = simulado\n").unwrap();
+        let sessoes = dir.join("sessoes.json");
+        let rt = fxpd_preparar(&args_fxpd(&[
+            "--serve",
+            "tcp:0",
+            "--fxp-config",
+            cfg.to_str().unwrap(),
+            "--zstd",
+            "--zstd-v",
+            "--tls-sessions",
+            sessoes.to_str().unwrap(),
+        ]))
+        .expect("montar");
+        // bits: ZSTD|DICT|ZSTD_V
+        assert_eq!(
+            rt.caps_annunciadas,
+            caps::ZSTD | caps::DICT | caps::ZSTD_V,
+            "{:b}",
+            rt.caps_annunciadas
+        );
+        // O caminho das sessões só é exercitado no fio (peer renasce e
+        // retoma — ver e2e v14 do vbl-fxp); aqui basta os bits do id 4.
+        let _ = sessoes;
     }
 
     #[test]
@@ -1825,9 +1896,11 @@ mod fxpd_tests {
                     batch: false,
                     timestamp: false,
                     zstd: false,
+                    zstd_v: false,
                     ledger: None,
                     tls_cert: None,
                     tls_key: None,
+                    tls_sessions: None,
                 };
                 assert_eq!(super::fxpd_preparar(&args).err(), Some(2));
             }
@@ -1918,9 +1991,11 @@ mod fxpd_dispatch_tests {
                     batch,
                     timestamp,
                     zstd,
+                    zstd_v,
                     ledger,
                     tls_cert,
                     tls_key,
+                    tls_sessions,
                 } => FxpdArgs {
                     fxp_mode,
                     fxp_config,
@@ -1933,9 +2008,11 @@ mod fxpd_dispatch_tests {
                     batch,
                     timestamp,
                     zstd,
+                    zstd_v,
                     ledger,
                     tls_cert,
                     tls_key,
+                    tls_sessions,
                 },
                 _ => panic!("esperava FxpDaemon"),
             }
@@ -2100,9 +2177,11 @@ mod probe_battery_tests {
                 batch,
                 timestamp,
                 zstd,
+                zstd_v,
                 ledger,
                 tls_cert,
                 tls_key,
+                tls_sessions,
             } => FxpdArgs {
                 fxp_mode,
                 fxp_config,
@@ -2114,10 +2193,12 @@ mod probe_battery_tests {
                 dict,
                 batch,
                 zstd,
+                zstd_v,
                 timestamp,
                 ledger,
                 tls_cert,
                 tls_key,
+                tls_sessions,
             },
             _ => panic!("esperava FxpDaemon"),
         }
@@ -2194,7 +2275,7 @@ mod probe_battery_tests {
             addr: vbl_fxp::RemoteAddr::TcpTls {
                 host: "nao-e-ip".into(),
                 port: 1,
-                trust: vbl_fxp::tls::Trust::Pin([0u8; 32]),
+                trust: vbl_fxp::tls::Trust::Pin(vec![[0u8; 32]]),
             },
         })
         .contains("inválido"));
@@ -2203,7 +2284,7 @@ mod probe_battery_tests {
             addr: vbl_fxp::RemoteAddr::TcpTls {
                 host: "127.0.0.1".into(),
                 port: 1,
-                trust: vbl_fxp::tls::Trust::Pin([0u8; 32]),
+                trust: vbl_fxp::tls::Trust::Pin(vec![[0u8; 32]]),
             },
         })
         .contains("falhou"));
