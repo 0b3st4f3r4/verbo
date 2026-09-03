@@ -324,6 +324,7 @@ release atual; a ordem reflete o custo/benefício medido.
 | 6 | **Release `v2027.0.0-alpha.1`** | Congelar changelog e cortar a janela de Setembro ([`RELEASES.md`](RELEASES.md); ver CHANGELOG "Não lançado") |
 | 7 | **Caminhos (b) RAG e (c) fine-tune do §7** | Registrados, não programados; a cada mudança na FORMAL, revalidar o cheat sheet com `make validate-cheatsheet` |
 | 8 | **FXP v1.1 — extensões do fio** *(concluído nesta janela)* | Origem: §9 do [FXP-SCHEMA-v1](FXP-SCHEMA-v1.md) (que virou o contrato v1.1 — sem arquivo duplicado). CAPS, AUTH PSK, READ_BATCH, LZ4, FLAG_TIMESTAMP e beacon FXPD, tudo negociado/opt-in, fio padrão byte a byte v1.0. Medidas: lote 5,3× (117,4→22,3 µs no ciclo de 8 sensores), timestamp +5 ns, handshake +4 µs — [FXP-V1.1-REPORT](reports/FXP-V1.1-REPORT.md) |
+| 9 | **FXP v1.2 — confidencialidade, dict, IPv6/SSM e mDNS** *(concluído nesta janela)* | Origem: §9 da v1.1 (as quatro extensões remanescentes). TLS 1.3 com pinning SHA-256 (`tcps`, rustls não expõe PSK — #174), dicionário LZ4 derivado do registro (id 2, gatilho no HELLO, zero bytes no fio), beacon em grupos IPv6 + SSM IPv4 (RFC 4607), mDNS/DNS-SD (`_fxp._tcp.local.`, feature `mdns` default-off). Tudo opt-in; fio default bit a bit v1.0/v1.1 (golden bytes intactos) — [FXP-V1.2-REPORT](reports/FXP-V1.2-REPORT.md) |
 
 ---
 

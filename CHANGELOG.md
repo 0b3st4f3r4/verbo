@@ -9,6 +9,27 @@ de suporte + 6 meses de descontinuação = 7 anos de ciclo de vida.
 ## [Não lançado]
 
 ### Adicionado
+- **FXP v1.2** — as quatro extensões remanescentes da §9 da v1.1
+  (`docs/FXP-SCHEMA-v1.md` promovido a v1.2; fio default continua byte a
+  byte v1.0/v1.1, golden bytes intactos; tudo negociado e opt-in):
+  - **TLS 1.3 (`tcps`, §7)** — confidencialidade + MAC por frame via
+    `rustls` (provedor `ring`); rustls não expõe TLS-PSK (#174), então o
+    modelo é certificado autoassinado + **pinning SHA-256 do DER** no
+    endpoint `tcps:host:porta@sha256:HEX` — certificado sem o pin exato
+    **fecha a conexão** (nunca degrada para texto plano). `vbl fxpd
+    --tls-cert/--tls-key` (par obrigatório); Unix+TLS é recusado no arranque.
+  - **Dicionário de compressão compartilhado (§4.8, id 2)** — derivado do
+    registro do servidor (nomes canônicos ordenados + `\n`, teto 64 KiB);
+    o `HELLO` vira gatilho do handshake e **nenhum byte de dicionário cruza
+    o fio**; decoder sem dict vê id 2 como v1.1 (fail-closed idêntico).
+    `compression_dict = true` no cliente; `vbl fxpd --dict` no servidor.
+  - **Beacon IPv6 + SSM (§4.9)** — grupos IPv6 (`[ff15::7080]:porta`, scope
+    numérico p/ link-local) e SSM IPv4 (RFC 4607, `ip:porta@fonte`); o
+    datagrama FXPD é intocado. SSM IPv6 fora do escopo (§9, aguarda API).
+  - **mDNS/DNS-SD (§4.10)** — feature `mdns` default-off (`mdns-sd`):
+    `_fxp._tcp.local.` com TXT `id`/`hash` (+`tls`/`pin`); endpoint
+    `mdns:ID` e `vbl fxpd --announce-mdns ID`; sem a feature, parse/flag
+    rejeitam com erro honesto.
 - **FXP v1.1** — as cinco extensões do fio registradas como futuras no §9 do
   schema (`docs/FXP-SCHEMA-v1.md`, agora v1.1; o fio padrão continua byte a
   byte o do v1.0, com teste de bytes-fixos na suíte):

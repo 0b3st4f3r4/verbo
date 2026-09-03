@@ -1,12 +1,20 @@
-# FXP — Schema de Mensagem v1.1
+# FXP — Schema de Mensagem v1.2
 
 **Status:** canônico. v1 definido **antes** dos drivers (PLAN §3.5) e canônico
-da Etapa 3; **v1.1** (esta revisão, janela `v2027.0.0-alpha.1` — PLAN §8 item 8)
-implementa as extensões do fio registradas na antiga §9: compressão, batching
-de leituras, descoberta multicast, autenticação do canal remoto e timestamps
-absolutos no fio. Implementação de referência: `core/crates/vbl-fxp/src/schema.rs`
-(roundtrip em `tests/schema_roundtrip.rs`), máquina de estado de conexão em
-`src/transport.rs`, lado servidor em `src/peer.rs`, beacon em `src/discover.rs`.
+da Etapa 3; **v1.1** (janela `v2027.0.0-alpha.1` — PLAN §8 item 8) implementou
+as extensões do fio da antiga §9: compressão, batching de leituras, descoberta
+multicast, autenticação do canal remoto e timestamps absolutos no fio.
+**v1.2** (esta revisão — PLAN §8 item 9) implementa as quatro extensões que
+ficaram registradas na §9 da v1.1: **TLS 1.3 com pinning** de certificado
+(§7, transporte `tcps`), **dicionário de compressão compartilhado** derivado
+do registro (§4.8), **beacon em IPv6** e **SSM IPv4** (§4.9) e
+**mDNS/DNS-SD** (§4.10, opt-in por feature). O fio default (sem recursos
+negociados) permanece **bit a bit v1.0**; todo recurso novo segue o princípio
+7 (negociado, opt-in, fail-closed). Implementação de referência:
+`core/crates/vbl-fxp/src/schema.rs` (roundtrip em `tests/schema_roundtrip.rs`),
+máquina de estado de conexão em `src/transport.rs`, lado servidor em
+`src/peer.rs`, beacon em `src/discover.rs`, mDNS em `src/mdns.rs`
+(feature `mdns`), TLS em `src/tls.rs`; cenários v1.2 em `tests/v12.rs`.
 
 ---
 
@@ -30,10 +38,14 @@ absolutos no fio. Implementação de referência: `core/crates/vbl-fxp/src/schem
 6. **Honestidade de dados no fio** (FORMAL §4.7): a resposta de leitura carrega
    a marca de origem (`FLAG_SINTETICO`); dado sintético só circula em modo
    simulado/híbrido explícito e chega ao Caderno com `measurement_status`.
-7. **Recursos novos são negociados e opt-in** (v1.1): o wire de configuração
-   default é **bit a bit v1.0** (testado por golden bytes); nenhum frame com
-   recurso novo parte sem `CAPS` confirmado; um peer v1.0 diante de opcode
-   v1.1 falha **fechado** (`UnknownOpcode`) — nunca interpreta silenciosamente.
+7. **Recursos novos são negociados e opt-in** (v1.1; mantido na v1.2): o wire
+   de configuração default é **bit a bit v1.0** (testado por golden bytes);
+   nenhum frame com recurso novo parte sem `CAPS` confirmado; um peer v1.0
+   diante de opcode v1.1 falha **fechado** (`UnknownOpcode`) — nunca
+   interpreta silenciosamente. A promoção do bit 3 de `CAPS` (reservado na
+   v1.1 ⇒ `DICT` na v1.2) é segura **por construção**: decoder v1.1 ignora
+   bits reservados no decode; quem não negocia `DICT` vê o algoritmo id 2
+   como desconhecido (§4.8) e falha fechado.
 
 ## 2. Enquadramento (frame)
 
@@ -152,7 +164,11 @@ count × DeviceDesc:
 
 O `HELLO` transporta o registro do peer remoto para o lado local enxergar os
 dispositivos publicados (números usados na validação inclusiva de limites,
-FORMAL §4.3).
+FORMAL §4.3). **Na v1.2** o `HELLO` ganha um segundo papel: quando `DICT`
+(§4.5) foi concedido, o `HELLO` integra o handshake (o §4.5 já o ordenava) e
+ambos os lados derivam o **mesmo** dicionário do registro do SERVIDOR a
+partir do que cada lado já possui — servidor: o próprio registro; cliente: a
+resposta `HELLO`. Nenhum byte de dicionário cruza o fio (§4.8).
 
 ### 4.5 `CAPS` — negociação de capacidades (v1.1)
 
@@ -165,12 +181,14 @@ u16 LE  bitmask de capacidades pedidas
 | 0   | `LZ4`           | frames com `FLAG_COMPRESSED` + algoritmo id 1 (§4.8)       |
 | 1   | `BATCH`         | opcodes `READ_BATCH`/`READ_BATCH_OK` (§4.7)                |
 | 2   | `TIMESTAMP`     | frames com `FLAG_TIMESTAMP` (§5)                           |
+| 3   | `DICT` (v1.2)   | algoritmo id 2 com dicionário do registro (§4.8); o `HELLO` passa a integrar o handshake |
 
 `CAPS_OK` devolve a **interseção** pedidos × suportados. Ordem obrigatória na
 conexão: **AUTH (§4.6, se política exigir) → CAPS → HELLO → trabalho**. Nenhum
 frame com recurso novo parte sem `CAPS_OK` confirmando a capacidade — o
-estado da conexão impõe (cliente e servidor); codec é stateless. Bits 3–15
-reservados: `0` no encode; ignorados no decode.
+estado da conexão impõe (cliente e servidor); codec é stateless. Bits 4–15
+reservados: `0` no encode; ignorados no decode (o bit 3 era reservado na
+v1.1 — a promoção é compatível, ver princípio 7).
 
 ### 4.6 `AUTH_*` — autenticação do canal remoto (v1.1)
 
@@ -222,14 +240,27 @@ READ_BATCH_OK: u16 LE count (igual ao pedido)
   diagnóstico `fxp_batch`. Falha pré-buscada de sensor que o programa não
   pediu **não** gera alerta — o alerta continua pertencendo à pergunta feita.
 
-### 4.8 Compressão do corpo (v1.1)
+### 4.8 Compressão do corpo (v1.1; id 2 v1.2)
 
-- Algoritmo único no v1.1: **LZ4 block** (`id 1`, byte `reservado` do header).
+- Algoritmos no byte `reservado` do header: `id 1` = **LZ4 block** (v1.1);
+  `id 2` = **LZ4 block + dicionário compartilhado do registro** (v1.2).
   Threshold de encode: só comprime quando a região plana (ts+nome+corpo)
   excede **512 B** e o resultado não excede a região plana (nunca inflar o fio).
-- `FLAG_COMPRESSED` marca o frame; `CAPS` bit 0 autoriza. Sem negociação, o
-  estado da conexão **proíbe o envio** (nunca depende de o outro lado
-  "tolerar" flag desconhecida).
+- `FLAG_COMPRESSED` marca o frame; `CAPS` bit 0 autoriza o id 1; bit `DICT`
+  (§4.5) autoriza o id 2. Sem negociação, o estado da conexão **proíbe o
+  envio** (nunca depende de o outro lado "tolerar" flag desconhecida).
+- **Dicionário (v1.2):** derivado deterministicamente do registro do
+  SERVIDOR — nomes canônicos **ordenados**, concatenados com `\n`, teto
+  **64 KiB** (truncado em ordem; mesmos bytes dos dois lados). O servidor
+  usa o próprio registro; o cliente deriva da resposta `HELLO`. Regras de
+  estado: (a) a resposta `HELLO` nunca sai comprimida com dict (o cliente
+  só terá o dicionário depois de recebê-la); (b) o lado servidor só marca o
+  dicionário como pronto DEPOIS de receber o `HELLO` do cliente; (c) frames
+  de trabalho com id 2 só partem após o gatilho do `HELLO`, dos dois lados.
+- Fail-closed: decoder sem dicionário diante do id 2 ⇒ `UnknownCompression
+  { received: 2 }` — **idêntico ao comportamento v1.1** (o codec é stateless
+  e desconhece o id); dicionário divergente ou blob corrupto ⇒
+  `DecompressionFailed`. Nunca lixo silencioso.
 - Guarda de bomba: a região descomprimida ≤ 8192; excedeu ou blob corrupto ⇒
   erro de decodificação (`DecompressionFailed`), nunca execução parcial.
 
@@ -253,6 +284,23 @@ u32 LE  primeiros 4 bytes de SHA-256 dos nomes canônicos do registro,
 - Opt-in (anúncio e consumo) via config; default **off** para não introduzir
   dependência de rede nos testes determinísticos de CI. Rede sem multicast ⇒
   descoberta "indisponível" (caminho honesto §4.7 — nunca erro de construção).
+
+### 4.10 mDNS/DNS-SD (v1.2, opt-in por feature)
+
+Alternativa ao beacon UDP (§4.9) para redes que filtram multicast IP mas
+resolvem mDNS. Compilada **apenas** com a cargo feature `mdns` (default off —
+nenhuma dependência nova no build de produção sem opt-in):
+
+- Serviço **`_fxp._tcp.local.`**, instância = identifier do `fxpd`; TXT:
+  `id` (identificador, canônico para match), `hash` (hex dos primeiros 4
+  bytes do SHA-256 do registro — mesma impressão digital do beacon §4.9) e,
+  para peers TLS (§7), `tls=1` + `pin` (hex SHA-256 do DER do certificado).
+- O endpoint `mdns:<identificador>` no registro resolve no `build()` do
+  barramento (janela idêntica ao beacon); TXT `tls=1` ⇒ endpoint `tcps`
+  com o pin. Sem a feature, o parse de `mdns:` **rejeita** o endpoint com
+  erro honesto — nada de aceitar e falhar depois.
+- mDNS é lossy como UDP (§4.9): ausência de resposta não é recusa; sem
+  cache além da janela de escuta.
 
 ## 5. Flags (u8)
 
@@ -313,7 +361,17 @@ Prioridade da fila: `0` = máxima (comandos associados a `subvert` — FORMAL
 | `in-process` | chamada direta (sem fio) | modo local; orçamento ≤ 10 µs/mensagem |
 | `unix`     | frames §2 sobre `UnixStream` (SOCK_STREAM) | local entre processos (`fxpd`) |
 | `tcp`      | frames §2 sobre `TcpStream` | remoto — mesma semântica, timeouts maiores |
-| `udp-beacon` (v1.1) | datagrama FXPD §4.9 (sem ack) | descoberta multicast, anúncio only |
+| `tcps` (v1.2) | frames §2 sobre **TLS 1.3** (rustls, provedor `ring`) | remoto com confidencialidade + MAC; **nunca degrada** para texto plano |
+| `udp-beacon` (v1.1) | datagrama FXPD §4.9 (sem ack) | descoberta multicast, anúncio only; v1.2: grupos IPv6 e SSM IPv4 (§4.9) |
+| `mdns` (v1.2, feature) | DNS-SD §4.10 | descoberta alternativa ao beacon |
+
+**TLS (`tcps`, v1.2):** o FXP não tem PSK no TLS (rustls não expõe TLS-PSK —
+rustls/rustls#174); o modelo de confiança v1.2 é **certificado autoassinado +
+pinning por impressão digital**: o endpoint `tcps:host:porta@sha256:HEX`
+carrega o pin SHA-256 do DER do certificado e o cliente REJEITA o handshake
+cujo certificado não bate exatamente com o pin (fail-closed; sem fallback
+para texto plano). Unix + TLS é recusado honestamente no arranque (não faz
+sentido empilhar camadas). O handshake tem timeout próprio de 2 s (§6).
 
 O servidor de referência (testes/integração) fala exatamente o frame §2;
 nenhuma mensagem v1 é transport-specific. O lado servidor com estado de
@@ -340,8 +398,15 @@ dono canônico único da máquina de estados — os loops genéricos
 | compressão só negociada, sem bomba (§4.8) | `FLAG_COMPRESSED` | `tests/schema_roundtrip.rs` + `tests/transport.rs` |
 | PSK fail-closed (§4.6) | `AUTH_*` | `tests/transport.rs` |
 | anúncio sem dado de sensor (§4.9) | beacon `FXPD` | `tests/discover.rs` |
+| TLS pin certo conecta; errado falha fechado (§7, v1.2) | `tcps` + pin | `tests/v12.rs` + `tests/e2e.rs` (CLI) |
+| TLS nunca em Unix; plano↔TLS cross falha nas duas direções (§7) | recusa honesta | `tests/v12.rs` |
+| dict derivado do registro, roundtrip id 2 (§4.8, v1.2) | `FLAG_COMPRESSED` + id 2 | `tests/v12.rs` + `tests/schema_roundtrip.rs` |
+| id 2 sem dict falha como v1.1 (§4.8, v1.2) | `UnknownCompression{2}` | `tests/v12.rs` |
+| dict negociado com HELLO; degradação v1.1 (§4.8) | `CAPS` bit 3 | `tests/v12.rs` |
+| beacon IPv6 e SSM IPv4; parse honesto (§4.9, v1.2) | grupos alternativos | `tests/v12.rs` |
+| mDNS anúncio/resolve; endpoint `mdns:` exige feature (§4.10) | TXT id/hash/tls/pin | `tests/v12.rs` (feature `mdns`) |
 
-## 9. Extensões (estado da v1.1)
+## 9. Extensões (estado da v1.2)
 
 **Implementado na v1.1** (antes listadas como trabalho futuro na antiga §9):
 compressão (§4.8), batching de leituras (§4.7), descoberta multicast (§4.9),
@@ -349,6 +414,21 @@ autenticação do canal remoto (§4.6) e timestamps absolutos no fio (§3/§5 �
 timestamp físico é atribuição de laboratório; o Caderno usa o relógio virtual
 do runtime).
 
-**Fica registrado como trabalho futuro (fora da v1.1):** confidencialidade e
-MAC por frame via TLS (rustls), IPv6/SSM para o beacon, mDNS/DNS-SD,
-dicionários de compressão compartilhados entre frames.
+**Implementado na v1.2** (as quatro extensões que ficaram registradas na §9
+da v1.1, todas opt-in, com o fio default bit a bit v1.0/v1.1):
+
+1. **Confidencialidade e MAC por frame via TLS** — TLS 1.3 (rustls, `ring`)
+   com certificado autoassinado + **pinning SHA-256** (§7): rustls não expõe
+   TLS-PSK (rustls/rustls#174), então o PSK-HMAC da v1.1 (§4.6) continua
+   disponível e combinável com TLS como camada de autorização de aplicação.
+2. **Dicionário de compressão compartilhado entre frames** — derivado do
+   registro do servidor (§4.8, id 2), gatilho no `HELLO`, zero bytes de
+   dicionário no fio.
+3. **IPv6 e SSM para o beacon** — grupos IPv6 (join com scope) e SSM IPv4
+   (assinatura por fonte, RFC 4607) no §4.9.
+4. **mDNS/DNS-SD** — §4.10, feature `mdns` default-off.
+
+**Fica registrado como trabalho futuro (fora da v1.2):** SSM IPv6 (aguarda
+API de socket — `MCAST_JOIN_SOURCE_GROUP` para v6), TOFU como alternativa
+operacional ao pinning, compressão zstd com dicionário treinado (id 3+),
+0-RTT/resumo de sessão TLS para reduzir o custo do handshake por conexão.

@@ -83,7 +83,7 @@ fn e2e_caps_batch_timestamp_compression_negociados() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::LZ4 | caps::BATCH | caps::TIMESTAMP },
+        PeerConfig { psk: None, caps: caps::LZ4 | caps::BATCH | caps::TIMESTAMP, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -135,6 +135,7 @@ fn e2e_auth_psk_chave_certa_abre_errada_fecha() {
         PeerConfig {
             psk: Some(b"chave-compartilhada".to_vec()),
             caps: caps::TIMESTAMP,
+            ..Default::default()
         },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
@@ -166,7 +167,7 @@ fn e2e_cliente_sem_auth_contra_servidor_com_psk_falha_fechado() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: Some(b"segredo".to_vec()), caps: 0 },
+        PeerConfig { psk: Some(b"segredo".to_vec()), caps: 0, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -188,7 +189,7 @@ fn e2e_falha_de_item_no_lote_so_alerta_quando_o_programa_pede() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::BATCH },
+        PeerConfig { psk: None, caps: caps::BATCH, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -274,7 +275,7 @@ fn e2e_descoberta_resolve_peer_no_build_e_sem_anuncio_inacessivel() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::TIMESTAMP },
+        PeerConfig { psk: None, caps: caps::TIMESTAMP, ..Default::default() },
     );
     let (_srv, port) = serve_tcp_peer(&peer).expect("servidor tcp");
     // Origem do beacon = interface de saída multicast; o servidor escuta em
@@ -374,7 +375,7 @@ fn e2e_act_remota_entrega_rejeita_e_aplica_fallback() {
     let peer = PeerServer::new(
         peer_bus(reg),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::TIMESTAMP },
+        PeerConfig { psk: None, caps: caps::TIMESTAMP, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -480,7 +481,7 @@ fn batch_de_um_sensor_cai_no_caminho_individual() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::BATCH },
+        PeerConfig { psk: None, caps: caps::BATCH, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -506,7 +507,7 @@ fn e2e_act_ack_rejeicao_por_minimo_maximo_e_outros_acks() {
     let peer = PeerServer::new(
         peer_bus(registry_peer_com_ator()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::TIMESTAMP },
+        PeerConfig { psk: None, caps: caps::TIMESTAMP, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -572,7 +573,7 @@ fn e2e_item_de_lote_com_erro_do_peer_so_alerta_quando_perguntado() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::BATCH },
+        PeerConfig { psk: None, caps: caps::BATCH, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -616,7 +617,7 @@ fn peer_fecha_conexao_com_lixo_pre_autenticacao() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: Some(b"segredo".to_vec()), caps: 0 },
+        PeerConfig { psk: Some(b"segredo".to_vec()), caps: 0, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -688,7 +689,7 @@ fn peer_batch_item_nao_registrado_viaja_e_vira_alerta_tipado() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::BATCH },
+        PeerConfig { psk: None, caps: caps::BATCH, ..Default::default() },
     );
     assert_eq!(peer.config().caps, caps::BATCH, "acessor de config honesto");
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
@@ -727,7 +728,7 @@ fn peer_act_com_str_e_rejeicao_de_safety_remota() {
     let peer = PeerServer::new(
         peer_bus(reg_peer),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0 },
+        PeerConfig { psk: None, caps: 0, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -775,7 +776,7 @@ fn hello_do_peer_carrega_a_matriz_completa_de_descritores() {
     let peer = PeerServer::new(
         peer_bus(reg),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0 },
+        PeerConfig { psk: None, caps: 0, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -838,7 +839,7 @@ fn lote_de_um_sensor_cai_no_caminho_individual() {
     let peer = PeerServer::new(
         peer_bus(reg),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0 },
+        PeerConfig { psk: None, caps: 0, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -914,7 +915,7 @@ fn violacao_de_limite_do_cliente_bloqueia_antes_do_fio() {
     let peer = PeerServer::new(
         peer_bus(regp),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0 },
+        PeerConfig { psk: None, caps: 0, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -973,7 +974,7 @@ fn power_real_ausente_marca_inacessivel_e_fallback_local_entrega() {
     let peer = PeerServer::new(
         peer_bus(registry_peer()),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0 },
+        PeerConfig { psk: None, caps: 0, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));
@@ -1021,7 +1022,7 @@ fn peer_cru_cumpre_o_protocolo_nas_bordas() {
     let peer = PeerServer::new(
         peer_bus(reg),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: 0b111 },
+        PeerConfig { psk: None, caps: 0b111, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, &sock).expect("servidor");
     assert!(wait_ready_unix(&sock, DEADLINE));

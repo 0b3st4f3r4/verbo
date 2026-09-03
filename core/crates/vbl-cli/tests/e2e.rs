@@ -559,12 +559,21 @@ use std::io::{BufRead, BufReader};
 use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
+/// Serializa os cenários com daemon (`fxpd`): sob instrumentação (llvm-cov)
+/// três daemons em paralelo já flanquearam por contenção de CPU/porta — os
+/// cenários são independentes, então podem correr em mutex sem perder nada.
+static FXPD_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Sobe o `vbl fxpd` e espera a linha "fxpd pronto em …" (teto de 10 s).
 /// Devolve o filho vivo e o endpoint impresso (ex.: `tcp:0.0.0.0:43117`).
 /// O filho é um daemon: quem encerra é o teste (`matar_fxpd`) — o aviso de
 /// processo sem `wait()` em todos os caminhos é o comportamento desejado.
 #[allow(clippy::zombie_processes)]
-fn spawn_fxpd(dir: &Path, envs: &[(&str, &str)], args: &[&str]) -> (Child, String) {
+fn spawn_fxpd(
+    dir: &Path,
+    envs: &[(&str, &str)],
+    args: &[&str],
+) -> (Child, String, BufReader<std::process::ChildStdout>) {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_vbl"));
     cmd.arg("fxpd").args(args).current_dir(dir);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -585,7 +594,14 @@ fn spawn_fxpd(dir: &Path, envs: &[(&str, &str)], args: &[&str]) -> (Child, Strin
             Ok(0) => panic!("fxpd encerrou antes de ficar pronto"),
             Ok(_) => {
                 if let Some(resto) = line.strip_prefix("fxpd pronto em ") {
-                    return (child, resto.trim().to_string());
+                    // O daemon ainda imprime a linha de recursos DEPOIS do
+                    // pronto; fechar o pipe aqui (drop do reader) faria o
+                    // println! do fxpd entrar em pânico (EPIPE) e matar o
+                    // servidor antes do cliente conectar — flake real sob
+                    // instrumentação. O leitor volta no tuple: fica VIVO
+                    // durante o cenário e é solto normalmente no fim (nada
+                    // vazado para o ASan, nada fechado cedo demais).
+                    return (child, resto.trim().to_string(), reader);
                 }
             }
             Err(e) => {
@@ -624,11 +640,12 @@ const PROGRAMA_MONITOR: &str = "event Monitora {\n\
 
 #[test]
 fn e2e_fxpd_batch_timestamp_compress_negociados_com_cliente_real() {
+    let _guardia = FXPD_SERIAL.lock().expect("lock fxpd");
     let dir = scenario("fxpd-v11");
 
     // Peer: registro mínimo em modo simulado (serve cpu_temp etc.).
     let cfg_peer = write(&dir, "peer.cfg", "mode = simulado\n");
-    let (filho, endpoint) = spawn_fxpd(
+    let (filho, endpoint, _stdout_vivo) = spawn_fxpd(
         &dir,
         &[],
         &[
@@ -693,9 +710,10 @@ fn e2e_fxpd_batch_timestamp_compress_negociados_com_cliente_real() {
 
 #[test]
 fn e2e_fxpd_auth_psk_abre_com_chave_certa_e_fecha_com_errada() {
+    let _guardia = FXPD_SERIAL.lock().expect("lock fxpd");
     let dir = scenario("fxpd-auth");
     let cfg_peer = write(&dir, "peer.cfg", "mode = simulado\n");
-    let (filho, endpoint) = spawn_fxpd(
+    let (filho, endpoint, _stdout_vivo) = spawn_fxpd(
         &dir,
         &[("E2E_PSK", "segredo-do-lab")],
         &["--serve", "tcp:0", "--fxp-config", &cfg_peer, "--auth", "psk:E2E_PSK"],
@@ -763,6 +781,126 @@ fn e2e_fxpd_auth_psk_abre_com_chave_certa_e_fecha_com_errada() {
     assert!(
         jsonl.contains("transporte: conexão quebrada: auth:"),
         "motivo auth não está no Caderno:\n{jsonl}"
+    );
+
+    matar_fxpd(filho);
+    clear(&dir);
+}
+
+// ======================================================================
+// FXP v1.2 — TLS do transporte (§7): `vbl fxpd --tls-cert/--tls-key`
+// (rustls, TLS 1.3 sob os frames) × cliente `vbl run` com endpoint
+// `tcps:host:porta@sha256:PIN`. Pin certo conecta; pin errado falha
+// fechado e vira evento honesto no Caderno.
+// ======================================================================
+
+use sha2::{Digest, Sha256};
+
+/// Gera um par autoassinado (rcgen) no cenário e devolve (caminho cert,
+/// caminho chave, hex do pin SHA-256 do DER).
+fn cert_do_cenario(dir: &Path, nome: &str) -> (String, String, String) {
+    let ck = rcgen::generate_simple_self_signed(vec!["localhost".into()])
+        .expect("rcgen gera cert autoassinado");
+    let cert = write(dir, &format!("{nome}.crt"), &ck.cert.pem());
+    let key = write(dir, &format!("{nome}.key"), &ck.signing_key.serialize_pem());
+    let fp = Sha256::digest(ck.cert.der().as_ref());
+    let hex: String = fp.iter().map(|b| format!("{b:02x}")).collect();
+    (cert, key, hex)
+}
+
+#[test]
+fn e2e_fxpd_tls_pin_certo_conecta_e_errado_falha_fechada() {
+    let _guardia = FXPD_SERIAL.lock().expect("lock fxpd");
+    let dir = scenario("fxpd-tls");
+    let cfg_peer = write(&dir, "peer.cfg", "mode = simulado\n");
+    let (cert, key, pin_hex) = cert_do_cenario(&dir, "srv");
+    let (filho, endpoint, _stdout_vivo) = spawn_fxpd(
+        &dir,
+        &[],
+        &[
+            "--serve",
+            "tcp:0",
+            "--fxp-config",
+            &cfg_peer,
+            "--tls-cert",
+            &cert,
+            "--tls-key",
+            &key,
+        ],
+    );
+    assert!(
+        endpoint.starts_with("tcps:"),
+        "endpoint do fxpd TLS deve anunciar tcps: {endpoint}"
+    );
+    let porta = porta_de(&endpoint);
+
+    // Pin CERTO: leitura atravessa o TLS e o Caderno fica sem alerta de I/O.
+    let cfg_ok = write(
+        &dir,
+        "cliente-ok.cfg",
+        &format!(
+            "mode = real\ncache_ttl_ms = 0\nread_timeout_ms = 2000\n\
+             cpu_temp.mode = real\n\
+             cpu_temp.endpoint = tcps:127.0.0.1:{porta}@sha256:{pin_hex}\n"
+        ),
+    );
+    let (out, text) = run(
+        &dir,
+        &args_run(
+            &dir,
+            &write(&dir, "monitora.vl", PROGRAMA_MONITOR),
+            "ok.vcad",
+            &["--ticks", "2", "--fxp-config", &cfg_ok],
+        ),
+    );
+    assert!(
+        out.status.success(),
+        "vbl run falhou contra fxpd TLS:\n{text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let jsonl = std::fs::read_to_string(dir.join("ok.vcad.jsonl")).unwrap();
+    assert!(
+        !jsonl.contains("sensor_inaccessible"),
+        "falha de leitura contra daemon TLS sadio:\n{jsonl}"
+    );
+
+    // Pin ERRADO (outro cert): handshake falha fechada — sem valor, com
+    // evento honesto no Caderno (nunca texto plano).
+    let (_c2, _k2, pin_ruim) = cert_do_cenario(&dir, "intruso");
+    let cfg_ruim = write(
+        &dir,
+        "cliente-ruim.cfg",
+        &format!(
+            "mode = real\ncache_ttl_ms = 0\nread_timeout_ms = 2000\n\
+             cpu_temp.mode = real\n\
+             cpu_temp.endpoint = tcps:127.0.0.1:{porta}@sha256:{pin_ruim}\n"
+        ),
+    );
+    let (out2, _text2) = run(
+        &dir,
+        &args_run(
+            &dir,
+            &write(&dir, "monitora2.vl", PROGRAMA_MONITOR),
+            "ruim.vcad",
+            &["--ticks", "2", "--fxp-config", &cfg_ruim],
+        ),
+    );
+    // §4.7: a leitura não vira valor — o run é honesto (alerta) e o processo
+    // termina normal; o motivo TLS completo fica no Caderno.
+    assert!(
+        out2.status.success(),
+        "run com pin errado deve ser honesto, não crashar:\n{}\n{}",
+        _text2,
+        String::from_utf8_lossy(&out2.stderr)
+    );
+    let jsonl2 = std::fs::read_to_string(dir.join("ruim.vcad.jsonl")).unwrap();
+    assert!(
+        jsonl2.contains("sensor_inaccessible"),
+        "recusa TLS não virou evento honesto:\n{jsonl2}"
+    );
+    assert!(
+        jsonl2.to_lowercase().contains("tls"),
+        "motivo do handshake recusado não está no Caderno:\n{jsonl2}"
     );
 
     matar_fxpd(filho);

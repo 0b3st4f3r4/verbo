@@ -41,11 +41,25 @@ impl From<schema::SchemaError> for TransportError {
     }
 }
 
-/// Fluxo bidirecional: Unix local ou TCP remoto — mesma semântica de frame.
+impl From<crate::tls::TlsError> for TransportError {
+    fn from(e: crate::tls::TlsError) -> Self {
+        // Toda falha TLS é de conexão/autenticação do canal — nunca degrada
+        // para texto plano (§7 v1.2: fail closed).
+        TransportError::ConnectionFailed(e.to_string())
+    }
+}
+
+/// Fluxo bidirecional: Unix local, TCP remoto ou TCP+TLS remoto (v1.2 §7) —
+/// mesma semântica de frame por cima (o TLS é um cano a mais, nunca muda o
+/// schema).
 #[derive(Debug)]
 pub(crate) enum Current {
     Unix(UnixStream),
     Tcp(TcpStream),
+    /// Cliente TLS (`tcps:`, pin por impressão digital).
+    TlsClient(rustls::StreamOwned<rustls::ClientConnection, TcpStream>),
+    /// Servidor TLS (`fxpd --tls-cert/--tls-key`).
+    TlsServer(rustls::StreamOwned<rustls::ServerConnection, TcpStream>),
 }
 
 impl Current {
@@ -59,6 +73,16 @@ impl Current {
                 let _ = s.set_read_timeout(Some(d));
                 let _ = s.set_write_timeout(Some(d));
             }
+            // O handshake paga o orçamento próprio (tls::HANDSHAKE_TIMEOUT);
+            // após o aperto de mãos vale o timeout de trabalho do chamador.
+            Current::TlsClient(s) => {
+                let _ = s.sock.set_read_timeout(Some(d));
+                let _ = s.sock.set_write_timeout(Some(d));
+            }
+            Current::TlsServer(s) => {
+                let _ = s.sock.set_read_timeout(Some(d));
+                let _ = s.sock.set_write_timeout(Some(d));
+            }
         }
     }
 
@@ -66,6 +90,8 @@ impl Current {
         match self {
             Current::Unix(s) => s.read(buf),
             Current::Tcp(s) => s.read(buf),
+            Current::TlsClient(s) => s.read(buf),
+            Current::TlsServer(s) => s.read(buf),
         }
     }
 
@@ -73,13 +99,17 @@ impl Current {
         match self {
             Current::Unix(s) => s.write_all(buf),
             Current::Tcp(s) => s.write_all(buf),
+            Current::TlsClient(s) => s.write_all(buf),
+            Current::TlsServer(s) => s.write_all(buf),
         }
     }
 }
 
-/// Conexão cliente falando frames v1.1 (docs/FXP-SCHEMA-v1.md §2). O estado
-/// de recursos negociados (`CAPS`, §4.5) vive aqui: nenhum frame com recurso
-/// novo parte sem `negotiate()` confirmado — o cliente falha fechado.
+/// Conexão cliente falando frames v1.1/v1.2 (docs/FXP-SCHEMA-v1.md §2). O
+/// estado de recursos negociados (`CAPS`, §4.5) e do dicionário compartilhado
+/// (v1.2 §4.8) vive aqui: nenhum frame com recurso novo parte sem
+/// `negotiate()` confirmado (e, para dict, sem o `HELLO` completo) — o
+/// cliente falha fechado.
 #[derive(Debug)]
 pub struct Connection {
     current: Current,
@@ -88,6 +118,10 @@ pub struct Connection {
     /// Contador próprio de seq dos frames de negociação (não colide com o
     /// espaço de seq do bus — a correlação é por conexão).
     neg_seq: u32,
+    /// Dicionário derivado do registro do PEER (v1.2 §4.8) — instalado pelo
+    /// bus após o `HELLO`; frames só comprimem com dict quando pronto.
+    dict: Option<Vec<u8>>,
+    dict_ready: bool,
 }
 
 impl Connection {
@@ -95,7 +129,13 @@ impl Connection {
         let s = UnixStream::connect(path)
             .map_err(|e| TransportError::ConnectionFailed(format!("{}: {e}", path.display())))?;
         s.set_nonblocking(false).ok();
-        let c = Connection { current: Current::Unix(s), negotiated_caps: 0, neg_seq: 0 };
+        let c = Connection {
+            current: Current::Unix(s),
+            negotiated_caps: 0,
+            neg_seq: 0,
+            dict: None,
+            dict_ready: false,
+        };
         c.current.set_timeout(timeout);
         Ok(c)
     }
@@ -108,7 +148,47 @@ impl Connection {
             .ok_or_else(|| TransportError::ConnectionFailed(format!("{host}:{port} sem endereço")))?;
         let s = TcpStream::connect(addr)
             .map_err(|e| TransportError::ConnectionFailed(format!("{addr}: {e}")))?;
-        let c = Connection { current: Current::Tcp(s), negotiated_caps: 0, neg_seq: 0 };
+        let c = Connection {
+            current: Current::Tcp(s),
+            negotiated_caps: 0,
+            neg_seq: 0,
+            dict: None,
+            dict_ready: false,
+        };
+        c.current.set_timeout(timeout);
+        Ok(c)
+    }
+
+    /// Conexão TLS (`tcps:`, v1.2 §7): TCP + rustls TLS 1.3 sob os frames —
+    /// confidencialidade e MAC por frame. A confiança é a impressão digital
+    /// (`pin`) do certificado do servidor: divergência ⇒ falha fechada,
+    /// **nunca** texto plano (§4.6: falha de segurança é terminativa). O
+    /// handshake tem orçamento próprio; depois, o `timeout` de trabalho vale
+    /// normalmente.
+    pub fn tcp_tls(
+        host: &str,
+        port: u16,
+        pin: &crate::tls::Fingerprint,
+        timeout: Duration,
+    ) -> Result<Self, TransportError> {
+        let addr = (host, port)
+            .to_socket_addrs()
+            .map_err(|e| TransportError::ConnectionFailed(format!("{host}:{port}: {e}")))?
+            .next()
+            .ok_or_else(|| TransportError::ConnectionFailed(format!("{host}:{port} sem endereço")))?;
+        let s = TcpStream::connect(addr)
+            .map_err(|e| TransportError::ConnectionFailed(format!("{addr}: {e}")))?;
+        let name = rustls::pki_types::ServerName::try_from(host.to_string())
+            .map_err(|e| TransportError::ConnectionFailed(format!("{host}: nome TLS: {e}")))?;
+        let cfg = Arc::new(crate::tls::client_config(*pin)?);
+        let stream = crate::tls::client_stream(cfg, s, name)?;
+        let c = Connection {
+            current: Current::TlsClient(stream),
+            negotiated_caps: 0,
+            neg_seq: 0,
+            dict: None,
+            dict_ready: false,
+        };
         c.current.set_timeout(timeout);
         Ok(c)
     }
@@ -122,15 +202,23 @@ impl Connection {
             .map_err(|e| TransportError::Broken(format!("escrita: {e}")))
     }
 
-    /// Encode do frame conforme as capacidades negociadas (§4.5/§4.8).
+    /// Encode do frame conforme as capacidades negociadas (§4.5/§4.8/v1.2):
+    /// dict (id 2) tem precedência quando negociado e pronto; LZ4 simples é
+    /// o caminho v1.1; sem recursos, o fio plano.
     fn encode_frame(&self, msg: &Message) -> Result<Vec<u8>, TransportError> {
+        if self.negotiated_caps & schema::caps::DICT != 0 && self.dict_ready {
+            if let Some(dict) = &self.dict {
+                let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
+                schema::encode_with_compression_dict(msg, dict, &mut f)?;
+                return Ok(f);
+            }
+        }
         if self.negotiated_caps & schema::caps::LZ4 != 0 {
             let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
             schema::encode_with_compression(msg, &mut f)?;
-            Ok(f)
-        } else {
-            Ok(schema::encode_to_vec(msg)?)
+            return Ok(f);
         }
+        Ok(schema::encode_to_vec(msg)?)
     }
 
     /// Recebe **um** frame respeitando o prazo total (`timeout` de parede).
@@ -171,7 +259,7 @@ impl Connection {
         while n_read < total {
             n_read += read(&mut frame[n_read..])?;
         }
-        let (msg, _) = schema::decode(&frame)?;
+        let (msg, _) = schema::decode_with_dict(&frame, self.dict.as_deref())?;
         Ok(msg)
     }
 
@@ -221,6 +309,45 @@ impl Connection {
     /// Capacidades concedidas pelo peer (0 antes do handshake).
     pub fn negotiated_caps(&self) -> u16 {
         self.negotiated_caps
+    }
+
+    // -----------------------------------------------------------------
+    // v1.2 — Dicionário de compressão compartilhado (§4.8)
+    // -----------------------------------------------------------------
+
+    /// Instala o dicionário derivado do registro do PEER e marca pronto —
+    /// chamado pelo bus imediatamente após o [`Self::exchange_hello`].
+    pub fn set_dict(&mut self, dict: Vec<u8>) {
+        self.dict = Some(dict);
+        self.dict_ready = true;
+    }
+
+    /// Dicionário pronto para o envio (negociado + HELLO completo).
+    pub fn dict_ready(&self) -> bool {
+        self.dict_ready
+    }
+
+    /// Publica o registro local (`HELLO`, §4.4) e devolve o registro do
+    /// PEER. Obrigatório quando `caps::DICT` foi concedido: ambos os lados
+    /// derivam o mesmo dicionário do registro do servidor antes do
+    /// primeiro frame de trabalho — nenhum byte de dicionário cruza o fio.
+    pub fn exchange_hello(
+        &mut self,
+        local: &[schema::DeviceDesc],
+        timeout: Duration,
+    ) -> Result<Vec<schema::DeviceDesc>, TransportError> {
+        self.neg_seq = self.neg_seq.wrapping_add(1);
+        let req = Message::hello(local.to_vec(), self.neg_seq);
+        let resp = self.request(&req, timeout)?;
+        if resp.opcode != schema::op::HELLO {
+            return Err(TransportError::Broken(
+                "resposta ao HELLO não é HELLO (§4.4)".into(),
+            ));
+        }
+        let Body::Hello { devices } = resp.body else {
+            return Err(TransportError::Broken("corpo do HELLO inválido (§4.4)".into()));
+        };
+        Ok(devices)
     }
 
     // -----------------------------------------------------------------
@@ -382,7 +509,7 @@ where
             return;
         }
         // Lê o próximo frame do fluxo (bloqueia até o timeout curto da conexão).
-        match read_frame(&mut flow, &mut rest) {
+        match read_frame(&mut flow, &mut rest, None) {
             Ok(Some(msg)) => {
                 if msg.opcode == schema::op::BYE {
                     return;
@@ -409,6 +536,7 @@ where
 pub(crate) fn read_frame(
     flow: &mut Current,
     rest: &mut Vec<u8>,
+    dict: Option<&[u8]>,
 ) -> Result<Option<Message>, TransportError> {
     if rest.len() >= 4 {
         let total = schema::peek_frame_len(rest)?;
@@ -434,7 +562,7 @@ pub(crate) fn read_frame(
     if rest.len() >= 4 {
         let total = schema::peek_frame_len(rest)?;
         if rest.len() >= total {
-            let (msg, _) = schema::decode(rest)?;
+            let (msg, _) = schema::decode_with_dict(rest, dict)?;
             rest.drain(..total);
             return Ok(Some(msg));
         }

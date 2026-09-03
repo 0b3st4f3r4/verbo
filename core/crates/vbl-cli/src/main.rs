@@ -153,20 +153,28 @@ where
             serve,
             auth,
             announce,
+            announce_mdns,
             compress,
+            dict,
             batch,
             timestamp,
             ledger,
+            tls_cert,
+            tls_key,
         } => fxpd(FxpdArgs {
             fxp_mode,
             fxp_config,
             serve,
             auth,
             announce,
+            announce_mdns,
             compress,
+            dict,
             batch,
             timestamp,
             ledger,
+            tls_cert,
+            tls_key,
         }),
         Command::FxpProbe {
             fxp_mode,
@@ -227,6 +235,9 @@ fn build_fxp(
         if let Some(b) = c.batch_prefetch {
             config.batch_prefetch = b;
         }
+        if let Some(b) = c.compression_dict {
+            config.compression_dict = b;
+        }
         if let Some(b) = c.compression {
             config.compression = b;
         }
@@ -264,10 +275,15 @@ struct FxpdArgs {
     serve: String,
     auth: Option<String>,
     announce: Option<String>,
+    announce_mdns: Option<String>,
     compress: bool,
+    dict: bool,
     batch: bool,
     timestamp: bool,
     ledger: Option<PathBuf>,
+    /// TLS v1.2 (§7): PEMs da cadeia + chave do servidor (ambos ou nenhum).
+    tls_cert: Option<PathBuf>,
+    tls_key: Option<PathBuf>,
 }
 
 /// O peer FXP montado e pronto para servir (resultado de [`fxpd_preparar`]).
@@ -319,6 +335,9 @@ fn fxpd_preparar(args: &FxpdArgs) -> Result<FxpdRuntime, i32> {
     let mut caps_annunciadas = 0;
     if args.compress {
         caps_annunciadas |= caps::LZ4;
+    }
+    if args.dict {
+        caps_annunciadas |= caps::DICT;
     }
     if args.batch {
         caps_annunciadas |= caps::BATCH;
@@ -373,10 +392,33 @@ fn fxpd_preparar(args: &FxpdArgs) -> Result<FxpdRuntime, i32> {
         let b = bus.lock().expect("bus");
         b.registry_rico().devices().map(|d| d.name.clone()).collect()
     };
+    // -- TLS (v1.2 §7): PEMs lidos do disco (o certificado é público; a
+    // -- chave fica no arquivo do operador, nunca no fio). Erro de leitura
+    // -- ou PEM inválido é honesto no arranque (serve_tcp_peer_port valida).
+    let tls = match (&args.tls_cert, &args.tls_key) {
+        (None, None) => None,
+        (Some(c), Some(k)) => {
+            let carregar = |p: &Path, o_que: &str| -> Result<String, i32> {
+                std::fs::read_to_string(p).map_err(|e| {
+                    eprintln!("vbl fxpd: não foi possível ler {o_que} '{}': {e}", p.display());
+                    2
+                })
+            };
+            let certs_pem = carregar(c, "--tls-cert")?;
+            let key_pem = carregar(k, "--tls-key")?;
+            Some(vbl_fxp::TlsAccept { certs_pem, key_pem })
+        }
+        _ => unreachable!("o parser de args exige --tls-cert e --tls-key juntos"),
+    };
+    let com_tls = tls.is_some();
+    // v1.2 §4.10: pin do certificado para o TXT do anúncio mDNS (antes do
+    // move para o PeerConfig).
+    #[cfg(feature = "mdns")]
+    let pin_tls = tls.as_ref().and_then(|t| vbl_fxp::tls::fingerprint_pem(&t.certs_pem));
     let peer = PeerServer::shared(
         bus,
         caderno,
-        PeerConfig { psk, caps: caps_annunciadas },
+        PeerConfig { psk, caps: caps_annunciadas, tls },
     );
 
     // -- transporte ----------------------------------------------------------
@@ -404,7 +446,8 @@ fn fxpd_preparar(args: &FxpdArgs) -> Result<FxpdRuntime, i32> {
                 };
                 match vbl_fxp::peer::serve_tcp_peer_port(&peer, porta) {
                     Ok((servidor, real)) => {
-                        (format!("tcp:0.0.0.0:{real}"), Some(real), Some(servidor))
+                        let esquema = if com_tls { "tcps" } else { "tcp" };
+                        (format!("{esquema}:0.0.0.0:{real}"), Some(real), Some(servidor))
                     }
                     Err(e) => {
                         eprintln!("vbl fxpd: não foi possível servir em tcp:{porta_txt}: {e}");
@@ -439,6 +482,34 @@ fn fxpd_preparar(args: &FxpdArgs) -> Result<FxpdRuntime, i32> {
         None => None,
     };
 
+    // v1.2 §4.10: anúncio mDNS opcional (--announce-mdns), com pin do
+    // certificado no TXT quando o peer também serve TLS (§7).
+    #[cfg(feature = "mdns")]
+    let _anunciador_mdns = match &args.announce_mdns {
+        Some(id) => {
+            let pin = pin_tls;
+            match vbl_fxp::mdns::MdnsAnnouncer::start(
+                id,
+                porta_tcp_real.unwrap_or(0),
+                vbl_fxp::discover::registry_hash(&nomes_do_registro),
+                pin,
+            ) {
+                Ok(a) => Some(a),
+                Err(e) => {
+                    eprintln!("vbl fxpd: anúncio mDNS indisponível ({e}) — peer segue no ar sem mDNS (§4.10 honesto)");
+                    None
+                }
+            }
+        }
+        None => None,
+    };
+    #[cfg(not(feature = "mdns"))]
+    if args.announce_mdns.is_some() {
+        eprintln!(
+            "vbl fxpd: --announce-mdns exige binário compilado com --features mdns — anúncio mDNS NÃO ativo (§4.10 honesto)"
+        );
+    }
+
     Ok(FxpdRuntime {
         servindo,
         porta_tcp_real,
@@ -455,17 +526,19 @@ fn fxpd(args: FxpdArgs) -> i32 {
         Ok(runtime) => {
             println!("fxpd pronto em {}", runtime.servindo);
             println!(
-                "fxpd recursos: {} | auth: {} | announce: {}",
+                "fxpd recursos: {} | auth: {} | tls: {} | announce: {}",
                 if runtime.caps_annunciadas == 0 {
                     "v1.0 puro".to_string()
                 } else {
                     let mut v = vec![];
                     if args.compress { v.push("lz4"); }
+                    if args.dict { v.push("dict"); }
                     if args.batch { v.push("batch"); }
                     if args.timestamp { v.push("timestamp"); }
                     v.join(",")
                 },
                 if args.auth.is_some() { "psk" } else { "nenhuma" },
+                if args.tls_cert.is_some() { "tls1.3" } else { "plano" },
                 args.announce.as_deref().unwrap_or("-"),
             );
             use std::io::Write;
@@ -1005,11 +1078,32 @@ fn actor_availability(endpoint: &Endpoint) -> String {
                     Err(_) => format!("✗ endereço inválido ({host}:{port})"),
                 }
             }
+            RemoteAddr::TcpTls { host, port, fingerprint } => {
+                // Probe é somente leitura: alcançabilidade TCP + eco do pin
+                // declarado (a validação do certificado é do handshake TLS).
+                match format!("{host}:{port}").parse::<std::net::SocketAddr>() {
+                    Ok(alvo) => match std::net::TcpStream::connect_timeout(
+                        &alvo,
+                        Duration::from_millis(500),
+                    ) {
+                        Ok(_) => format!(
+                            "✓ peer alcançável (tls; pin sha256:{})",
+                            vbl_fxp::tls::hex32(fingerprint)
+                        ),
+                        Err(e) => format!("✗ conexão falhou ({e})"),
+                    },
+                    Err(_) => format!("✗ endereço inválido ({host}:{port})"),
+                }
+            }
         },
         Endpoint::AutoRemote { identifier } => {
             // Probe é somente leitura e não reabre a janela de descoberta do
             // build: reporta o estado da resolução feita lá.
             format!("discover:{identifier} (resolvida no build; ver coluna rota)")
+        }
+        Endpoint::AutoRemoteMdns { identifier } => {
+            // v1.2 §4.10: mesma semântica do beacon — resolução no build.
+            format!("mdns:{identifier} (resolvida no build; ver coluna rota)")
         }
     }
 }
@@ -1494,7 +1588,7 @@ retries = 3
                 port: 1,
             },
         };
-        assert!(actor_availability(&tcp_ruim).starts_with("✗ endereço inválido"));
+        assert!(super::actor_availability(&tcp_ruim).starts_with("✗ endereço inválido"));
         // TCP inalcançável: porta de descarte em endereço de loopback válido
         let tcp_morto = Endpoint::Remote {
             addr: RemoteAddr::Tcp {
@@ -1502,7 +1596,7 @@ retries = 3
                 port: 1,
             },
         };
-        assert!(actor_availability(&tcp_morto).starts_with("✗ conexão falhou"));
+        assert!(super::actor_availability(&tcp_morto).starts_with("✗ conexão falhou"));
     }
 }
 
@@ -1524,20 +1618,28 @@ mod fxpd_tests {
                 serve,
                 auth,
                 announce,
+                announce_mdns,
                 compress,
+                dict,
                 batch,
                 timestamp,
                 ledger,
+                tls_cert,
+                tls_key,
             } => FxpdArgs {
                 fxp_mode,
                 fxp_config,
                 serve,
                 auth,
                 announce,
+                announce_mdns,
                 compress,
+                dict,
                 batch,
                 timestamp,
                 ledger,
+                tls_cert,
+                tls_key,
             },
             _ => panic!("esperava FxpDaemon"),
         }
@@ -1648,12 +1750,16 @@ mod fxpd_tests {
                     serve,
                     auth: None,
                     announce: None,
+                    announce_mdns: None,
                     compress: false,
+                    dict: false,
                     batch: false,
                     timestamp: false,
                     ledger: None,
+                    tls_cert: None,
+                    tls_key: None,
                 };
-                assert_eq!(fxpd_preparar(&args).err(), Some(2));
+                assert_eq!(super::fxpd_preparar(&args).err(), Some(2));
             }
             _ => panic!("esperava FxpDaemon"),
         }
@@ -1737,20 +1843,28 @@ mod fxpd_dispatch_tests {
                     serve,
                     auth,
                     announce,
+                    announce_mdns,
                     compress,
+                    dict,
                     batch,
                     timestamp,
                     ledger,
+                    tls_cert,
+                    tls_key,
                 } => FxpdArgs {
                     fxp_mode,
                     fxp_config,
                     serve,
                     auth,
                     announce,
+                    announce_mdns,
                     compress,
+                    dict,
                     batch,
                     timestamp,
                     ledger,
+                    tls_cert,
+                    tls_key,
                 },
                 _ => panic!("esperava FxpDaemon"),
             }
@@ -1807,6 +1921,9 @@ mod fxpd_dispatch_tests {
 //    run em tempo real e modos do fxpd (cobra as cláusulas de exibição). ──
 #[cfg(test)]
 mod probe_battery_tests {
+    use crate::args::{parse_args, Command};
+    use crate::FxpdArgs;
+    use vbl_fxp::Endpoint;
     use crate::tests::{PROGRAMA_OK, roda, tmp_dir};
 
     #[test]
@@ -1880,4 +1997,130 @@ mod probe_battery_tests {
         ]);
         assert_eq!(code, 0);
     }
+
+    fn args_fxpd_local(extras: &[&str]) -> FxpdArgs {
+        let cmd = parse_args(
+            std::iter::once("fxpd".to_string()).chain(extras.iter().map(|s| s.to_string())),
+        )
+        .expect("parse fxpd");
+        match cmd {
+            Command::FxpDaemon {
+                fxp_mode,
+                fxp_config,
+                serve,
+                auth,
+                announce,
+                announce_mdns,
+                compress,
+                dict,
+                batch,
+                timestamp,
+                ledger,
+                tls_cert,
+                tls_key,
+            } => FxpdArgs {
+                fxp_mode,
+                fxp_config,
+                serve,
+                auth,
+                announce,
+                announce_mdns,
+                compress,
+                dict,
+                batch,
+                timestamp,
+                ledger,
+                tls_cert,
+                tls_key,
+            },
+            _ => panic!("esperava FxpDaemon"),
+        }
+    }
+
+    #[test]
+    fn fxpd_fxpmode_invalido_e_disponibilidade_remota_honestas() {
+        // --fxp-mode inválido ⇒ honesto no arranque (código 2).
+        let args = args_fxpd_local(&["--serve", "tcp:0", "--fxp-mode", "turbo"]);
+        assert_eq!(super::fxpd_preparar(&args).err(), Some(2));
+
+        // Disponibilidade de ator remoto TCP: porta ABERTA ⇒ alcançável…
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let porta = listener.local_addr().expect("addr").port();
+        let msg = super::actor_availability(&Endpoint::Remote {
+            addr: vbl_fxp::RemoteAddr::Tcp { host: "127.0.0.1".into(), port: porta },
+        });
+        assert!(msg.contains("alcançável"), "{msg}");
+
+        // …porta FECHADA ⇒ falha honesta (sem fingir).
+        let msg2 = super::actor_availability(&Endpoint::Remote {
+            addr: vbl_fxp::RemoteAddr::Tcp { host: "127.0.0.1".into(), port: 1 },
+        });
+        assert!(msg2.contains("falhou"), "{msg2}");
+    }
+
+    #[test]
+    fn fxpd_tls_cert_ilegivel_falha_honesto_no_arranque() {
+        // PEM inexistente ⇒ erro honesto de arranque (código 2), nunca
+        // daemon no ar sem TLS nem degradação para texto plano.
+        let args = args_fxpd_local(&[
+            "--serve",
+            "tcp:0",
+            "--tls-cert",
+            "nao-existe.pem",
+            "--tls-key",
+            "nao-existe.key.pem",
+        ]);
+        assert_eq!(super::fxpd_preparar(&args).err(), Some(2));
+    }
+
+
+    #[test]
+    fn disponibilidade_de_ator_cobre_todos_os_bracos_honestos() {
+        use std::path::PathBuf;
+        // Rota real com endpoint ausente; descobertas; tcps com pin.
+        assert!(super::actor_availability(&Endpoint::ThermalZone {
+            dir: PathBuf::from("/vbl-certo-nao-existe"),
+        })
+        .contains("ausente"));
+        assert!(super::actor_availability(&Endpoint::RaplConstraint {
+            file: PathBuf::from("/vbl-certo-nao-existe"),
+        })
+        .contains("ausente"));
+        assert!(super::actor_availability(&Endpoint::HwmonPwm {
+            file: PathBuf::from("/vbl-certo-nao-existe"),
+        })
+        .contains("ausente"));
+        assert!(super::actor_availability(&Endpoint::AutoRemote {
+            identifier: "x".into(),
+        })
+        .contains("discover:"));
+        assert!(super::actor_availability(&Endpoint::AutoRemoteMdns {
+            identifier: "x".into(),
+        })
+        .contains("mdns:"));
+        // tcps com endereço inválido ⇒ honesto sem conectar.
+        assert!(super::actor_availability(&Endpoint::Remote {
+            addr: vbl_fxp::RemoteAddr::TcpTls {
+                host: "nao-e-ip".into(),
+                port: 1,
+                fingerprint: [0u8; 32],
+            },
+        })
+        .contains("inválido"));
+        // tcps em porta fechada ⇒ conexão falhou (honesto).
+        assert!(super::actor_availability(&Endpoint::Remote {
+            addr: vbl_fxp::RemoteAddr::TcpTls {
+                host: "127.0.0.1".into(),
+                port: 1,
+                fingerprint: [0u8; 32],
+            },
+        })
+        .contains("falhou"));
+        // tcp endereço inválido ⇒ honesto.
+        assert!(super::actor_availability(&Endpoint::Remote {
+            addr: vbl_fxp::RemoteAddr::Tcp { host: "x".into(), port: 1 },
+        })
+        .contains("inválido"));
+    }
+
 }

@@ -100,6 +100,10 @@ pub enum DeviceKind {
 pub enum RemoteAddr {
     Unix(PathBuf),
     Tcp { host: String, port: u16 },
+    /// TCP + TLS 1.3 (v1.2 §7): confidencialidade/MAC por frame; a confiança
+    /// é a impressão digital SHA-256 do DER do certificado do servidor
+    /// (`tcps:host:porta@sha256:HEX`) — sem pin não há conexão (fail closed).
+    TcpTls { host: String, port: u16, fingerprint: crate::tls::Fingerprint },
 }
 
 /// Endpoint concreto do dispositivo — o **nome simbólico nunca é caminho de
@@ -130,6 +134,10 @@ pub enum Endpoint {
     /// ouvindo o grupo FXPD pelo `identifier`; sem anúncio no prazo ⇒
     /// registrado porém inacessível (FORMAL §4.7).
     AutoRemote { identifier: String },
+    /// Descoberta mDNS/DNS-SD (v1.2 §4.10): `_fxp._tcp.local.` com TXT
+    /// `id`/`hash` (+ `tls`/`pin`); exige a feature `mdns` — sem ela o
+    /// parse REJEITA o endpoint (erro honesto, nada silencioso).
+    AutoRemoteMdns { identifier: String },
 }
 
 impl Endpoint {
@@ -150,6 +158,17 @@ impl Endpoint {
             }
             return Ok(Endpoint::AutoRemote { identifier: id.into() });
         }
+        if let Some(id) = s.strip_prefix("mdns:") {
+            if id.is_empty() {
+                return Err(RegistryError::InvalidEndpoint(s.into()));
+            }
+            #[cfg(feature = "mdns")]
+            return Ok(Endpoint::AutoRemoteMdns { identifier: id.into() });
+            #[cfg(not(feature = "mdns"))]
+            return Err(RegistryError::InvalidEndpoint(format!(
+                "{s} (mDNS exige compilar com --features mdns)"
+            )));
+        }
         let (schema, rest) = s
             .split_once(':')
             .ok_or_else(|| RegistryError::InvalidEndpoint(s.into()))?;
@@ -163,13 +182,29 @@ impl Endpoint {
             "led" => Ok(Endpoint::LedClass { dir: path(rest) }),
             "unix" => Ok(Endpoint::Remote { addr: RemoteAddr::Unix(path(rest)) }),
             "tcp" => {
-                let (host, port) = rest.rsplit_once(':').ok_or_else(|| {
-                    RegistryError::InvalidEndpoint(format!("{s} (esperado tcp:host:porta)"))
+                let (host, port) = parse_tcp_target(s, rest, "tcp:host:porta")?;
+                Ok(Endpoint::Remote { addr: RemoteAddr::Tcp { host, port } })
+            }
+            "tcps" => {
+                // v1.2 §7: tcps:host:porta@sha256:HEX — pin OBRIGATÓRIO; sem
+                // ele não há confiança declarada e a construção falha.
+                let (target, pin_txt) = rest.rsplit_once('@').ok_or_else(|| {
+                    RegistryError::InvalidEndpoint(format!(
+                        "{s} (tcps exige @sha256:HEX — sem pin não há confiança declarada)"
+                    ))
                 })?;
-                let port: u16 = port.parse().map_err(|_| {
-                    RegistryError::InvalidEndpoint(format!("{s} (porta inválida)"))
+                let hex = pin_txt.strip_prefix("sha256:").ok_or_else(|| {
+                    RegistryError::InvalidEndpoint(format!(
+                        "{s} (pin deve ser sha256:HEX de 64 dígitos)"
+                    ))
                 })?;
-                Ok(Endpoint::Remote { addr: RemoteAddr::Tcp { host: host.into(), port } })
+                let fingerprint = crate::tls::unhex32(hex).ok_or_else(|| {
+                    RegistryError::InvalidEndpoint(format!(
+                        "{s} (pin sha256 precisa de 64 dígitos hex)"
+                    ))
+                })?;
+                let (host, port) = parse_tcp_target(s, target, "host:porta")?;
+                Ok(Endpoint::Remote { addr: RemoteAddr::TcpTls { host, port, fingerprint } })
             }
             _ => Err(RegistryError::InvalidEndpoint(s.into())),
         }
@@ -190,14 +225,32 @@ impl Endpoint {
             Endpoint::Remote { addr } => match addr {
                 RemoteAddr::Unix(p) => format!("unix:{}", p.display()),
                 RemoteAddr::Tcp { host, port } => format!("tcp:{host}:{port}"),
+                RemoteAddr::TcpTls { host, port, fingerprint } => format!(
+                    "tcps:{host}:{port}@sha256:{}",
+                    crate::tls::hex32(fingerprint)
+                ),
             },
             Endpoint::AutoRemote { identifier } => format!("discover:{identifier}"),
+            Endpoint::AutoRemoteMdns { identifier } => format!("mdns:{identifier}"),
         }
     }
 
     pub fn is_remote(&self) -> bool {
         matches!(self, Endpoint::Remote { .. })
     }
+}
+
+/// `host:porta` → `(host, porta)` — host pode ser IP ou nome; porta é
+/// decimal u16. O erro preserva o endpoint completo (`s`) e o formato
+/// esperado do esquema chamador.
+fn parse_tcp_target(s: &str, rest: &str, formato: &str) -> Result<(String, u16), RegistryError> {
+    let (host, port) = rest
+        .rsplit_once(':')
+        .ok_or_else(|| RegistryError::InvalidEndpoint(format!("{s} (esperado {formato})")))?;
+    let port: u16 = port
+        .parse()
+        .map_err(|_| RegistryError::InvalidEndpoint(format!("{s} (porta inválida)")))?;
+    Ok((host.to_string(), port))
 }
 
 /// Entrada do registro: canônico único + aliases + modo + rota + fallback.
@@ -496,6 +549,9 @@ pub struct FxpConfig {
     pub batch_prefetch: Option<bool>,
     /// v1.1 §4.8: anunciar LZ4 (respostas comprimidas; default off).
     pub compression: Option<bool>,
+    /// v1.2 §4.8: anunciar DICT (dicionário compartilhado do registro com
+    /// HELLO no handshake; default off).
+    pub compression_dict: Option<bool>,
     /// v1.1 §5: anunciar FLAG_TIMESTAMP (carimbo físico no fio; default off —
     /// o Caderno continua no relógio virtual).
     pub wire_timestamp: Option<bool>,
@@ -563,6 +619,9 @@ impl FxpConfig {
                     cfg.batch_prefetch = Some(Self::bool_cfg("batch_prefetch", value, i)?)
                 }
                 "compression" => cfg.compression = Some(Self::bool_cfg("compression", value, i)?),
+                "compression_dict" => {
+                    cfg.compression_dict = Some(Self::bool_cfg("compression_dict", value, i)?)
+                }
                 "wire_timestamp" => {
                     cfg.wire_timestamp = Some(Self::bool_cfg("wire_timestamp", value, i)?)
                 }

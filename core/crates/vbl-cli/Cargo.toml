@@ -20,3 +20,12 @@ vbl-lang = { workspace = true }
 vbl-runtime = { workspace = true }
 vbl-fxp = { workspace = true }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "signal"] }
+
+[dev-dependencies]
+# v1.2: e2e TLS — cert autoassinado + impressão digital sem depender do bin.
+rcgen = { workspace = true }
+sha2 = { workspace = true }
+
+[features]
+# mDNS/DNS-SD (v1.2 §4.10): anúncio/descoberta opt-in via mdns-sd.
+mdns = ["vbl-fxp/mdns"]

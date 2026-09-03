@@ -15,7 +15,7 @@ use vbl_fxp::bus::{BusConfig, FxpBus};
 use vbl_fxp::registry::{DeviceEntry, DeviceRegistry, FxpConfig, OperationMode};
 use vbl_fxp::schema::{caps, decode, encode_to_vec, AckAct, BatchResult, Message};
 use vbl_fxp::transport::{wait_ready_unix, serve_unix};
-use vbl_fxp::{PeerConfig, PeerServer};
+use vbl_fxp::{PeerConfig, PeerServer, TlsAccept};
 use vbl_runtime::ledger::ChainLedger;
 use vbl_runtime::fxp::{Fxp, Value};
 
@@ -209,7 +209,7 @@ fn setup_peer_v11(
             vbl_runtime::FxpSimulator::new(),
         ),
         ChainLedger::new(),
-        PeerConfig { psk: None, caps: caps::LZ4 | caps::BATCH | caps::TIMESTAMP },
+        PeerConfig { psk: None, caps: caps::LZ4 | caps::BATCH | caps::TIMESTAMP, ..Default::default() },
     );
     let _srv = vbl_fxp::peer::serve_unix_peer(&peer, Path::new(&sock)).expect("servidor");
     std::thread::sleep(Duration::from_millis(20));
@@ -350,6 +350,7 @@ fn v11_auth(c: &mut Criterion) {
         PeerConfig {
             psk: Some(b"chave-do-bench".to_vec()),
             caps: caps::LZ4 | caps::BATCH | caps::TIMESTAMP,
+            ..Default::default()
         },
     );
     let _srv_auth = vbl_fxp::peer::serve_unix_peer(&peer_auth, Path::new(&sock_auth)).expect("srv");
@@ -374,5 +375,127 @@ fn v11_auth(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, schema_v1, local_read, remote_read, local_actuation, v11_batch, v11_timestamp_and_compression, v11_auth);
+
+// ══════════════════════════════════════════════════════════════════════════
+// v1.2 — TLS 1.3 (§7) e dicionário compartilhado (§4.8)
+// ══════════════════════════════════════════════════════════════════════════
+
+fn v12_tls_e_dict(c: &mut Criterion) {
+    use std::path::Path;
+    use vbl_fxp::transport::Connection;
+
+    let mut group = c.benchmark_group("v12_tls_dict");
+    let dir = std::env::temp_dir().join(format!("vbl-bench-v12-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+
+    // --- TLS: handshake + frame sobre TLS vs TCP plano (mesma leitura) ---
+    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).expect("cert");
+    let accept = TlsAccept {
+        certs_pem: cert.cert.pem(),
+        key_pem: cert.signing_key.serialize_pem(),
+    };
+    let peer_tls = PeerServer::new(
+        FxpBus::build(
+            registry_n_sensores(1),
+            BusConfig { mode: OperationMode::Simulated, ..Default::default() },
+            vbl_runtime::FxpSimulator::new(),
+        ),
+        ChainLedger::new(),
+        PeerConfig { tls: Some(accept), ..Default::default() },
+    );
+    let (_srv, porta) =
+        vbl_fxp::peer::serve_tcp_peer_port(&peer_tls, 0).expect("srv tls");
+    std::thread::sleep(Duration::from_millis(20));
+    let fingerprint = vbl_fxp::tls::fingerprint(cert.cert.der());
+    let peer_plano = PeerServer::new(
+        FxpBus::build(
+            registry_n_sensores(1),
+            BusConfig { mode: OperationMode::Simulated, ..Default::default() },
+            vbl_runtime::FxpSimulator::new(),
+        ),
+        ChainLedger::new(),
+        PeerConfig::default(),
+    );
+    let (_srv2, porta_plana) =
+        vbl_fxp::peer::serve_tcp_peer_port(&peer_plano, 0).expect("srv plano");
+    std::thread::sleep(Duration::from_millis(20));
+
+    group.bench_function("tls_handshake_ler", |b| {
+        b.iter(|| {
+            let mut conn = Connection::tcp_tls(
+                "127.0.0.1",
+                porta,
+                &fingerprint,
+                Duration::from_secs(2),
+            )
+            .expect("tls con");
+            let r = conn
+                .request(&Message::read("temp_0", 1, true), Duration::from_secs(1))
+                .expect("r");
+            black_box(r)
+        })
+    });
+    group.bench_function("tcp_plano_handshake_ler", |b| {
+        b.iter(|| {
+            let mut conn =
+                Connection::tcp("127.0.0.1", porta_plana, Duration::from_secs(2)).expect("con");
+            let r = conn
+                .request(&Message::read("temp_0", 1, true), Duration::from_secs(1))
+                .expect("r");
+            black_box(r)
+        })
+    });
+
+    // --- Dict: HELLO do registro ⇒ dict; leitura em lote com/novos nomes ---
+    let sock = dir.join("bench-dict.sock");
+    let peer_dict = PeerServer::new(
+        FxpBus::build(
+            registry_n_sensores(1),
+            BusConfig { mode: OperationMode::Simulated, ..Default::default() },
+            vbl_runtime::FxpSimulator::new(),
+        ),
+        ChainLedger::new(),
+        PeerConfig { caps: caps::LZ4 | caps::DICT, ..Default::default() },
+    );
+    let _srv3 = vbl_fxp::peer::serve_unix_peer(&peer_dict, Path::new(&sock)).expect("srv dict");
+    std::thread::sleep(Duration::from_millis(20));
+
+    // Codec puro: mesmo payload com LZ4 simples × LZ4+dict.
+    let nomes: Vec<String> = (0..40)
+        .map(|i| format!("temp_{i:02}_sensor_de_temperatura_do_rack_{i:02}"))
+        .collect();
+    let dict = vbl_fxp::schema::compress::dict_from_registry(&nomes);
+    let resultados: Vec<vbl_fxp::BatchResult> = nomes
+        .iter()
+        .map(|n| vbl_fxp::BatchResult::Ok { value: 36.5, canonical: n.clone() })
+        .collect();
+    let msg = Message::read_batch_ok(resultados, 1);
+    group.bench_function("encode_lz4_simples", |b| {
+        b.iter(|| {
+            let mut f = Vec::new();
+            vbl_fxp::schema::encode_with_compression(&msg, &mut f).expect("enc");
+            black_box(f)
+        })
+    });
+    group.bench_function("encode_lz4_dict", |b| {
+        b.iter(|| {
+            let mut f = Vec::new();
+            vbl_fxp::schema::encode_with_compression_dict(&msg, &dict, &mut f).expect("enc");
+            black_box(f)
+        })
+    });
+    let mut frame = Vec::new();
+    vbl_fxp::schema::encode_with_compression_dict(&msg, &dict, &mut frame).expect("enc");
+    group.bench_function("decode_lz4_dict", |b| {
+        b.iter(|| {
+            let r = vbl_fxp::schema::decode_with_dict(&frame, Some(&dict)).expect("dec");
+            black_box(r)
+        })
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+    group.finish();
+}
+
+criterion_group!(benches, schema_v1, local_read, remote_read, local_actuation, v11_batch, v11_timestamp_and_compression, v11_auth, v12_tls_e_dict);
 criterion_main!(benches);

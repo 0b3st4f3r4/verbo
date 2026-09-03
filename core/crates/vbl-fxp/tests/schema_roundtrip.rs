@@ -536,8 +536,15 @@ fn auth_scheme_e_nonce_sao_validados() {
 
 #[test]
 fn caps_reservados_sao_rejeitados_no_encode() {
-    let msg = Message::caps(0b0000_0000_0000_1000, 1); // bit 3 é reservado
+    // v1.2: o bit 3 virou `caps::DICT` (promovido do reservado); o primeiro
+    // reservado é agora o bit 4 — encode segue rejeitando 4..=15.
+    let msg = Message::caps(0b0000_0000_0001_0000, 1); // bit 4 é reservado
     assert!(matches!(encode_to_vec(&msg), Err(SchemaError::ReservedCaps)));
+    let msg = Message::caps(0b1000_0000_0000_0000, 1); // bit 15 também
+    assert!(matches!(encode_to_vec(&msg), Err(SchemaError::ReservedCaps)));
+    // O bit promovido encode limpo: quem anuncia DICT não é rejeitado.
+    let msg = Message::caps(0b0000_0000_0000_1000, 1); // caps::DICT
+    assert!(encode_to_vec(&msg).is_ok());
 }
 
 // ══════════════════════════════════════════════════════════════════════════

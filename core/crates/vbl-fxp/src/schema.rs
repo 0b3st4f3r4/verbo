@@ -111,8 +111,13 @@ pub mod caps {
     pub const BATCH: u16 = 1 << 1;
     /// Frames com `FLAG_TIMESTAMP` (§5).
     pub const TIMESTAMP: u16 = 1 << 2;
-    /// Bits reservados: `0` no encode; ignorados no decode.
-    pub const RESERVED: u16 = !0b0111;
+    /// Dicionário LZ4 compartilhado derivado do registro (v1.2 §4.8). Quando
+    /// concedido, o `HELLO` (§4.4) integra o handshake e ambos os lados
+    /// derivam o mesmo dicionário do registro do servidor.
+    pub const DICT: u16 = 1 << 3;
+    /// Bits reservados: `0` no encode; ignorados no decode (4–15 desde a
+    /// v1.2 — o bit 3 virou `DICT`; peers v1.1 o ignoram no decode).
+    pub const RESERVED: u16 = !0b1111;
 }
 
 /// Algoritmos e política de compressão do corpo (v1.1 §4.8).
@@ -120,8 +125,36 @@ pub mod compress {
     pub const ALGO_NONE: u8 = 0;
     /// LZ4 block — único algoritmo da v1.1 (via `lz4_flex`).
     pub const ALGO_LZ4: u8 = 1;
+    /// LZ4 block + dicionário compartilhado do registro (v1.2 §4.8) — o
+    /// dicionário nunca cruza o fio: cada lado deriva dos nomes canônicos
+    /// que já possui (servidor: o próprio registro; cliente: a resposta
+    /// `HELLO`). Peer sem o bit `DICT` negociado vê id desconhecido ⇒
+    /// `UnknownCompression` (princípio 7 — fail closed).
+    pub const ALGO_LZ4_DICT: u8 = 2;
     /// Só comprime quando a região plana excede este tamanho (bytes).
     pub const THRESHOLD: usize = 512;
+    /// Teto determinístico do dicionário derivado (64 KiB — acima disso o
+    /// LZ4 block praticamente não ganha nada; truncar em ordem ordenada
+    /// mantém os dois lados com os MESMOS bytes).
+    pub const DICT_MAX: usize = 64 * 1024;
+
+    /// Dicionário compartilhado (v1.2 §4.8): nomes canônicos **ordenados**,
+    /// concatenados com `\n`, truncados em [`DICT_MAX`] bytes — a mesma
+    /// matéria da impressão digital do beacon (§4.9), agora com nomes
+    /// completos (onde a razão de compressão mora entre frames).
+    pub fn dict_from_registry(names: &[String]) -> Vec<u8> {
+        let mut sorted: Vec<&String> = names.iter().collect();
+        sorted.sort();
+        let mut out = Vec::new();
+        for (i, n) in sorted.iter().enumerate() {
+            if i > 0 {
+                out.push(b'\n');
+            }
+            out.extend_from_slice(n.as_bytes());
+        }
+        out.truncate(DICT_MAX);
+        out
+    }
 }
 
 /// Razões canônicas de `READ_ERR` (FORMAL §4.7).
@@ -792,6 +825,43 @@ pub fn encode_with_compression(msg: &Message, out: &mut Vec<u8>) -> Result<(), S
     Ok(())
 }
 
+/// Encode com o dicionário compartilhado (v1.2 §4.8): mesmas regras do
+/// [`encode_with_compression`] (threshold, nunca inflar, teto), com o
+/// algoritmo `ALGO_LZ4_DICT` no byte reservado. O dicionário é a matéria
+/// derivada do registro do servidor em AMBOS os lados
+/// ([`compress::dict_from_registry`]) — só quem negociou `caps::DICT` e já
+/// completou o `HELLO` consegue decodificar; os demais falham fechado.
+pub fn encode_with_compression_dict(
+    msg: &Message,
+    dict: &[u8],
+    out: &mut Vec<u8>,
+) -> Result<(), SchemaError> {
+    let mut plain = Vec::with_capacity(HEADER_LEN + msg.name.len() + 64);
+    encode(msg, &mut plain)?;
+    let ts_len = usize::from(msg.timestamp_us.is_some());
+    let prefix = HEADER_LEN + 8 * ts_len;
+    let region = &plain[4 + prefix..];
+    if region.len() <= compress::THRESHOLD {
+        out.extend_from_slice(&plain);
+        return Ok(());
+    }
+    let blob = lz4_flex::block::compress_with_dict(region, dict);
+    if blob.len() >= region.len() {
+        out.extend_from_slice(&plain);
+        return Ok(());
+    }
+    let length = prefix + blob.len();
+    if length > MAX_PAYLOAD {
+        return Err(SchemaError::FrameExceeded { length });
+    }
+    out.extend_from_slice(&plain[..4 + prefix]);
+    out[0..4].copy_from_slice(&(length as u32).to_le_bytes());
+    out[4 + 5] |= flag::COMPRESSED;
+    out[4 + 6] = compress::ALGO_LZ4_DICT;
+    out.extend_from_slice(&blob);
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Decode
 // ---------------------------------------------------------------------------
@@ -875,6 +945,18 @@ pub fn peek_frame_len(buf: &[u8]) -> Result<usize, SchemaError> {
 /// bytes consumidos (prefixo + payload). Erro se o payload estiver truncado
 /// (`MissingField`) ou sobrar bytes dentro do frame (`PayloadTooLong`).
 pub fn decode(buf: &[u8]) -> Result<(Message, usize), SchemaError> {
+    decode_with_dict(buf, None)
+}
+
+/// Decode com o dicionário da conexão (v1.2 §4.8): `dict = None` é o
+/// comportamento v1.1 exato (id 2 ⇒ `UnknownCompression`, princípio 7);
+/// com `dict = Some`, frames `ALGO_LZ4_DICT` descomprimem contra o
+/// dicionário derivado (blob corrupto ou dicionário divergente ⇒
+/// `DecompressionFailed`, nunca lixo silencioso).
+pub fn decode_with_dict(
+    buf: &[u8],
+    dict: Option<&[u8]>,
+) -> Result<(Message, usize), SchemaError> {
     let total = peek_frame_len(buf)?;
     if total == 0 || buf.len() < total {
         return Err(SchemaError::MissingField);
@@ -913,18 +995,32 @@ pub fn decode(buf: &[u8]) -> Result<(Message, usize), SchemaError> {
         rest = &rest[8..];
     }
     if flags & flag::COMPRESSED != 0 {
-        // §4.8: algoritmo único LZ4 no byte reservado; guarda de bomba = teto
+        // §4.8/v1.2: algoritmo no byte reservado; guarda de bomba = teto
         // da região descomprimida (blob corrupto/grande demais ⇒ erro).
-        if reservado != compress::ALGO_LZ4 {
-            return Err(SchemaError::UnknownCompression { received: reservado });
+        match reservado {
+            compress::ALGO_LZ4 => {
+                // Buffer-teto = guarda de bomba: blob que exceder 8192
+                // descomprimido falha; o que sobra é truncado após o fato.
+                region_owned = vec![0u8; MAX_PAYLOAD];
+                let n = lz4_flex::block::decompress_into(rest, &mut region_owned)
+                    .map_err(|_| SchemaError::DecompressionFailed)?;
+                region_owned.truncate(n);
+                rest = &region_owned;
+            }
+            compress::ALGO_LZ4_DICT => {
+                // v1.2: sem o dicionário da conexão, id 2 é desconhecido —
+                // exatamente o que um codec v1.1 faz (fail closed).
+                let Some(dict) = dict else {
+                    return Err(SchemaError::UnknownCompression { received: reservado });
+                };
+                region_owned = vec![0u8; MAX_PAYLOAD];
+                let n = lz4_flex::block::decompress_into_with_dict(rest, &mut region_owned, dict)
+                    .map_err(|_| SchemaError::DecompressionFailed)?;
+                region_owned.truncate(n);
+                rest = &region_owned;
+            }
+            _ => return Err(SchemaError::UnknownCompression { received: reservado }),
         }
-        // Buffer-teto = guarda de bomba: blob que exceder 8192 descomprimido
-        // falha; o que sobra de capacidade é truncado após o fato.
-        region_owned = vec![0u8; MAX_PAYLOAD];
-        let n = lz4_flex::block::decompress_into(rest, &mut region_owned)
-            .map_err(|_| SchemaError::DecompressionFailed)?;
-        region_owned.truncate(n);
-        rest = &region_owned;
     }
 
     let mut r = Reader::new(rest);

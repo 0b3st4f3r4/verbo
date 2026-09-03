@@ -29,6 +29,10 @@ pub mod peer;
 pub mod queue;
 pub mod registry;
 pub mod schema;
+pub mod tls;
+/// mDNS/DNS-SD (v1.2 §4.10) — opt-in: compile com `--features mdns`.
+#[cfg(feature = "mdns")]
+pub mod mdns;
 pub mod transport;
 
 pub use auth::{mac as auth_mac, nonce as auth_nonce, verify as auth_verify, NONCE_LEN as AUTH_NONCE_BYTES};
@@ -42,4 +46,5 @@ pub use peer::{PeerConfig, PeerServer};
 pub use queue::{Command, QueueError, CommandQueue, PRIORITY_NORMAL, PRIORITY_SUBVERT};
 pub use registry::{DeviceEntry, DeviceKind, DeviceMode, DeviceRegistry, Endpoint, RegistryError, FxpConfig, OperationMode, RemoteAddr};
 pub use schema::{AckAct, BatchResult, Body, DeviceDesc, SchemaError, Message, WireValue};
+pub use tls::TlsAccept;
 pub use transport::{TransportError, Server};

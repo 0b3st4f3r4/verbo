@@ -44,8 +44,12 @@ pub enum Command {
         auth: Option<String>,
         /// Anuncia o beacon multicast FXPD (§4.9) com este identificador.
         announce: Option<String>,
+        /// Anuncia mDNS/DNS-SD (v1.2 §4.10) — exige a feature `mdns`.
+        announce_mdns: Option<String>,
         /// Anuncia LZ4 (§4.8) — compressão negociada das respostas.
         compress: bool,
+        /// Anuncia DICT (v1.2 §4.8) — dicionário do registro + HELLO.
+        dict: bool,
         /// Anuncia BATCH (§4.7) — lote de leituras.
         batch: bool,
         /// Anuncia TIMESTAMP (§5) — carimbo físico nas respostas.
@@ -53,6 +57,9 @@ pub enum Command {
         /// Caderno do peer (produção); sem ele, o Caderno fica desligado
         /// (aviso honesto — §4.7 não registra eventos sem Caderno).
         ledger: Option<PathBuf>,
+        /// TLS 1.3 (v1.2 §7): PEM da cadeia + chave; ambos ou nenhum.
+        tls_cert: Option<PathBuf>,
+        tls_key: Option<PathBuf>,
     },
     /// `vbl ledger-verify ARQUIVO` — verificação externa do log do Caderno
     /// (binário `.vcad` ou JSONL): recomputa a cadeia SHA-256 e emite o
@@ -84,10 +91,14 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
             let mut serve: Option<String> = None;
             let mut auth = None;
             let mut announce = None;
+            let mut announce_mdns = None;
             let mut compress = false;
+            let mut dict = false;
             let mut batch = false;
             let mut timestamp = false;
             let mut ledger = None;
+            let mut tls_cert = None;
+            let mut tls_key = None;
             while let Some(a) = args.next() {
                 match a.as_str() {
                     "--fxp-mode" => {
@@ -110,10 +121,26 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                     "--auth" => {
                         auth = Some(args.next().ok_or("--auth exige psk:VAR_DE_ENV")?)
                     }
+                    "--tls-cert" => {
+                        tls_cert = Some(PathBuf::from(
+                            args.next().ok_or("--tls-cert exige ARQUIVO.pem")?,
+                        ))
+                    }
+                    "--tls-key" => {
+                        tls_key = Some(PathBuf::from(
+                            args.next().ok_or("--tls-key exige ARQUIVO.pem")?,
+                        ))
+                    }
                     "--announce" => {
                         announce = Some(args.next().ok_or("--announce exige IDENTIFICADOR")?)
                     }
+                    "--announce-mdns" => {
+                        announce_mdns = Some(
+                            args.next().ok_or("--announce-mdns exige IDENTIFICADOR")?,
+                        )
+                    }
                     "--compress" => compress = true,
+                    "--dict" => dict = true,
                     "--batch" => batch = true,
                     "--timestamp" => timestamp = true,
                     "--ledger" => {
@@ -124,16 +151,25 @@ pub fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Command, Str
                     other => return Err(format!("argumento de fxpd inesperado: {other}\n{USAGE}")),
                 }
             }
+            if tls_cert.is_some() != tls_key.is_some() {
+                return Err(format!(
+                    "fxpd: --tls-cert e --tls-key devem vir juntos (cadeia + chave)\n{USAGE}"
+                ));
+            }
             Ok(Command::FxpDaemon {
                 fxp_mode,
                 fxp_config,
                 serve: serve.ok_or(format!("fxpd exige --serve unix:PATH|tcp:PORTA\n{USAGE}"))?,
                 auth,
                 announce,
+                announce_mdns,
                 compress,
+                dict,
                 batch,
                 timestamp,
                 ledger,
+                tls_cert,
+                tls_key,
             })
         }
         "run" => {
@@ -292,13 +328,17 @@ uso:
   vbl fxpd --serve unix:PATH|tcp:PORTA [opções]
   vbl ledger-verify <ARQUIVO>
 
-opções de fxpd (schema v1.1 — docs/FXP-SCHEMA-v1.md §7/§4.5–§4.9):
+opções de fxpd (schema v1.1/v1.2 — docs/FXP-SCHEMA-v1.md §7/§4.5–§4.9):
   --fxp-config ARQUIVO             registro/config FXP servido pelo peer
   --fxp-mode MODO                  simulado|real|hibrido (padrão: o da config, senão simulado)
   --serve unix:PATH|tcp:PORTA      transporte do peer (porta 0 = efêmera)
   --auth psk:VAR_DE_ENV            PSK (§4.6): handshake AUTH obrigatório; chave NUNCA em arquivo
+  --tls-cert ARQUIVO               TLS 1.3 (v1.2 §7): PEM da cadeia do servidor
+  --tls-key ARQUIVO                TLS: PEM da chave privada (no disco, nunca no fio)
   --announce IDENTIFICADOR         beacon multicast FXPD (§4.9) com este identificador
+  --announce-mdns IDENTIFICADOR    mDNS/DNS-SD (v1.2 §4.10); exige --features mdns
   --compress                       anuncia LZ4 (§4.8)
+  --dict                           anuncia DICT (v1.2 §4.8): dicionário do registro
   --batch                          anuncia READ_BATCH (§4.7)
   --timestamp                      anuncia FLAG_TIMESTAMP (§5 — carimbo físico)
   --ledger ARQUIVO                 Caderno do peer (produção .vcad); sem ele, desligado
@@ -501,10 +541,14 @@ mod tests {
             serve,
             auth,
             announce,
+            announce_mdns,
             compress,
+            dict,
             batch,
             timestamp,
             ledger,
+            tls_cert,
+            tls_key,
         } = parse_args(args(&[
             "fxpd",
             "--serve",
@@ -517,11 +561,18 @@ mod tests {
             "psk:MINHA_VAR",
             "--announce",
             "fxpd-lab",
+            "--announce-mdns",
+            "fxpd-lab-mdns",
             "--compress",
+            "--dict",
             "--batch",
             "--timestamp",
             "--ledger",
             "peer.vcad",
+            "--tls-cert",
+            "srv.pem",
+            "--tls-key",
+            "srv.key.pem",
         ]))
         .unwrap()
         else {
@@ -532,8 +583,11 @@ mod tests {
         assert_eq!(fxp_mode.as_deref(), Some("hibrido"));
         assert_eq!(auth.as_deref(), Some("psk:MINHA_VAR"));
         assert_eq!(announce.as_deref(), Some("fxpd-lab"));
-        assert!(compress && batch && timestamp);
+        assert_eq!(announce_mdns.as_deref(), Some("fxpd-lab-mdns"));
+        assert!(compress && dict && batch && timestamp);
         assert_eq!(ledger, Some(PathBuf::from("peer.vcad")));
+        assert_eq!(tls_cert, Some(PathBuf::from("srv.pem")));
+        assert_eq!(tls_key, Some(PathBuf::from("srv.key.pem")));
 
         // Cláusulas de erro: sem --serve, argumento estranho, flags que
         // exigem valor sem o valor.
@@ -542,9 +596,15 @@ mod tests {
         assert!(parse_args(args(&["fxpd", "--serve"])).is_err());
         assert!(parse_args(args(&["fxpd", "--auth"])).is_err());
         assert!(parse_args(args(&["fxpd", "--announce"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--announce-mdns"])).is_err());
         assert!(parse_args(args(&["fxpd", "--ledger"])).is_err());
         assert!(parse_args(args(&["fxpd", "--fxp-config"])).is_err());
         assert!(parse_args(args(&["fxpd", "--fxp-mode"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--tls-cert"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--tls-key"])).is_err());
+        // TLS exige o PAR (cadeia + chave): só um dos dois ⇒ erro de uso.
+        assert!(parse_args(args(&["fxpd", "--serve", "tcp:0", "--tls-cert", "s.pem"])).is_err());
+        assert!(parse_args(args(&["fxpd", "--serve", "tcp:0", "--tls-key", "k.pem"])).is_err());
     }
 
     #[test]

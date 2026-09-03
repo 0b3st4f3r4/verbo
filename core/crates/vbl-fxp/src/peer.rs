@@ -43,6 +43,10 @@ pub struct PeerConfig {
     pub psk: Option<Vec<u8>>,
     /// Capacidades anunciadas (bits `caps::*`; bits reservados ignorados).
     pub caps: u16,
+    /// TLS presente (v1.2 §7) ⇒ o TCP fala TLS 1.3 sob os frames
+    /// (confidencialidade/MAC por frame); peer sem TLS falha o handshake
+    /// (nunca texto plano). Só se aplica a TCP — Unix local não cifra.
+    pub tls: Option<crate::tls::TlsAccept>,
 }
 
 /// O servidor FXP: barramento + Caderno do peer + política.
@@ -80,6 +84,13 @@ impl PeerServer {
 
 /// Servidor Unix com máquina de estados v1.1 por conexão.
 pub fn serve_unix_peer(server: &PeerServer, path: &Path) -> Result<Server, TransportError> {
+    // TLS é do TCP remoto (§7): unix local não cifra — config equivocada
+    // falha na construção (nunca "serve plano ignorando o tls").
+    if server.config.tls.is_some() {
+        return Err(TransportError::ConnectionFailed(
+            "tls configurado em transporte unix — TLS só se aplica a tcp (v1.2 §7)".into(),
+        ));
+    }
     let _ = std::fs::remove_file(path);
     let listener =
         UnixListener::bind(path).map_err(|e| TransportError::ConnectionFailed(format!("{e}")))?;
@@ -124,6 +135,15 @@ pub fn serve_tcp_peer(server: &PeerServer) -> Result<(Server, u16), TransportErr
 
 /// Variante com porta explícita (`--serve tcp:PORTA`; 0 = efêmera).
 pub fn serve_tcp_peer_port(server: &PeerServer, port: u16) -> Result<(Server, u16), TransportError> {
+    // TLS v1.2 (§7): config validada UMA vez no arranque — PEM ruim ⇒ erro
+    // honesto antes do 1º cliente; o Arc compartilhado serve N conexões.
+    let tls_cfg: Option<Arc<rustls::ServerConfig>> = match &server.config.tls {
+        Some(a) => Some(Arc::new(
+            crate::tls::server_config(a)
+                .map_err(|e| TransportError::ConnectionFailed(e.to_string()))?,
+        )),
+        None => None,
+    };
     let listener = TcpListener::bind(("0.0.0.0", port))
         .map_err(|e| TransportError::ConnectionFailed(format!("{e}")))?;
     let port = listener
@@ -135,18 +155,29 @@ pub fn serve_tcp_peer_port(server: &PeerServer, port: u16) -> Result<(Server, u1
         .map_err(|e| TransportError::ConnectionFailed(format!("{e}")))?;
     let desligar = Arc::new(AtomicBool::new(false));
     let flag_off = desligar.clone();
-    let identifier = format!("tcp:127.0.0.1:{port}");
+    let esquema = if tls_cfg.is_some() { "tcps" } else { "tcp" };
+    let identifier = format!("{esquema}:127.0.0.1:{port}");
     let bus = server.bus.clone();
     let ledger = server.ledger.clone();
     let config = server.config.clone();
     let handle = std::thread::spawn(move || {
         while !flag_off.load(Ordering::SeqCst) {
             match listener.accept() {
-                Ok((flow, _)) => {
+                Ok((stream, _)) => {
                     let (bus, ledger, config, flag_conn) =
                         (bus.clone(), ledger.clone(), config.clone(), flag_off.clone());
+                    let tls_conn = tls_cfg.clone();
                     std::thread::spawn(move || {
-                        serve_connection(Current::Tcp(flow), &bus, &ledger, &config, &flag_conn)
+                        // Handshake TLS antes da máquina de estados: quem fala
+                        // texto plano contra servidor TLS morre aqui (§7).
+                        let flow = match tls_conn {
+                            Some(cfg) => match crate::tls::server_stream(cfg, stream) {
+                                Ok(f) => Current::TlsServer(f),
+                                Err(_) => return, // handshake falhou: fecha, segue
+                            },
+                            None => Current::Tcp(stream),
+                        };
+                        serve_connection(flow, &bus, &ledger, &config, &flag_conn)
                     });
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -192,6 +223,7 @@ fn serve_connection(
             &mut flow,
             &Message::auth_challenge(AUTH_SCHEME_PSK_HMAC_SHA256, server_nonce, 0),
             0,
+            None,
         )
         .is_err()
     {
@@ -200,11 +232,16 @@ fn serve_connection(
     let mut authenticated = config.psk.is_none();
 
     let mut caps_negociadas: u16 = 0;
+    // v1.2 §4.8: dict derivado do registro LOCAL (o servidor publica os
+    // nomes que viram dicionário). Só é usado depois do HELLO do cliente —
+    // prova de que o outro lado já derivou os mesmos bytes.
+    let mut dict_local: Option<Vec<u8>> = None;
+    let mut dict_ready = false;
     loop {
         if shutdown.load(Ordering::SeqCst) {
             return;
         }
-        match read_frame(&mut flow, &mut rest) {
+        match read_frame(&mut flow, &mut rest, dict_local.as_deref().filter(|_| dict_ready)) {
             Ok(Some(msg)) => {
                 // Fail closed: com PSK, só AUTH_RESPONSE é aceita pré-auth
                 // (§4.6 — qualquer outra opcode ⇒ fechamento sem razão).
@@ -218,11 +255,18 @@ fn serve_connection(
                 if msg.opcode == op::BYE {
                     return;
                 }
+                let eh_hello = msg.opcode == op::HELLO;
                 if let Some(resp) =
-                    dispatch(&msg, bus, ledger, config, &mut caps_negociadas)
+                    dispatch(&msg, bus, ledger, config, &mut caps_negociadas, &mut dict_local)
                 {
-                    if write_frame(&mut flow, &resp, caps_negociadas).is_err() {
+                    // O HELLO de resposta nunca sai com dict (o cliente só
+                    // terá o dicionário depois de recebê-lo).
+                    let dict = if dict_ready && !eh_hello { dict_local.as_deref() } else { None };
+                    if write_frame(&mut flow, &resp, caps_negociadas, dict).is_err() {
                         return;
+                    }
+                    if eh_hello && dict_local.is_some() {
+                        dict_ready = true;
                     }
                 }
             }
@@ -251,7 +295,7 @@ fn handle_auth(
         return AuthResult::Close; // não-autenticado falando outra coisa
     };
     if auth::verify(key, nonce, server_nonce, mac) {
-        let _ = write_frame(flow, &Message::auth_ok(msg.seq), 0);
+        let _ = write_frame(flow, &Message::auth_ok(msg.seq), 0, None);
         AuthResult::Ok
     } else {
         AuthResult::Close
@@ -266,12 +310,25 @@ fn dispatch(
     ledger: &Arc<Mutex<dyn Ledger + Send>>,
     config: &PeerConfig,
     caps_negociadas: &mut u16,
+    dict_local: &mut Option<Vec<u8>>,
 ) -> Option<Message> {
     match msg.opcode {
         op::CAPS => {
             let Body::Caps { capabilities } = msg.body else { return None };
-            // Interseção pedidos × anunciados; bits reservados ignorados.
+            // Interseção pedidos × anunciados; bits reservados ignorados
+            // (peer v1.1 ignora o bit DICT no decode ⇒ interseção sem ele).
             *caps_negociadas = capabilities & config.caps & !caps::RESERVED;
+            // v1.2 §4.8: DICT concedido ⇒ deriva o dicionário do registro
+            // servido (os mesmos bytes que o cliente obterá via HELLO).
+            if *caps_negociadas & caps::DICT != 0 {
+                let nomes: Vec<String> = bus
+                    .lock()
+                    .map(|b| {
+                        b.registry_rico().devices().map(|d| d.name.clone()).collect()
+                    })
+                    .unwrap_or_default();
+                *dict_local = Some(schema::compress::dict_from_registry(&nomes));
+            }
             Some(Message::caps_ok(*caps_negociadas, msg.seq))
         }
         op::READ => {
@@ -320,14 +377,20 @@ fn dispatch(
     }
 }
 
-/// Escreve a resposta com compressão negociada (§4.8) — servidor usa o mesmo
-/// critério "só quando compensa" do cliente (o codec decide).
+/// Escreve a resposta com compressão negociada (§4.8/v1.2) — o codec decide
+/// "só quando compensa"; com dict pronto, o id 2 tem precedência sobre o
+/// LZ4 simples (mesma regra do cliente em `transport::Connection`).
 fn write_frame(
     flow: &mut Current,
     msg: &Message,
     caps_negociadas: u16,
+    dict: Option<&[u8]>,
 ) -> Result<(), TransportError> {
-    let frame = if caps_negociadas & caps::LZ4 != 0 {
+    let frame = if let Some(dict) = dict {
+        let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
+        schema::encode_with_compression_dict(msg, dict, &mut f).map_err(TransportError::from)?;
+        f
+    } else if caps_negociadas & caps::LZ4 != 0 {
         let mut f = Vec::with_capacity(schema::HEADER_LEN + msg.name.len() + 64);
         schema::encode_with_compression(msg, &mut f).map_err(TransportError::from)?;
         f

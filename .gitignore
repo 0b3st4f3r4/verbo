@@ -31,3 +31,5 @@ logs/**/stress-10k.vcad.jsonl
 
 # cache/store do framework pre-commit (wrapper .githooks/pre-commit)
 .pc-cache/
+
+.cargo-home/

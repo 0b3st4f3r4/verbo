@@ -88,6 +88,10 @@ pub struct BusConfig {
     pub batch_prefetch: bool,
     /// Compressão LZ4 negociada dos frames (§4.8).
     pub compression: bool,
+    /// Dicionário LZ4 compartilhado do registro (v1.2 §4.8) — pede
+    /// `caps::DICT` e completa o `HELLO` no handshake; o dicionário é
+    /// derivado do registro do peer (nenhum byte cruza o fio).
+    pub compression_dict: bool,
     /// Pedir `FLAG_TIMESTAMP` ao peer e propagar como `fio_us` (§5).
     pub wire_timestamp: bool,
     /// PSK de autenticação do canal remoto (§4.6) — bytes da chave; o CLI
@@ -96,6 +100,9 @@ pub struct BusConfig {
     /// Janela de escuta da descoberta multicast (§4.9) para endpoints
     /// `discover:<identificador>`.
     pub discover_window: Duration,
+    /// Grupo de descoberta (v1.2 §4.9): `ip:porta` v4, `[v6]:porta` (scope
+    /// numérico `%N`) e `@fonte-v4` para SSM. Default = grupo v4 do §4.9.
+    pub discover_group: Option<String>,
 }
 
 impl Default for BusConfig {
@@ -110,9 +117,11 @@ impl Default for BusConfig {
             queue_timeout_ticks: 2,
             batch_prefetch: false,
             compression: false,
+            compression_dict: false,
             wire_timestamp: false,
             psk: None,
             discover_window: Duration::from_millis(500),
+            discover_group: None,
         }
     }
 }
@@ -140,6 +149,7 @@ impl Route {
             Route::Remote(a) => match a {
                 RemoteAddr::Unix(p) => format!("remota (unix:{})", p.display()),
                 RemoteAddr::Tcp { host, port } => format!("remota (tcp:{host}:{port})"),
+                RemoteAddr::TcpTls { host, port, .. } => format!("remota (tcps:{host}:{port})"),
             },
             Route::Inaccessible { reason } => format!("inacessível ({reason})"),
         }
@@ -230,10 +240,28 @@ impl FxpBus {
                     let endpoint = match &d.endpoint {
                         Endpoint::Auto => discover(&d.name),
                         Endpoint::AutoRemote { identifier } => {
-                            match crate::discover::discover_peers(
-                                config.discover_window,
-                                crate::discover::DEFAULT_GROUP,
-                            ) {
+                            // v1.2 §4.9: grupo configurável (v4/v6) + SSM
+                            // (`@fonte`); parse ruim ⇒ registrado porém
+                            // inacessível com o motivo honesto do build.
+                            let descoberta = match &config.discover_group {
+                                None => crate::discover::discover_peers(
+                                    config.discover_window,
+                                    crate::discover::DEFAULT_GROUP,
+                                ),
+                                Some(txt) => match crate::discover::parse_group(txt) {
+                                    Err(_) => Err(crate::discover::DiscoveryError::BeaconInvalido),
+                                    Ok((grupo, Some(fonte))) => crate::discover::discover_peers_ssm(
+                                        config.discover_window,
+                                        grupo,
+                                        fonte,
+                                    ),
+                                    Ok((grupo, None)) => crate::discover::discover_peers(
+                                        config.discover_window,
+                                        grupo,
+                                    ),
+                                },
+                            };
+                            match descoberta {
                                 Ok(peers) => match peers
                                     .into_iter()
                                     .find(|p| p.identifier == *identifier)
@@ -247,6 +275,41 @@ impl FxpBus {
                                     None => None,
                                 },
                                 Err(_) => None,
+                            }
+                        }
+                        Endpoint::AutoRemoteMdns { identifier } => {
+                            // v1.2 §4.10: DNS-SD com TXT `id`/`hash` (+ tls/
+                            // pin ⇒ tcps). Janela sem resposta ⇒ inacessível
+                            // (mDNS é lossy, mesma honestidade do beacon).
+                            #[cfg(feature = "mdns")]
+                            match crate::mdns::discover_mdns(config.discover_window) {
+                                Ok(peers) => match peers
+                                    .into_iter()
+                                    .find(|p| p.identifier == *identifier)
+                                {
+                                    Some(p) => Some(Endpoint::Remote {
+                                        addr: match p.tls {
+                                            Some(pin) => RemoteAddr::TcpTls {
+                                                host: p.host.to_string(),
+                                                port: p.port,
+                                                fingerprint: pin,
+                                            },
+                                            None => RemoteAddr::Tcp {
+                                                host: p.host.to_string(),
+                                                port: p.port,
+                                            },
+                                        },
+                                    }),
+                                    None => None,
+                                },
+                                Err(_) => None,
+                            }
+                            // Sem a feature o parse já rejeita `mdns:`; o
+                            // braço é inatingível — e segue honesto.
+                            #[cfg(not(feature = "mdns"))]
+                            {
+                                let _ = identifier;
+                                None
                             }
                         }
                         e => Some(e.clone()),
@@ -533,6 +596,11 @@ impl FxpBus {
         let mut c = match addr {
             RemoteAddr::Unix(p) => Connection::unix(p, timeout)?,
             RemoteAddr::Tcp { host, port } => Connection::tcp(host, *port, timeout)?,
+            // v1.2 §7: TLS com pin — handshake falho/divergente é terminativo
+            // (nunca reconecta em texto plano).
+            RemoteAddr::TcpTls { host, port, fingerprint } => {
+                Connection::tcp_tls(host, *port, fingerprint, timeout)?
+            }
         };
         // §6 — ordem: AUTH → CAPS → trabalho. Falha de AUTENTICAÇÃO é
         // terminativa (segurança não degrada para canal aberto).
@@ -542,41 +610,65 @@ impl FxpBus {
             }
         }
         let wanted = self.wanted_caps();
-        if wanted != 0 {
-            if let Err(e) = c.negotiate(wanted, timeout) {
-                if matches!(e, TransportError::Timeout) {
-                    return Err(e);
+        let concedidas = if wanted != 0 {
+            match c.negotiate(wanted, timeout) {
+                Ok(g) => g,
+                Err(TransportError::Timeout) => return Err(TransportError::Timeout),
+                Err(_) => {
+                    // Peer provavelmente v1.0 (fechou diante de CAPS): reconecta
+                    // em modo v1.0 puro e REGISTRA a degradação (nunca silenciosa).
+                    let c2 = match addr {
+                        RemoteAddr::Unix(p) => Connection::unix(p, timeout)?,
+                        RemoteAddr::Tcp { host, port } => Connection::tcp(host, *port, timeout)?,
+                        RemoteAddr::TcpTls { host, port, fingerprint } => {
+                            Connection::tcp_tls(host, *port, fingerprint, timeout)?
+                        }
+                    };
+                    self.connections.insert(key.clone(), c2);
+                    self.v1_peers.insert(key.clone(), true);
+                    ledger.record(
+                        kinds::FXP_PEER_V1,
+                        &format!(
+                            "Peer remoto ({key}) não anunciou v1.1 (CAPS); seguindo em modo v1.0 — recursos de fio desligados."
+                        ),
+                        Json::obj([
+                            ("motivo", Json::str("fxp_peer_v1")),
+                            ("peer", Json::str(key.clone())),
+                        ]),
+                    );
+                    return Ok(());
                 }
-                // Peer provavelmente v1.0 (fechou diante de CAPS): reconecta
-                // em modo v1.0 puro e REGISTRA a degradação (nunca silenciosa).
-                let c2 = match addr {
-                    RemoteAddr::Unix(p) => Connection::unix(p, timeout)?,
-                    RemoteAddr::Tcp { host, port } => Connection::tcp(host, *port, timeout)?,
-                };
-                self.connections.insert(key.clone(), c2);
-                self.v1_peers.insert(key.clone(), true);
-                ledger.record(
-                    kinds::FXP_PEER_V1,
-                    &format!(
-                        "Peer remoto ({key}) não anunciou v1.1 (CAPS); seguindo em modo v1.0 — recursos de fio desligados."
-                    ),
-                    Json::obj([
-                        ("motivo", Json::str("fxp_peer_v1")),
-                        ("peer", Json::str(key.clone())),
-                    ]),
-                );
-                return Ok(());
             }
+        } else {
+            0
+        };
+        // v1.2 §4.8: DICT concedido ⇒ HELLO integra o handshake. O cliente
+        // publica o registro local e deriva o dicionário do registro do
+        // PEER (o servidor deriva do dele — mesmos bytes, sem fio extra).
+        if concedidas & caps::DICT != 0 {
+            let local: Vec<crate::schema::DeviceDesc> = self
+                .registry_rico()
+                .devices()
+                .map(|d| d.to_device_desc())
+                .collect();
+            let remoto = c.exchange_hello(&local, timeout).map_err(|e| {
+                TransportError::Broken(format!("handshake dict (HELLO): {e}"))
+            })?;
+            let nomes: Vec<String> = remoto.iter().map(|d| d.name().to_string()).collect();
+            c.set_dict(crate::schema::compress::dict_from_registry(&nomes));
         }
         self.connections.insert(key, c);
         Ok(())
     }
 
-    /// Capacidades que este bus pede ao peer (config opt-in v1.1).
+    /// Capacidades que este bus pede ao peer (config opt-in v1.1/v1.2).
     fn wanted_caps(&self) -> u16 {
         let mut w = 0;
         if self.config.compression {
             w |= caps::LZ4;
+        }
+        if self.config.compression_dict {
+            w |= caps::DICT;
         }
         if self.config.batch_prefetch {
             w |= caps::BATCH;
@@ -1139,6 +1231,9 @@ pub(crate) fn addr_key(addr: &RemoteAddr) -> String {
     match addr {
         RemoteAddr::Unix(p) => format!("unix:{}", p.display()),
         RemoteAddr::Tcp { host, port } => format!("tcp:{host}:{port}"),
+        RemoteAddr::TcpTls { host, port, fingerprint } => {
+            format!("tcps:{host}:{port}@sha256:{}", crate::tls::hex32(fingerprint))
+        }
     }
 }
 

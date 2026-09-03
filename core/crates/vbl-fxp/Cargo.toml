@@ -21,7 +21,18 @@ lz4_flex = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
 getrandom = { workspace = true }
+# v1.2: TLS do transporte remoto (§7) e multicast IPv6/SSM do beacon (§4.9).
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+socket2 = { workspace = true }
+mdns-sd = { workspace = true, optional = true }
+
+[features]
+# mDNS/DNS-SD (v1.2 §4.10): descoberta adicional opt-in — o fio §2 não muda.
+mdns = ["dep:mdns-sd"]
 
 [dev-dependencies]
 criterion = { workspace = true }
 vbl-lang = { workspace = true }
+# v1.2: certificados autoassinados de teste (par servidor/cliente TLS).
+rcgen = { workspace = true }
